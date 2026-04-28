@@ -1,0 +1,50 @@
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# Editors / IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Xcode (iOS)
+iOS/build/
+iOS/DerivedData/
+iOS/*.xcodeproj/xcuserdata/
+iOS/*.xcodeproj/project.xcworkspace/xcuserdata/
+iOS/*.xcworkspace/xcuserdata/
+*.xcuserstate
+*.moved-aside
+xcuserdata/
+
+# Swift Package Manager
+.build/
+Packages/
+Package.resolved
+
+# Android Studio / Gradle
+Android/.gradle/
+Android/build/
+Android/app/build/
+Android/captures/
+Android/local.properties
+Android/.idea/
+Android/*.iml
+Android/app/*.iml
+Android/.cxx/
+Android/.externalNativeBuild/
+
+# Kotlin
+*.class
+*.kotlin_module
+
+# Logs / env
+*.log
+.env
+.env.local
+
+# Claude Code memory (lives outside repo, but ignore if anything ends up here)
+.claude/
