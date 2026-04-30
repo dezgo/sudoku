@@ -9,6 +9,7 @@ import {
   leaveGroup,
 } from './groups';
 import { ensureUpcomingDailies, getDailyByPuzzleId, getDailyToday } from './daily';
+import { getGroupScores, postScore } from './scores';
 
 export default {
   async fetch(req: Request, env: Env): Promise<Response> {
@@ -59,6 +60,12 @@ async function route(req: Request, env: Env): Promise<Response> {
   const dailyMatch = path.match(/^\/v1\/daily\/(\d+)$/);
   if (dailyMatch && method === 'GET') {
     return getDailyByPuzzleId(env, parseInt(dailyMatch[1]!, 10));
+  }
+
+  if (path === '/v1/scores' && method === 'POST') return postScore(req, env);
+  const groupScoresMatch = path.match(/^\/v1\/groups\/([^/]+)\/scores\/(\d+)$/);
+  if (groupScoresMatch && method === 'GET') {
+    return getGroupScores(req, env, groupScoresMatch[1]!, parseInt(groupScoresMatch[2]!, 10));
   }
 
   return jsonError(404, 'not_found');

@@ -7,6 +7,7 @@ import com.derekgillett.sudoku.data.GameSaveRepository
 import com.derekgillett.sudoku.data.GroupsRepository
 import com.derekgillett.sudoku.data.PreferencesRepository
 import com.derekgillett.sudoku.data.PuzzleHistoryRepository
+import com.derekgillett.sudoku.data.ScoresRepository
 import com.derekgillett.sudoku.data.sudokuDataStore
 import com.derekgillett.sudoku.generator.GeneratedPuzzleProvider
 import com.derekgillett.sudoku.generator.PuzzleProvider
@@ -26,4 +27,5 @@ class AppContainer(context: Context) {
     val authRepo = AuthRepository(context, apiClient)
     val groupsRepo = GroupsRepository(context.sudokuDataStore, apiClient, authRepo)
     val dailyRepo = DailyPuzzleRepository(context.sudokuDataStore, apiClient, provider)
+    val scoresRepo = ScoresRepository(context.sudokuDataStore, apiClient, authRepo)
 }

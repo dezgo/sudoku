@@ -11,6 +11,11 @@ struct SolvedView: View {
     let puzzle: Puzzle
     let elapsedSeconds: Int
     let mistakeCount: Int
+    let rank: Int?
+    let showLeaderboardButton: Bool
+    let showSignInPrompt: Bool
+    let onLeaderboard: () -> Void
+    let onSignIn: () -> Void
     let onDone: () -> Void
 
     @State private var animateIn: Bool = false
@@ -53,12 +58,50 @@ struct SolvedView: View {
                 .opacity(animateIn ? 1 : 0)
                 .animation(.easeOut(duration: 0.3).delay(0.25), value: animateIn)
 
-                Button(action: onDone) {
-                    Text("Done")
-                        .frame(maxWidth: .infinity)
+                if let rank {
+                    HStack(spacing: 6) {
+                        Image(systemName: "trophy.fill")
+                            .foregroundStyle(.yellow)
+                        Text("Rank #\(rank)")
+                            .font(.headline)
+                    }
+                    .opacity(animateIn ? 1 : 0)
+                    .animation(.easeOut(duration: 0.3).delay(0.3), value: animateIn)
                 }
-                .buttonStyle(.borderedProminent)
-                .controlSize(.large)
+
+                VStack(spacing: 8) {
+                    if showLeaderboardButton {
+                        Button(action: onLeaderboard) {
+                            Label("View leaderboard", systemImage: "list.number")
+                                .frame(maxWidth: .infinity)
+                        }
+                        .buttonStyle(.borderedProminent)
+                        .controlSize(.large)
+                    } else if showSignInPrompt {
+                        Button(action: onSignIn) {
+                            Label("Sign in to put this on the board", systemImage: "person.crop.circle.badge.plus")
+                                .frame(maxWidth: .infinity)
+                        }
+                        .buttonStyle(.borderedProminent)
+                        .controlSize(.large)
+                    }
+
+                    if showLeaderboardButton || showSignInPrompt {
+                        Button(action: onDone) {
+                            Text("Done")
+                                .frame(maxWidth: .infinity)
+                        }
+                        .buttonStyle(.bordered)
+                        .controlSize(.large)
+                    } else {
+                        Button(action: onDone) {
+                            Text("Done")
+                                .frame(maxWidth: .infinity)
+                        }
+                        .buttonStyle(.borderedProminent)
+                        .controlSize(.large)
+                    }
+                }
                 .padding(.horizontal, 32)
                 .padding(.top, 12)
                 .opacity(animateIn ? 1 : 0)

@@ -54,7 +54,7 @@ class SudokuGameViewModel(
 
     private var timerJob: Job? = null
     private var wasAutoPaused: Boolean = false
-    private var solveCallback: ((PuzzleResult) -> Unit)? = null
+    private var solveCallback: ((PuzzleResult, Int) -> Unit)? = null
 
     init {
         viewModelScope.launch { initialize() }
@@ -62,9 +62,10 @@ class SudokuGameViewModel(
 
     /**
      * Set a callback to be notified when a puzzle is solved during play.
-     * The Composable layer uses this to show the fanfare sheet.
+     * The Composable layer uses this to show the fanfare sheet. Second arg
+     * is the mistake count (not stored on PuzzleResult — kept transient).
      */
-    fun onSolved(callback: (PuzzleResult) -> Unit) {
+    fun onSolved(callback: (PuzzleResult, Int) -> Unit) {
         solveCallback = callback
     }
 
@@ -398,7 +399,7 @@ class SudokuGameViewModel(
             historyRepo.record(result)
             saveRepo.remove(state.puzzleID)
         }
-        solveCallback?.invoke(result)
+        solveCallback?.invoke(result, state.mistakeCount)
     }
 
     private fun loadPuzzle(puzzle: Puzzle) {

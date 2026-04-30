@@ -23,6 +23,7 @@ struct HomeView: View {
     let onShowGames: () -> Void
     let onShowSettings: () -> Void
     let onSignIn: () -> Void
+    let onShowLeaderboard: () -> Void
 
     var body: some View {
         VStack(spacing: 0) {
@@ -35,6 +36,7 @@ struct HomeView: View {
                 if let save = mostRecentSave, save.puzzle.id != dailyPuzzleID {
                     continueGroup(save: save)
                 }
+                leaderboardButton
                 newGameButton
                 gamesButton
             }
@@ -137,6 +139,15 @@ struct HomeView: View {
                 .font(.caption)
                 .foregroundStyle(.secondary)
         }
+    }
+
+    private var leaderboardButton: some View {
+        Button(action: onShowLeaderboard) {
+            Label("Today's Leaderboard", systemImage: "list.number")
+                .frame(maxWidth: .infinity)
+        }
+        .buttonStyle(BorderedButtonStyle())
+        .controlSize(.large)
     }
 
     private var newGameButton: some View {

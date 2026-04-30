@@ -76,6 +76,17 @@ data class DailyTodayResponse(
     val tomorrow: PuzzleResponse
 )
 
+@Serializable
+data class ScoreSubmitResponse(val rank: Int)
+
+@Serializable
+data class LeaderboardEntry(
+    @SerialName("display_name") val displayName: String?,
+    @SerialName("elapsed_seconds") val elapsedSeconds: Int,
+    @SerialName("completed_at") val completedAt: Long,
+    val rank: Int
+)
+
 /**
  * The server emits Difficulty as lowercase ("medium"); the local Difficulty
  * enum's default Kotlinx serializer would expect "MEDIUM". Localized

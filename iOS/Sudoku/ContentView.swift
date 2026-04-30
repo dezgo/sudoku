@@ -18,6 +18,7 @@ struct ContentView: View {
     @EnvironmentObject private var auth: AuthStore
     @EnvironmentObject private var groupsStore: GroupsStore
     @EnvironmentObject private var dailyStore: DailyPuzzleStore
+    @EnvironmentObject private var scoresStore: ScoresStore
 
     @StateObject private var history: PuzzleHistory
     @StateObject private var store: GameStore
@@ -30,6 +31,10 @@ struct ContentView: View {
     @State private var showingSignIn = false
     @State private var confirmingReset = false
     @State private var replayingDaily: PuzzleResult?
+    @State private var showingLeaderboard = false
+    @State private var dailyIsOfflineFallback = false
+    @State private var solvedRank: Int?
+    @State private var solvedWasDaily = false
 
     init() {
         let h = PuzzleHistory()
@@ -63,7 +68,8 @@ struct ContentView: View {
                     onNewGame: { showingNewGame = true },
                     onShowGames: { showingHistory = true },
                     onShowSettings: { showingSettings = true },
-                    onSignIn: { showingSignIn = true }
+                    onSignIn: { showingSignIn = true },
+                    onShowLeaderboard: { showingLeaderboard = true }
                 )
             case .playing:
                 gameView
@@ -73,6 +79,7 @@ struct ContentView: View {
             await dailyStore.refresh()
             if auth.isSignedIn {
                 await groupsStore.refresh()
+                await scoresStore.flushPending()
             }
         }
         .onChange(of: game.isSolved) { _, isSolved in
@@ -84,7 +91,33 @@ struct ContentView: View {
                 puzzle: game.currentPuzzle
             ))
             if phase == .playing {
+                solvedWasDaily = game.currentPuzzle.isDaily
+                solvedRank = nil
                 showingSolved = true
+
+                // Spec §17.4: post score for canonical daily solves only;
+                // offline-fallback dailies are explicitly unranked.
+                if solvedWasDaily && !dailyIsOfflineFallback {
+                    let pid = game.puzzleID
+                    let elapsed = game.elapsedSeconds
+                    let mistakes = game.mistakeCount
+                    Task {
+                        let rank = await scoresStore.submit(
+                            puzzleID: pid,
+                            elapsedSeconds: elapsed,
+                            mistakes: mistakes
+                        )
+                        solvedRank = rank
+                    }
+                }
+            }
+        }
+        .onChange(of: auth.isSignedIn) { _, signedIn in
+            if signedIn {
+                Task {
+                    await groupsStore.refresh()
+                    await scoresStore.flushPending()
+                }
             }
         }
         .sheet(isPresented: $showingHistory) {
@@ -114,11 +147,29 @@ struct ContentView: View {
             SolvedView(
                 puzzle: game.currentPuzzle,
                 elapsedSeconds: game.elapsedSeconds,
-                mistakeCount: game.mistakeCount
-            ) {
-                phase = .home
-                showingSolved = false
-            }
+                mistakeCount: game.mistakeCount,
+                rank: solvedRank,
+                showLeaderboardButton: solvedWasDaily && !dailyIsOfflineFallback && auth.isSignedIn && !groupsStore.groups.isEmpty,
+                showSignInPrompt: solvedWasDaily && !dailyIsOfflineFallback && !auth.isSignedIn,
+                onLeaderboard: {
+                    showingSolved = false
+                    showingLeaderboard = true
+                },
+                onSignIn: {
+                    showingSolved = false
+                    showingSignIn = true
+                },
+                onDone: {
+                    phase = .home
+                    showingSolved = false
+                }
+            )
+        }
+        .sheet(isPresented: $showingLeaderboard) {
+            LeaderboardView(
+                puzzleID: resolvedDailyID,
+                puzzleLabel: dailyStore.today?.displayLabel ?? Puzzle(id: resolvedDailyID, difficulty: .medium, givens: [], solution: nil).displayLabel
+            )
         }
         .preferredColorScheme(appearance.colorScheme)
         .onChange(of: scenePhase) { _, newPhase in
@@ -222,7 +273,8 @@ struct ContentView: View {
     /// local generator if nothing's reachable, then enters the playing phase.
     private func startDaily() {
         Task {
-            let (puzzle, _) = await dailyStore.ensureToday()
+            let (puzzle, isOffline) = await dailyStore.ensureToday()
+            dailyIsOfflineFallback = isOffline
             game.startDaily(puzzle: puzzle)
             phase = .playing
         }
@@ -259,8 +311,11 @@ struct ContentView: View {
 }
 
 #Preview {
-    ContentView()
-        .environmentObject(AuthStore(client: APIClient()))
-        .environmentObject(GroupsStore(client: APIClient(), auth: AuthStore(client: APIClient())))
-        .environmentObject(DailyPuzzleStore(client: APIClient(), fallbackProvider: GeneratedPuzzleProvider()))
+    let client = APIClient()
+    let auth = AuthStore(client: client)
+    return ContentView()
+        .environmentObject(auth)
+        .environmentObject(GroupsStore(client: client, auth: auth))
+        .environmentObject(DailyPuzzleStore(client: client, fallbackProvider: GeneratedPuzzleProvider()))
+        .environmentObject(ScoresStore(client: client, auth: auth))
 }

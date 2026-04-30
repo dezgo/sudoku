@@ -13,29 +13,33 @@ Two platforms (iOS + Android) targeting the same behavioural contract in [`SPEC.
 
 ## Where things stand
 
-**Phase 1 (identity + groups + cross-platform daily) is shipped and validated end-to-end.** Friends can sign in via email OTP on either platform, create / join groups via 6-character codes, and both apps fetch the same daily puzzle from `sudoku.appfoundry.cc`. Cross-platform identical-daily proven on 2026-04-29 by playing the same `20260429` puzzle on iOS and Android with two different users in one group.
+**Phases 1 & 2 are code-complete.** Phase 1 (identity + groups + cross-platform daily) was validated end-to-end on 2026-04-29. Phase 2 (leaderboards) was implemented on 2026-04-30 — backend is deployed; iOS + Android changes need a rebuild to land on devices.
 
 ### What works
-- **iOS** networking + sign-in / group-onboarding sheets shipped. Daily fetched from server with offline-fallback to local generator (marked unranked). Token in Keychain. Groups + daily caches in UserDefaults. Foreground refresh keeps groups in sync.
-- **Android** networking + sign-in / group-onboarding sheets shipped. Same offline-fallback model. Token in EncryptedSharedPreferences. Groups + daily caches in DataStore. Lifecycle observer refreshes daily + groups on `ON_RESUME` / `ON_START`.
-- **Backend** deployed at `sudoku.appfoundry.cc`. All Phase 1 endpoints live (auth start/verify, me get/put + groups, groups create/join/members/leave, daily today + by-id). Hourly cron pre-generates today + tomorrow's puzzle so user-facing requests just read from D1. Resend domain verified, OTP emails landing in inboxes. `/v1/me/groups` returns `invite_code` per group so any member can recover the code.
+- **iOS** networking + sign-in / group-onboarding sheets shipped. Daily fetched from server with offline-fallback to local generator (marked unranked). Token in Keychain. Groups + daily + pending-scores caches in UserDefaults. Foreground refresh keeps groups in sync. Score POSTed on canonical-daily solves; offline solves queued and flushed on launch / sign-in. Leaderboard sheet (top 10 + own row pinned, group picker for 2+ groups) reachable from Home and from the Solved fanfare.
+- **Android** networking + sign-in / group-onboarding sheets shipped. Same offline-fallback model. Token in EncryptedSharedPreferences. Groups + daily + pending-scores caches in DataStore. Lifecycle observer refreshes daily + groups on `ON_RESUME` / `ON_START`. Same Phase 2 wiring as iOS (post on solve, queue + flush, leaderboard sheet).
+- **Backend** deployed at `sudoku.appfoundry.cc`. All Phase 1 + Phase 2 endpoints live (auth start/verify, me get/put + groups, groups create/join/members/leave, daily today + by-id, **scores POST**, **groups/:id/scores/:puzzle_id**). Hourly cron pre-generates today + tomorrow's puzzle so user-facing requests just read from D1. Resend domain verified. `/v1/me/groups` returns `invite_code` per group. Score POST is idempotent via composite PK `(user_id, puzzle_id)` so the offline-queue retry is safe.
 
 ### What's NOT yet implemented (so a future Claude doesn't go looking)
-- Score POST + leaderboard endpoints + leaderboard view in either app (Phase 2).
-- Pending-scores queue *infrastructure exists locally as `sudoku.pending_scores.v1` storage key, but nothing reads/writes it yet*.
 - Username field on users; invite-by-username; invite-by-email; pending-invites UI (Phase 2.5).
 - Live realtime co-op / competitive (Phase 4).
 - Per-group timezone (currently global Sydney).
 - Cross-session Undo persistence; per-tier dailies; rule-vs-solution mistake toggle.
 
+## Pending rebuilds
+
+Phase 2 backend is deployed; the apps are not yet running the new code:
+
+1. Rebuild iOS in Xcode — picks up the leaderboard sheet, post-on-solve, and pending-queue flush.
+2. Rebuild Android in Studio — same. (Verified to compile cleanly via `./gradlew compileDebugKotlin`.)
+
 ## Roadmap
 
-1. **Phase 2 — Leaderboards** (next). Add `POST /v1/scores` and `GET /v1/groups/:id/scores/:puzzle_id` to the Worker. iOS + Android post on solve, render a per-group leaderboard sheet, queue offline scores in `sudoku.pending_scores.v1`. This is the visible payoff for the social model.
-2. **Phase 2.5 — Better invite UX.** Add `username` (unique, lowercase, separate from `display_name`) to users; add `group_invites` table; add user-search + invite-by-username endpoints; show pending invites on home; optional invite-by-email path via Resend. Replaces invite codes as the primary onboarding flow but keeps codes as a fallback.
-3. **Distribution.** TestFlight (iOS, requires $99/yr Apple Developer Program) + Play internal-test (Android, free) for the friend group.
-4. **Phase 3 — Async buddy progress.** Periodic `POST /v1/me/progress` during play; "Alice is 47/81 at 03:12" surfaced on the leaderboard view.
-5. **Phase 4 — Realtime co-op / competitive.** Cloudflare Durable Objects + WebSockets; room key = match_id (UUID), independent of group_id.
-6. **Polish bucket.** Per-group timezone, solution vs rule mistake toggle, cross-session Undo, per-tier dailies.
+1. **Phase 2.5 — Better invite UX.** Add `username` (unique, lowercase, separate from `display_name`) to users; add `group_invites` table; add user-search + invite-by-username endpoints; show pending invites on home; optional invite-by-email path via Resend. Replaces invite codes as the primary onboarding flow but keeps codes as a fallback.
+2. **Distribution.** TestFlight (iOS, requires $99/yr Apple Developer Program) + Play internal-test (Android, free) for the friend group.
+3. **Phase 3 — Async buddy progress.** Periodic `POST /v1/me/progress` during play; "Alice is 47/81 at 03:12" surfaced on the leaderboard view.
+4. **Phase 4 — Realtime co-op / competitive.** Cloudflare Durable Objects + WebSockets; room key = match_id (UUID), independent of group_id.
+5. **Polish bucket.** Per-group timezone, solution vs rule mistake toggle, cross-session Undo, per-tier dailies.
 
 ## Decisions already made (don't re-litigate in a new session)
 
@@ -53,7 +57,7 @@ Two platforms (iOS + Android) targeting the same behavioural contract in [`SPEC.
 ## Operational notes
 
 - **Backend URL**: `https://sudoku.appfoundry.cc/v1`. Worker name `sudoku-api`. Custom-domain bound via `wrangler.toml` `routes` with `custom_domain = true`.
-- **D1 database**: name `sudoku`. Schema in `Backend/migrations/0001_init.sql` (7 tables: `users`, `auth_codes`, `auth_tokens`, `daily_puzzles`, `groups`, `group_members`, `scores` — last is empty until Phase 2).
+- **D1 database**: name `sudoku`. Schema in `Backend/migrations/0001_init.sql` (7 tables: `users`, `auth_codes`, `auth_tokens`, `daily_puzzles`, `groups`, `group_members`, `scores`).
 - **Resend domain**: `appfoundry.cc`, sender `noreply@appfoundry.cc`. SPF/DKIM/DMARC records added in Cloudflare DNS for the zone.
 - **Cron**: hourly `0 * * * *`, idempotent — ensures today + tomorrow's daily puzzles exist in D1.
 - **Recover an invite code from D1** (until the in-app display ships):

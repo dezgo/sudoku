@@ -24,7 +24,8 @@ class MainActivity : ComponentActivity() {
                 prefsRepo = container.prefsRepo,
                 authRepo = container.authRepo,
                 groupsRepo = container.groupsRepo,
-                dailyRepo = container.dailyRepo
+                dailyRepo = container.dailyRepo,
+                scoresRepo = container.scoresRepo
             )
         }
     }

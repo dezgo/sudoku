@@ -14,13 +14,17 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.outlined.List
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Schedule
+import androidx.compose.material.icons.filled.Star
+import androidx.compose.material.icons.outlined.AccountCircle
 import androidx.compose.material3.Button
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
@@ -44,6 +48,11 @@ import com.derekgillett.sudoku.model.PuzzleResult
 @Composable
 fun SolvedSheet(
     result: PuzzleResult,
+    rank: Int? = null,
+    showLeaderboardButton: Boolean = false,
+    showSignInPrompt: Boolean = false,
+    onLeaderboard: () -> Unit = {},
+    onSignIn: () -> Unit = {},
     onDone: () -> Unit
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
@@ -126,13 +135,64 @@ fun SolvedSheet(
                     }
                 }
 
-                Button(
-                    onClick = onDone,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(top = 8.dp)
-                        .scale(if (buttonAlpha.value > 0.01f) 1f else 0.9f)
-                ) { Text("Done") }
+                if (rank != null) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        Icon(
+                            Icons.Filled.Star,
+                            contentDescription = null,
+                            tint = Color(0xFFFFC107)
+                        )
+                        Text(
+                            "Rank #$rank",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                    }
+                }
+
+                if (showLeaderboardButton) {
+                    Button(
+                        onClick = onLeaderboard,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .scale(if (buttonAlpha.value > 0.01f) 1f else 0.9f)
+                    ) {
+                        Icon(Icons.AutoMirrored.Outlined.List, contentDescription = null)
+                        Spacer(Modifier.size(8.dp))
+                        Text("View leaderboard")
+                    }
+                } else if (showSignInPrompt) {
+                    Button(
+                        onClick = onSignIn,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .scale(if (buttonAlpha.value > 0.01f) 1f else 0.9f)
+                    ) {
+                        Icon(Icons.Outlined.AccountCircle, contentDescription = null)
+                        Spacer(Modifier.size(8.dp))
+                        Text("Sign in to put this on the board")
+                    }
+                }
+
+                if (showLeaderboardButton || showSignInPrompt) {
+                    OutlinedButton(
+                        onClick = onDone,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .scale(if (buttonAlpha.value > 0.01f) 1f else 0.9f)
+                    ) { Text("Done") }
+                } else {
+                    Button(
+                        onClick = onDone,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(top = 8.dp)
+                            .scale(if (buttonAlpha.value > 0.01f) 1f else 0.9f)
+                    ) { Text("Done") }
+                }
             }
         }
     }

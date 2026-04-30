@@ -79,6 +79,19 @@ struct DailyTodayResponse: Codable {
     let tomorrow: PuzzleResponse
 }
 
+struct ScoreSubmitResponse: Codable {
+    let rank: Int
+}
+
+struct LeaderboardEntry: Codable, Equatable, Identifiable {
+    let displayName: String?
+    let elapsedSeconds: Int
+    let completedAt: Int
+    let rank: Int
+
+    var id: Int { rank }
+}
+
 actor APIClient {
     private let baseURL: URL
     private let session: URLSession
@@ -155,6 +168,22 @@ actor APIClient {
         try await sendJSON("daily/today", method: "GET")
     }
 
+    // MARK: - Scores
+
+    func postScore(token: String, puzzleID: Int, elapsedSeconds: Int, mistakes: Int) async throws -> Int {
+        let body: [String: Any] = [
+            "puzzle_id": puzzleID,
+            "elapsed_seconds": elapsedSeconds,
+            "mistakes": mistakes,
+        ]
+        let r: ScoreSubmitResponse = try await sendJSONRaw("scores", method: "POST", token: token, body: body)
+        return r.rank
+    }
+
+    func groupScores(token: String, groupID: String, puzzleID: Int) async throws -> [LeaderboardEntry] {
+        try await sendJSON("groups/\(groupID)/scores/\(puzzleID)", method: "GET", token: token)
+    }
+
     // MARK: - Plumbing
 
     private func sendJSON<T: Decodable>(
@@ -180,11 +209,36 @@ actor APIClient {
         _ = try await sendRaw(path, method: method, token: token, body: body)
     }
 
+    /// Variant that allows non-string JSON bodies (numbers etc). Used by
+    /// `/scores` which carries integer fields. Same shape as `sendJSON`.
+    private func sendJSONRaw<T: Decodable>(
+        _ path: String,
+        method: String,
+        token: String? = nil,
+        body: [String: Any]
+    ) async throws -> T {
+        let data = try await sendRawAny(path, method: method, token: token, body: body)
+        do {
+            return try decoder.decode(T.self, from: data)
+        } catch {
+            throw APIError.decode
+        }
+    }
+
     private func sendRaw(
         _ path: String,
         method: String,
         token: String?,
         body: [String: String]?
+    ) async throws -> Data {
+        try await sendRawAny(path, method: method, token: token, body: body as [String: Any]?)
+    }
+
+    private func sendRawAny(
+        _ path: String,
+        method: String,
+        token: String?,
+        body: [String: Any]?
     ) async throws -> Data {
         var req = URLRequest(url: baseURL.appendingPathComponent(path))
         req.httpMethod = method

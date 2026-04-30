@@ -5,6 +5,7 @@ import kotlinx.coroutines.withContext
 import kotlinx.serialization.SerializationException
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import java.io.IOException
@@ -76,6 +77,27 @@ class ApiClient(
     suspend fun dailyToday(): DailyTodayResponse =
         sendJson("daily/today", "GET")
 
+    // Scores ----------------------------------------------------------------
+
+    suspend fun postScore(
+        token: String,
+        puzzleId: Int,
+        elapsedSeconds: Int,
+        mistakes: Int
+    ): Int {
+        val body = JsonObject(
+            mapOf(
+                "puzzle_id" to JsonPrimitive(puzzleId),
+                "elapsed_seconds" to JsonPrimitive(elapsedSeconds),
+                "mistakes" to JsonPrimitive(mistakes)
+            )
+        )
+        return sendJsonRaw<ScoreSubmitResponse>("scores", "POST", token, body).rank
+    }
+
+    suspend fun groupScores(token: String, groupId: String, puzzleId: Int): List<LeaderboardEntry> =
+        sendJson("groups/$groupId/scores/$puzzleId", "GET", token = token)
+
     // Plumbing --------------------------------------------------------------
 
     private suspend inline fun <reified T> sendJson(
@@ -103,11 +125,40 @@ class ApiClient(
         requestText(path, method, token, body)
     }
 
+    /** Variant that accepts a JsonElement body (for endpoints with non-string fields). */
+    private suspend inline fun <reified T> sendJsonRaw(
+        path: String,
+        method: String,
+        token: String?,
+        body: JsonElement
+    ): T {
+        val text = requestTextRaw(path, method, token, json.encodeToString(JsonElement.serializer(), body).toByteArray())
+        return try {
+            json.decodeFromString(text)
+        } catch (_: SerializationException) {
+            throw ApiException.Decode
+        } catch (_: IllegalArgumentException) {
+            throw ApiException.Decode
+        }
+    }
+
     private suspend fun requestText(
         path: String,
         method: String,
         token: String?,
         body: Map<String, String>?
+    ): String = requestTextRaw(
+        path,
+        method,
+        token,
+        body?.let { json.encodeToString(it).toByteArray() }
+    )
+
+    private suspend fun requestTextRaw(
+        path: String,
+        method: String,
+        token: String?,
+        body: ByteArray?
     ): String = withContext(Dispatchers.IO) {
         val url = URL("$baseUrl/$path")
         val conn = (url.openConnection() as HttpURLConnection).apply {
@@ -119,7 +170,7 @@ class ApiClient(
             doInput = true
             if (body != null) {
                 doOutput = true
-                outputStream.use { os -> os.write(json.encodeToString(body).toByteArray()) }
+                outputStream.use { os -> os.write(body) }
             }
         }
         try {

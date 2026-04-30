@@ -60,7 +60,9 @@ fun HomeScreen(
     authRepo: AuthRepository,
     groupsRepo: GroupsRepository,
     dailyRepo: DailyPuzzleRepository,
-    onSignIn: () -> Unit
+    onSignIn: () -> Unit,
+    onShowLeaderboard: () -> Unit,
+    onStartDaily: (isOffline: Boolean) -> Unit
 ) {
     val saves by viewModel.saves.collectAsState(initial = emptyMap())
     val history by viewModel.history.collectAsState(initial = emptyList())
@@ -114,7 +116,8 @@ fun HomeScreen(
                         replayingDaily = history.firstOrNull { it.puzzleID == dailyID }
                     } else {
                         scope.launch {
-                            val (puzzle, _) = dailyRepo.ensureToday()
+                            val (puzzle, isOffline) = dailyRepo.ensureToday()
+                            onStartDaily(isOffline)
                             viewModel.startDaily(puzzle)
                         }
                     }
@@ -129,6 +132,16 @@ fun HomeScreen(
                 }
                 Spacer(Modifier.height(14.dp))
             }
+
+            OutlinedButton(
+                onClick = onShowLeaderboard,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Icon(Icons.AutoMirrored.Outlined.List, contentDescription = null)
+                Spacer(Modifier.size(8.dp))
+                Text("Today's Leaderboard")
+            }
+            Spacer(Modifier.height(14.dp))
 
             OutlinedButton(
                 onClick = { showingNewGame = true },
