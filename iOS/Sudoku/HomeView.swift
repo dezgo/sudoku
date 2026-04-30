@@ -12,13 +12,17 @@ enum DailyStatus {
 struct HomeView: View {
     let mostRecentSave: GameSave?
     let dailyDate: Date
+    let dailyPuzzleID: Int
     let dailyStatus: DailyStatus
-    let dailyElapsed: Int?  // shown when in progress
+    let dailyElapsed: Int?
+    let signedInDisplayName: String?
     let onDaily: () -> Void
+    let onReplayDaily: () -> Void
     let onContinue: () -> Void
     let onNewGame: () -> Void
     let onShowGames: () -> Void
     let onShowSettings: () -> Void
+    let onSignIn: () -> Void
 
     var body: some View {
         VStack(spacing: 0) {
@@ -28,7 +32,7 @@ struct HomeView: View {
             Spacer()
             VStack(spacing: 14) {
                 dailyGroup
-                if let save = mostRecentSave, save.puzzle.id != DailyPuzzle.id(for: dailyDate) {
+                if let save = mostRecentSave, save.puzzle.id != dailyPuzzleID {
                     continueGroup(save: save)
                 }
                 newGameButton
@@ -38,6 +42,10 @@ struct HomeView: View {
             Spacer()
             Spacer()
         }
+        .overlay(alignment: .topLeading) {
+            identityChip
+                .padding()
+        }
         .overlay(alignment: .topTrailing) {
             Button(action: onShowSettings) {
                 Image(systemName: "gearshape")
@@ -45,6 +53,22 @@ struct HomeView: View {
             }
             .buttonStyle(PlainButtonStyle())
             .padding()
+        }
+    }
+
+    @ViewBuilder
+    private var identityChip: some View {
+        if let name = signedInDisplayName {
+            Label(name, systemImage: "person.crop.circle.fill")
+                .font(.footnote)
+                .foregroundStyle(.secondary)
+        } else {
+            Button(action: onSignIn) {
+                Label("Sign in", systemImage: "person.crop.circle")
+                    .font(.footnote)
+            }
+            .buttonStyle(.plain)
+            .foregroundStyle(.tint)
         }
     }
 
@@ -62,13 +86,12 @@ struct HomeView: View {
     private var dailyButton: some View {
         switch dailyStatus {
         case .completed:
-            Button(action: {}) {
+            Button(action: onReplayDaily) {
                 Label("Daily Done", systemImage: "checkmark.seal.fill")
                     .frame(maxWidth: .infinity)
             }
             .buttonStyle(BorderedButtonStyle())
             .controlSize(.large)
-            .disabled(true)
         case .inProgress:
             Button(action: onDaily) {
                 Label("Resume Daily", systemImage: "play.fill")
@@ -110,7 +133,7 @@ struct HomeView: View {
             .buttonStyle(BorderedButtonStyle())
             .controlSize(.large)
 
-            Text("Puzzle #\(save.puzzle.id) · \(save.puzzle.difficulty.label) · \(formatTime(save.elapsedSeconds))")
+            Text(verbatim: "\(save.puzzle.displayLabel) · \(save.puzzle.difficulty.label) · \(formatTime(save.elapsedSeconds))")
                 .font(.caption)
                 .foregroundStyle(.secondary)
         }

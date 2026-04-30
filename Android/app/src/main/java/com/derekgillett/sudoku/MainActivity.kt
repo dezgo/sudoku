@@ -21,7 +21,10 @@ class MainActivity : ComponentActivity() {
         setContent {
             SudokuRoot(
                 viewModel = viewModel,
-                prefsRepo = container.prefsRepo
+                prefsRepo = container.prefsRepo,
+                authRepo = container.authRepo,
+                groupsRepo = container.groupsRepo,
+                dailyRepo = container.dailyRepo
             )
         }
     }

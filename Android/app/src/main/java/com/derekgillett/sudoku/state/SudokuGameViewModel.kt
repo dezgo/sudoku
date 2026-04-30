@@ -157,6 +157,19 @@ class SudokuGameViewModel(
         }
     }
 
+    /**
+     * Load a daily puzzle that's already been resolved by the caller —
+     * typically `DailyPuzzleRepository.ensureToday()`, which handles the
+     * server-fetch + offline-fallback logic and returns a ready Puzzle.
+     */
+    fun startDaily(puzzle: Puzzle) {
+        saveProgress()
+        viewModelScope.launch {
+            loadPuzzle(puzzle)
+            _state.update { it?.copy(phase = Phase.PLAYING) }
+        }
+    }
+
     private suspend fun excludedIds(): Set<Int> {
         val completed = historyRepo.results.first().map { it.puzzleID }.toSet()
         val inProgress = saveRepo.saves.first().keys
@@ -281,7 +294,7 @@ class SudokuGameViewModel(
         val undo = s.lastPlacementInfo
         val isUndoTarget = undo != null && undo.row == sel.row && undo.col == sel.col
 
-        if (isUndoTarget && undo != null) {
+        if (undo != null && isUndoTarget) {
             // Restore prior notes on the selected cell, and put back any
             // pencil marks we auto-cleared from peers.
             newCells[sel.row][sel.col] = newCells[sel.row][sel.col]

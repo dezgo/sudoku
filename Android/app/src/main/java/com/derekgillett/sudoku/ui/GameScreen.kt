@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.systemBarsPadding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.ErrorOutline
@@ -37,13 +38,18 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.derekgillett.sudoku.data.AuthRepository
+import com.derekgillett.sudoku.data.GroupsRepository
 import com.derekgillett.sudoku.data.PreferencesRepository
 import com.derekgillett.sudoku.state.SudokuGameViewModel
 
 @Composable
 fun GameScreen(
     viewModel: SudokuGameViewModel,
-    prefsRepo: PreferencesRepository
+    prefsRepo: PreferencesRepository,
+    authRepo: AuthRepository,
+    groupsRepo: GroupsRepository,
+    onSignIn: () -> Unit
 ) {
     val state by viewModel.state.collectAsState()
     val s = state ?: return
@@ -53,6 +59,7 @@ fun GameScreen(
     Column(
         modifier = Modifier
             .fillMaxSize()
+            .systemBarsPadding()
             .padding(vertical = 12.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
@@ -65,7 +72,7 @@ fun GameScreen(
             horizontalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             Text(
-                text = "Sudoku #${s.puzzleID} · ${s.difficulty.label}",
+                text = "${s.puzzle.displayLabel} · ${s.difficulty.label}",
                 fontSize = 18.sp,
                 fontWeight = FontWeight.Bold
             )
@@ -155,6 +162,12 @@ fun GameScreen(
         SettingsSheet(
             viewModel = viewModel,
             prefsRepo = prefsRepo,
+            authRepo = authRepo,
+            groupsRepo = groupsRepo,
+            onSignIn = {
+                showingSettings = false
+                onSignIn()
+            },
             onDismiss = { showingSettings = false }
         )
     }

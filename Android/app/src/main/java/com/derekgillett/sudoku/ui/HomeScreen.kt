@@ -1,21 +1,23 @@
 package com.derekgillett.sudoku.ui
 
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.systemBarsPadding
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.outlined.List
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.outlined.AccountCircle
 import androidx.compose.material.icons.outlined.CalendarToday
-import androidx.compose.material.icons.outlined.List
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
@@ -23,11 +25,13 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -35,10 +39,15 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.derekgillett.sudoku.data.AuthRepository
+import com.derekgillett.sudoku.data.DailyPuzzleRepository
+import com.derekgillett.sudoku.data.GroupsRepository
 import com.derekgillett.sudoku.data.PreferencesRepository
 import com.derekgillett.sudoku.generator.DailyPuzzle
 import com.derekgillett.sudoku.model.GameSave
+import com.derekgillett.sudoku.model.PuzzleResult
 import com.derekgillett.sudoku.state.SudokuGameViewModel
+import kotlinx.coroutines.launch
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
 
@@ -47,13 +56,22 @@ private enum class DailyStatus { NOT_STARTED, IN_PROGRESS, COMPLETED }
 @Composable
 fun HomeScreen(
     viewModel: SudokuGameViewModel,
-    prefsRepo: PreferencesRepository
+    prefsRepo: PreferencesRepository,
+    authRepo: AuthRepository,
+    groupsRepo: GroupsRepository,
+    dailyRepo: DailyPuzzleRepository,
+    onSignIn: () -> Unit
 ) {
     val saves by viewModel.saves.collectAsState(initial = emptyMap())
     val history by viewModel.history.collectAsState(initial = emptyList())
+    val user by authRepo.user.collectAsState()
+    val serverDaily by dailyRepo.today.collectAsState()
+    val scope = rememberCoroutineScope()
 
     val today = remember { LocalDate.now() }
-    val dailyID = remember(today) { DailyPuzzle.id(today) }
+    val localDailyId = remember(today) { DailyPuzzle.id(today) }
+    // Use server-resolved id when known, else local fallback. (SPEC §17.6)
+    val dailyID = serverDaily?.id ?: localDailyId
 
     val dailyStatus: DailyStatus = when {
         history.any { it.puzzleID == dailyID } -> DailyStatus.COMPLETED
@@ -69,8 +87,9 @@ fun HomeScreen(
     var showingSettings by remember { mutableStateOf(false) }
     var showingGames by remember { mutableStateOf(false) }
     var showingNewGame by remember { mutableStateOf(false) }
+    var replayingDaily: PuzzleResult? by remember { mutableStateOf(null) }
 
-    Box(modifier = Modifier.fillMaxSize()) {
+    Box(modifier = Modifier.fillMaxSize().systemBarsPadding()) {
         Column(
             modifier = Modifier
                 .fillMaxSize()
@@ -90,12 +109,21 @@ fun HomeScreen(
                 date = today,
                 status = dailyStatus,
                 elapsedSeconds = dailyElapsed,
-                onClick = { viewModel.startDaily(today) }
+                onClick = {
+                    if (dailyStatus == DailyStatus.COMPLETED) {
+                        replayingDaily = history.firstOrNull { it.puzzleID == dailyID }
+                    } else {
+                        scope.launch {
+                            val (puzzle, _) = dailyRepo.ensureToday()
+                            viewModel.startDaily(puzzle)
+                        }
+                    }
+                }
             )
 
             Spacer(Modifier.height(14.dp))
 
-            if (showContinue && mostRecentSave != null) {
+            if (mostRecentSave != null && showContinue) {
                 ContinueButton(save = mostRecentSave) {
                     viewModel.continueMostRecent()
                 }
@@ -115,12 +143,47 @@ fun HomeScreen(
                 onClick = { showingGames = true },
                 modifier = Modifier.fillMaxWidth()
             ) {
-                Icon(Icons.Outlined.List, contentDescription = null)
+                Icon(Icons.AutoMirrored.Outlined.List, contentDescription = null)
                 Spacer(Modifier.size(8.dp))
                 Text("Games")
             }
 
             Spacer(Modifier.weight(2f))
+        }
+
+        // Identity chip — top-left.
+        Box(
+            modifier = Modifier
+                .align(Alignment.TopStart)
+                .padding(8.dp)
+        ) {
+            val displayName = user?.displayName
+            if (displayName != null) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(
+                        Icons.Outlined.AccountCircle,
+                        contentDescription = null,
+                        modifier = Modifier.size(16.dp),
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Spacer(Modifier.size(6.dp))
+                    Text(
+                        text = displayName,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            } else {
+                TextButton(onClick = onSignIn) {
+                    Icon(
+                        Icons.Outlined.AccountCircle,
+                        contentDescription = null,
+                        modifier = Modifier.size(16.dp)
+                    )
+                    Spacer(Modifier.size(6.dp))
+                    Text("Sign in", style = MaterialTheme.typography.bodySmall)
+                }
+            }
         }
 
         IconButton(
@@ -137,6 +200,12 @@ fun HomeScreen(
         SettingsSheet(
             viewModel = viewModel,
             prefsRepo = prefsRepo,
+            authRepo = authRepo,
+            groupsRepo = groupsRepo,
+            onSignIn = {
+                showingSettings = false
+                onSignIn()
+            },
             onDismiss = { showingSettings = false }
         )
     }
@@ -155,6 +224,9 @@ fun HomeScreen(
             },
             onDismiss = { showingNewGame = false }
         )
+    }
+    replayingDaily?.let { result ->
+        CompletedBoardSheet(result = result, onDismiss = { replayingDaily = null })
     }
 }
 
@@ -179,8 +251,7 @@ private fun DailyButton(
         when (status) {
             DailyStatus.COMPLETED -> {
                 OutlinedButton(
-                    onClick = { /* disabled */ },
-                    enabled = false,
+                    onClick = onClick,
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     Icon(Icons.Filled.CheckCircle, contentDescription = null)
@@ -235,7 +306,7 @@ private fun ContinueButton(save: GameSave, onClick: () -> Unit) {
         }
         Spacer(Modifier.height(4.dp))
         Text(
-            "Puzzle #${save.puzzle.id} · ${save.puzzle.difficulty.label} · ${formatTime(save.elapsedSeconds)}",
+            "${save.puzzle.displayLabel} · ${save.puzzle.difficulty.label} · ${formatTime(save.elapsedSeconds)}",
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )

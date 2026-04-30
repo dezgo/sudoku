@@ -1,6 +1,6 @@
-# Sudoku — Status
+# Sudoku — iOS Status
 
-_Last updated: 2026-04-28_
+_Last updated: 2026-04-29_
 
 A SwiftUI iOS Sudoku app. Single-target Xcode project. iOS 18.5 deployment.
 
@@ -32,43 +32,70 @@ A SwiftUI iOS Sudoku app. Single-target Xcode project. iOS 18.5 deployment.
 - Games sheet with two sections: In Progress (tap to resume) and Completed (tap to view solved board read-only).
 - Completion history persisted with timestamp, elapsed time, and full puzzle snapshot for replay viewing.
 
+### Identity, groups, and networking (Phase 1)
+- Email + 6-digit OTP sign-in via the Sudoku backend at `sudoku.appfoundry.cc`. Bearer token stored in Keychain.
+- Multi-step sign-in sheet (email → code → display name → create-or-join-a-group).
+- Anonymous play allowed; signing in is optional, surfaced via "Sign in" chip top-left and Settings → Account.
+- Multiple groups per user. Create a group → 6-char invite code shown + shareable. Join with a code. Settings → Groups lists all your groups with member counts and invite codes (each row has a Share button).
+- Daily puzzle is **fetched from the server** (server-side generation in Sydney timezone). Today + tomorrow are cached locally so the daily works offline once fetched. If the network is unreachable on first launch, falls back to the local generator (flagged unranked; will not post a score).
+- App refreshes daily + groups on foreground (`scenePhase == .active` when signed in) so changes from another device propagate without a kill+relaunch.
+
 ## Architecture
 
 | File | Role |
 |---|---|
-| `SudokuApp.swift` | App entry point. |
-| `ContentView.swift` | Root view; wires `SudokuGame`, `PuzzleHistory`, `GameStore`; header / board / pad / controls layout; sheet presentation. |
+| `SudokuApp.swift` | App entry; instantiates `AuthStore`, `GroupsStore`, `DailyPuzzleStore` and injects them via environment. |
+| `ContentView.swift` | Root view; phase routing (home / playing); presents sign-in, settings, history, new-game, solved sheets; refresh-on-foreground hooks. |
 | `BoardView.swift` | 9×9 grid layout, grid lines, pause cover. |
 | `CellView.swift` | Single cell rendering: backgrounds, value vs notes, locked/error styling. |
 | `NumberPadView.swift` | 1–9 buttons, Pencil toggle, dynamic Erase/Undo button. |
-| `SudokuGame.swift` | All game state and logic (`ObservableObject`). Cells, selection, modes, highlighting helpers, conflict / solve detection, autosave hooks, undo bookkeeping. |
-| `SudokuPuzzle.swift` | `Difficulty` enum, `Puzzle` Codable struct, hand-curated source puzzles (Easy / Medium / Hard) sharing one solution. |
-| `PuzzleProvider.swift` | `PuzzleProvider` protocol + `HardcodedPuzzleProvider` (7 variants per tier via validity-preserving transforms; deterministic seeded RNG). Kept for previews / tests; production uses `GeneratedPuzzleProvider`. |
-| `PuzzleGenerator.swift` | Production `GeneratedPuzzleProvider` + `SudokuGridGenerator` + `SudokuSolver`. Generates an independent solved grid per call, carves a puzzle by uniqueness-preserving cell removal targeting a per-difficulty hint count. Maintains a small per-difficulty buffer filled on a background queue so New Game stays responsive. Also implements deterministic daily puzzles — same date → same puzzle on every device — via `DailyPuzzle.seed`. Today's daily is pre-warmed in the cache at app launch. |
-| `SeededRNG.swift` | Linear-congruential RNG used for both variant transforms and daily-puzzle seeding. |
-| `DailyPuzzle.swift` | Daily puzzle naming + seeding helpers. Stable `id(for:)` (YYYYMMDD) so saves/history record dailies under predictable IDs. |
-| `PuzzleHistory.swift` | Completed-puzzle records (`PuzzleResult`) persisted to UserDefaults. |
-| `GameStore.swift` | In-progress saves (`GameSave`) keyed by puzzle ID, persisted to UserDefaults. |
+| `SudokuGame.swift` | All game state and logic (`ObservableObject`). Cells, selection, modes, highlighting helpers, conflict / solve detection, autosave hooks, undo bookkeeping. `startDaily(puzzle:)` overload accepts a server-resolved daily. |
+| `SudokuPuzzle.swift` | `Difficulty` enum, `Puzzle` Codable struct, hand-curated source puzzles. |
+| `PuzzleProvider.swift` | `PuzzleProvider` protocol + `HardcodedPuzzleProvider` (kept for previews / tests). |
+| `PuzzleGenerator.swift` | `GeneratedPuzzleProvider` + `SudokuGridGenerator` + `SudokuSolver`. Used for non-daily puzzles and as the offline-fallback daily generator. |
+| `SeededRNG.swift` | Linear-congruential RNG. |
+| `DailyPuzzle.swift` | YYYYMMDD → daily ID + seed (now mostly used by the offline-fallback path). |
+| `PuzzleHistory.swift` | Completed-puzzle records persisted to UserDefaults. |
+| `GameStore.swift` | In-progress saves keyed by puzzle ID. |
 | `HistoryView.swift` | Games sheet; in-progress + completed sections. |
-| `CompletedBoardView.swift` | Read-only solved-board view for completed entries. |
-| `SettingsView.swift` | Highlight toggles + theme picker; gear icon in header. |
-| `HomeView.swift` | Landing screen on launch / after solve. New Game, Continue (if a save exists), Games, gear-icon Settings. |
-| `SolvedView.swift` | Fanfare sheet shown when a puzzle is completed. Tap Done to return to home. |
-| `NewGameSheet.swift` | Compact bottom sheet that asks for difficulty before starting a new game; pre-selects last-played tier. |
+| `CompletedBoardView.swift` | Read-only solved-board view. |
+| `HomeView.swift` | Landing screen. Daily / Continue / New Game / Games / Settings. Identity chip top-left; "Sign in" button when signed out, display name when signed in. |
+| `SettingsView.swift` | Highlight toggles + theme picker + **Account** section (sign in / sign out) + **Groups** section (list, invite codes, share, leave, add-a-group). |
+| `SolvedView.swift` | Fanfare sheet on completion. |
+| `NewGameSheet.swift` | Difficulty picker. |
+| `APIClient.swift` | Async HTTP client (URLSession + JSON) for the backend. Pure functions per endpoint; no auth state of its own. |
+| `Keychain.swift` | Tiny wrapper over Security framework for the bearer token. |
+| `AuthStore.swift` | `ObservableObject` for token + signed-in user. Sign-in/verify/setDisplayName/sign-out. Persists via Keychain (token) and UserDefaults (cached user). |
+| `GroupsStore.swift` | `ObservableObject` for the user's groups. Refresh / create / join / leave. Cache in UserDefaults. |
+| `DailyPuzzleStore.swift` | Coordinates daily fetch + cache + offline fallback. `ensureToday()` returns `(Puzzle, isOffline)`. |
+| `SignInView.swift` | Multi-step sign-in sheet (email → code → display name → group onboarding). |
+| `GroupOnboardingView.swift` | Create-or-join-a-group sheet content; shows the invite code with `ShareLink` after creation. |
 
 ### Persistence keys
-- `sudoku.history.v1` — completed games.
-- `sudoku.saves.v1` — in-progress saves.
-- `sudoku.difficulty` — preferred difficulty.
-- `sudoku.appearance` — theme override.
+
+| Key | Backing store | Contents |
+|---|---|---|
+| `sudoku.history.v1` | UserDefaults | Completed games (`PuzzleResult` array). |
+| `sudoku.saves.v1` | UserDefaults | In-progress saves keyed by `puzzle.id`. |
+| `sudoku.difficulty` | UserDefaults | Preferred difficulty. |
+| `sudoku.appearance` | UserDefaults | Theme override (System/Light/Dark). |
+| `sudoku.identity.v1` | UserDefaults | Cached signed-in user (id, display name). |
+| `api-token` (account) | **Keychain** | Bearer token for the API. |
+| `sudoku.groups.v1` | UserDefaults | Cached `[GroupListItem]` (group + member count + invite code). |
+| `sudoku.daily_cache.v1` | UserDefaults | Cached today + tomorrow puzzles + `fetched_at`. |
+| `sudoku.pending_scores.v1` | UserDefaults | Reserved for Phase 2 — score POSTs queued when offline. |
 
 ### Notes / known caveats
-- Production puzzles come from `GeneratedPuzzleProvider`, which produces an independent solved grid per call and carves with uniqueness verification. Generated puzzles use IDs starting at 1000 to avoid colliding with the 1–21 hardcoded range that may exist in older saves/history.
+- Production puzzles come from `GeneratedPuzzleProvider`; generated puzzle IDs start at 1000 to avoid colliding with the 1–21 hardcoded range that may exist in older saves/history.
 - `lastPlacementInfo` (Undo target) is in-memory only; closing the app forfeits Undo for the most recent placement.
-- Conflict detection prefers solution-mismatch for user cells when a solution is known; falls back to row/col/box rule check otherwise.
-- First New Game after a fresh launch can briefly block (1–2s) if the per-difficulty buffer hasn't filled yet; subsequent generations are instant.
+- Conflict detection prefers solution-mismatch for user cells when a solution is known.
+- First New Game after a fresh launch can briefly block (1–2s) if the per-difficulty buffer hasn't filled yet.
+- Daily fetched from server in `Australia/Sydney` timezone for v1 — devices in other timezones may see a ±1 day skew (SPEC §17.6 — per-group timezones are deferred).
+- Offline-fallback daily is **not** byte-identical to the server's daily; any solve against a fallback puzzle is unranked and will not post a score (Phase 2).
 
-## Roadmap (likely order)
+## Roadmap
 
-1. **Leaderboards** — needs networking + identity. Originally excluded for MVP, now on the table per user. The daily puzzle (already shipped) provides the shared anchor.
-2. More polish: settings toggle for solution-based vs rule-based mistake highlighting, optional cross-session Undo persistence, per-tier dailies if desired.
+1. **Phase 2 — Leaderboards.** Score POST on solve, leaderboard sheet showing per-group ranking for today's daily, pending-scores queue for offline solves.
+2. **Phase 2.5 — Username + invite-by-username.** Replace invite-code-as-primary with searchable usernames; keep codes as fallback.
+3. **TestFlight distribution.** Requires Apple Developer Program ($99/yr).
+4. **Polish.** Per-group timezone, solution-based vs rule-based mistake toggle, cross-session Undo, per-tier dailies.

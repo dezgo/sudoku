@@ -11,6 +11,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -18,35 +19,54 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.derekgillett.sudoku.data.AppearancePreference
+import com.derekgillett.sudoku.data.AuthRepository
+import com.derekgillett.sudoku.data.DailyPuzzleRepository
+import com.derekgillett.sudoku.data.GroupsRepository
 import com.derekgillett.sudoku.data.PreferencesRepository
 import com.derekgillett.sudoku.model.PuzzleResult
 import com.derekgillett.sudoku.state.Phase
 import com.derekgillett.sudoku.state.SudokuGameViewModel
 import com.derekgillett.sudoku.ui.theme.SudokuTheme
+import kotlinx.coroutines.launch
 
 @Composable
 fun SudokuRoot(
     viewModel: SudokuGameViewModel,
-    prefsRepo: PreferencesRepository
+    prefsRepo: PreferencesRepository,
+    authRepo: AuthRepository,
+    groupsRepo: GroupsRepository,
+    dailyRepo: DailyPuzzleRepository
 ) {
     val state by viewModel.state.collectAsState()
     val prefs by prefsRepo.preferences.collectAsState(initial = null)
     var solvedResult by remember { mutableStateOf<PuzzleResult?>(null) }
+    var showingSignIn by remember { mutableStateOf(false) }
+    val refreshScope = rememberCoroutineScope()
 
-    // Wire the solve callback on first composition.
     LaunchedEffect(viewModel) {
-        viewModel.onSolved { result ->
-            solvedResult = result
-        }
+        viewModel.onSolved { result -> solvedResult = result }
     }
 
-    // Auto-pause / auto-resume on lifecycle changes.
+    // Initial load: prime caches from disk, then refresh from server.
+    LaunchedEffect(Unit) {
+        dailyRepo.primeFromCache()
+        groupsRepo.primeFromCache()
+        dailyRepo.refresh()
+        if (authRepo.isSignedIn) groupsRepo.refresh()
+    }
+
     val lifecycleOwner = LocalLifecycleOwner.current
     LaunchedEffect(lifecycleOwner) {
         val observer = LifecycleEventObserver { _, event ->
             when (event) {
                 Lifecycle.Event.ON_STOP, Lifecycle.Event.ON_PAUSE -> viewModel.enterBackground()
-                Lifecycle.Event.ON_START, Lifecycle.Event.ON_RESUME -> viewModel.enterForeground()
+                Lifecycle.Event.ON_START, Lifecycle.Event.ON_RESUME -> {
+                    viewModel.enterForeground()
+                    refreshScope.launch {
+                        dailyRepo.refresh()
+                        if (authRepo.isSignedIn) groupsRepo.refresh()
+                    }
+                }
                 else -> Unit
             }
         }
@@ -74,16 +94,30 @@ fun SudokuRoot(
                 when (s.phase) {
                     Phase.HOME -> HomeScreen(
                         viewModel = viewModel,
-                        prefsRepo = prefsRepo
+                        prefsRepo = prefsRepo,
+                        authRepo = authRepo,
+                        groupsRepo = groupsRepo,
+                        dailyRepo = dailyRepo,
+                        onSignIn = { showingSignIn = true }
                     )
                     Phase.PLAYING -> GameScreen(
                         viewModel = viewModel,
-                        prefsRepo = prefsRepo
+                        prefsRepo = prefsRepo,
+                        authRepo = authRepo,
+                        groupsRepo = groupsRepo,
+                        onSignIn = { showingSignIn = true }
                     )
                 }
             }
 
-            // Solved fanfare.
+            if (showingSignIn) {
+                SignInSheet(
+                    authRepo = authRepo,
+                    groupsRepo = groupsRepo,
+                    onDismiss = { showingSignIn = false }
+                )
+            }
+
             solvedResult?.let { result ->
                 SolvedSheet(
                     result = result,

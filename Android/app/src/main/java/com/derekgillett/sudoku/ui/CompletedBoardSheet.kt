@@ -13,9 +13,19 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CalendarMonth
+import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Schedule
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.draw.scale
+import androidx.compose.ui.graphics.Color
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -48,10 +58,11 @@ fun CompletedBoardSheet(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(horizontal = 16.dp, vertical = 8.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp)
+            verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
+            FanfareHeader()
             Text(
-                "Puzzle #${result.puzzleID} · ${puzzle.difficulty.label}",
+                "${puzzle.displayLabel} · ${puzzle.difficulty.label}",
                 fontSize = 22.sp,
                 fontWeight = FontWeight.Bold,
                 modifier = Modifier.padding(horizontal = 8.dp)
@@ -78,6 +89,40 @@ fun CompletedBoardSheet(
             }
             ReadOnlyBoard(puzzle)
         }
+    }
+}
+
+/**
+ * Bouncy "Solved!" header — animation plays once on appear, then the view
+ * settles into the read-only board below. Mirrors iOS's symbolEffect(.bounce).
+ */
+@Composable
+private fun FanfareHeader() {
+    var triggered by remember { mutableStateOf(false) }
+    val scale by animateFloatAsState(
+        targetValue = if (triggered) 1f else 0.4f,
+        animationSpec = tween(durationMillis = 380),
+        label = "fanfare-scale"
+    )
+    LaunchedEffect(Unit) { triggered = true }
+    Column(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(6.dp)
+    ) {
+        Icon(
+            imageVector = Icons.Filled.CheckCircle,
+            contentDescription = null,
+            tint = Color(0xFF2E7D32),
+            modifier = Modifier
+                .size(56.dp)
+                .scale(scale)
+        )
+        Text(
+            "Solved!",
+            fontSize = 22.sp,
+            fontWeight = FontWeight.Bold
+        )
     }
 }
 

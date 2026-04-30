@@ -33,6 +33,25 @@ struct Puzzle: Codable {
         self.solution = solution
     }
 
+    /// True if this puzzle's ID looks like a daily (YYYYMMDD-shaped Int).
+    var isDaily: Bool { id >= 19700101 && id <= 99991231 }
+
+    /// Human-readable label for headers / lists. Dailies show as
+    /// "Daily · Apr 29"; generated puzzles show as "Puzzle #1042".
+    var displayLabel: String {
+        if isDaily,
+           let date = DateComponents(
+               calendar: .current,
+               year: id / 10000,
+               month: (id / 100) % 100,
+               day: id % 100
+           ).date {
+            return "Daily · " + date.formatted(.dateTime.month(.abbreviated).day())
+        }
+        return "Puzzle #\(id)"
+    }
+
+
     private enum CodingKeys: String, CodingKey {
         case id, difficulty, givens, solution
     }

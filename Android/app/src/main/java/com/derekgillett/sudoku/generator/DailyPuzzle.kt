@@ -23,7 +23,11 @@ object DailyPuzzle {
      * outputs.
      */
     fun seed(date: LocalDate = LocalDate.now()): Long {
-        // Note: matches iOS multiplier; Long arithmetic wraps mod 2^64.
-        return id(date).toLong() * 0x9E37_79B9_7F4A_7C15L
+        // Multiplier is the same bit pattern as the iOS version. Kotlin's
+        // Long is signed and 0x9E3779B97F4A7C15 exceeds Long.MAX_VALUE, so
+        // we write it as a ULong literal and reinterpret bits to Long. The
+        // multiplication itself wraps mod 2^64, matching iOS unchecked
+        // overflow operators.
+        return id(date).toLong() * 0x9E3779B97F4A7C15uL.toLong()
     }
 }

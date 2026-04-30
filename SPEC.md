@@ -8,7 +8,9 @@ If a behaviour isn't here, it isn't part of the contract: feel free to choose th
 
 ## 1. Vision
 
-A small, tight Sudoku app intended to be sent to a friend group. The core loop is the **daily puzzle**: every device shows the same puzzle on a given calendar date, and friends compare completion times on a shared leaderboard. The single-player game (random puzzles at three difficulty tiers) is fully featured but is a side-mode to the daily.
+A small, tight Sudoku app intended to be sent to friend / family groups. The core loop is the **daily puzzle**: every device shows the same puzzle on a given calendar date, and members of each group compare completion times on a per-group leaderboard. The same user can belong to multiple groups (e.g. family + two separate friend circles); the daily puzzle is global, but the leaderboard is filtered to each group's members. The single-player game (random puzzles at three difficulty tiers) is fully featured but is a side-mode to the daily.
+
+Identity, group membership, daily distribution, and score storage are all served by a small Cloudflare Workers backend at `sudoku.appfoundry.cc` — see §17.
 
 Distribution is via TestFlight (iOS) and Google Play internal-test track (Android). Not a public app-store launch.
 
@@ -39,7 +41,7 @@ Standard 9×9 Sudoku:
 
 | Field      | Type            | Meaning                                                    |
 |------------|-----------------|------------------------------------------------------------|
-| id         | int             | Stable identifier. Generated puzzles use ≥1000; daily uses YYYYMMDD. |
+| id         | int             | Stable identifier. Generated puzzles use ≥1000; daily uses YYYYMMDD. The puzzle's `displayLabel` reads "Daily · MMM d" when the ID is in the YYYYMMDD range and "Puzzle #N" otherwise — used everywhere a puzzle is named in the UI to avoid showing a raw 8-digit number to the user. |
 | difficulty | enum (E/M/H)    | Easy, Medium, or Hard.                                     |
 | givens     | int[9][9]       | Starting grid. 0 = blank.                                  |
 | solution   | int[9][9]?      | The completed solution. Optional only for unsourced puzzles; in this app, always present. |
@@ -78,12 +80,16 @@ The runtime in-memory state (current selection, last placement / undo info, paus
 
 Storage format is JSON-encoded; the iOS reference uses `UserDefaults` keyed as:
 
-| Key                     | Contents                                                          |
-|-------------------------|-------------------------------------------------------------------|
-| `sudoku.history.v1`     | Array of `PuzzleResult`.                                          |
-| `sudoku.saves.v1`       | Map of `puzzle.id` → `GameSave`.                                  |
-| `sudoku.difficulty`     | Difficulty enum raw value.                                        |
-| `sudoku.appearance`     | Appearance enum raw value (system/light/dark).                    |
+| Key                          | Contents                                                          |
+|------------------------------|-------------------------------------------------------------------|
+| `sudoku.history.v1`          | Array of `PuzzleResult`.                                          |
+| `sudoku.saves.v1`            | Map of `puzzle.id` → `GameSave`.                                  |
+| `sudoku.difficulty`          | Difficulty enum raw value.                                        |
+| `sudoku.appearance`          | Appearance enum raw value (system/light/dark).                    |
+| `sudoku.identity.v1`         | `{ user_id, display_name, token }` for the signed-in user. Token stored in Keychain (iOS) / EncryptedSharedPreferences (Android), not in plain UserDefaults / DataStore. Absent when signed out. |
+| `sudoku.groups.v1`           | Cached list of `{ id, name, member_count }` for the user's groups, refreshed from `/v1/me/groups`. |
+| `sudoku.daily_cache.v1`      | `{ today: Puzzle, tomorrow: Puzzle, fetched_at }` from `/v1/daily/today`. Used so the daily works offline once fetched. |
+| `sudoku.pending_scores.v1`   | Queue of `{ puzzle_id, elapsed_seconds, mistakes, completed_at }` awaiting upload — solves completed while offline or signed-out. |
 
 Any equivalent platform-native key/value store (Android `DataStore`, web `localStorage`) is fine.
 
@@ -123,14 +129,14 @@ The solver doubles as the engine that knows whether a placement matches the solu
 
 ## 7. Daily Puzzle
 
-A single shared puzzle per calendar date, identical across devices.
+A single shared puzzle per calendar date, identical across **all** devices and groups, served by the backend.
 
-- **Date** is the device's local calendar date (year/month/day).
-- **ID** is `YYYYMMDD` (e.g. 2026-04-28 → 20260428).
-- **Seed** is a 64-bit value derived from the ID, multiplied by a large odd constant to spread bits.
-- The same generator (above) is run with a deterministic RNG seeded from this value, so any two devices on the same date produce identical givens and solution.
+- **Date** is the **server's** calendar date in `Australia/Sydney` for v1. Per-group timezones (each group resolves "today" in its own timezone) are a deferred enhancement — see §17.6.
+- **ID** is `YYYYMMDD` (e.g. 2026-04-29 → 20260429).
+- The Worker generates the day's puzzle on first request and persists it in D1, so every subsequent request returns byte-identical givens and solution. The puzzle is generated using the §6 algorithm seeded from the puzzle ID, which is deterministic but no longer load-bearing for cross-device identity (D1 is the source of truth).
 - Difficulty is fixed (currently Medium).
-- Today's daily should be pre-warmed in the cache at app launch so opening it is instant.
+- Apps fetch the daily via `GET /v1/daily/today`, which returns **today and tomorrow** in one response. Both are cached locally (`sudoku.daily_cache.v1`), so any device that opens the app once a day always has the next daily prefetched and works offline.
+- **Offline fallback**: if the daily can't be fetched and isn't cached, the app may generate a local puzzle using the §6 algorithm so the user has *something* to play. Such a fallback puzzle is **not guaranteed to match** the canonical server puzzle, so the app must clearly mark it as offline / unranked, and any solve against it is **not posted as a score**.
 
 The daily uses the same in-progress save / history flow as any other puzzle (its ID happens to be in the YYYYMMDD range).
 
@@ -236,7 +242,7 @@ Shows, in order:
 1. **Daily Puzzle button** — featured, at the top. Three states:
    - *Not started today* — "Daily Puzzle" with subtitle = today's date.
    - *In progress today* — "Resume Daily" with subtitle = date + elapsed time.
-   - *Completed today* — disabled, "Daily Done" with subtitle = "already played".
+   - *Completed today* — "Daily Done" with subtitle = "already played". Tappable — opens the read-only completed-board view (§13.5) with the bouncy "Solved!" header playing on appear, so the user can revisit their solved daily.
 2. **Continue button** — only shown if the most-recent in-progress save is *not* today's daily (otherwise Daily already covers it). Subtitle shows puzzle ID, difficulty, elapsed time.
 3. **New Game button** — opens the New Game sheet (difficulty picker).
 4. **Games button** — opens the Games sheet.
@@ -244,7 +250,7 @@ Shows, in order:
 
 ### 13.2 Playing screen
 
-- **Header**: puzzle title (`Sudoku #N · Difficulty`), green seal if solved, mistake count (only if "Highlight mistakes" on), elapsed timer, pause/play button, settings gear.
+- **Header**: puzzle title (`<displayLabel> · Difficulty`), green seal if solved, mistake count (only if "Highlight mistakes" on), elapsed timer, pause/play button, settings gear. `displayLabel` is "Daily · MMM d" for dailies and "Puzzle #N" for generated puzzles (see §3).
 - **Board**: 9×9 grid with the highlighting rules from §8. Tap to select.
 - **Number pad**: 1–9 buttons (§9), Pencil-toggle button, Erase/Undo button.
 - **Bottom controls**: prominent **Home** button (with house icon), **Reset** button (with confirmation dialog before discarding progress).
@@ -272,10 +278,11 @@ A "Clear" button (with confirmation) wipes the completed history. In-progress sa
 
 ### 13.5 Completed-board view
 
-Read-only render of a previously-solved puzzle:
+Read-only render of a previously-solved puzzle. Reachable from the Games sheet (Completed section) and from the Home screen's "Daily Done" button.
 
 - Title: `Puzzle #N`.
-- Top: completion date, elapsed time.
+- Top: bouncy green checkmark-seal icon with "Solved!" text — animation plays once on appear, the view then settles to the static board.
+- Below: completion date, elapsed time.
 - Below: the 9×9 grid showing the *solution*. Givens render in bold; user-filled cells in regular weight.
 - "Done" button to dismiss.
 
@@ -288,12 +295,13 @@ Sectioned form:
 
 ### 13.7 Solved sheet (fanfare)
 
-Shown automatically when the user solves a puzzle while on the Playing screen:
+Shown automatically when the user solves a puzzle while on the Playing screen. The sheet is intentionally celebratory:
 
-- Large green checkmark-seal icon (animated bounce on appear).
-- "Solved!" title.
-- Subtitle: `Puzzle #N · Difficulty`, elapsed time, mistake count.
-- "Done" button — dismisses the sheet **and** returns to Home in one action.
+- **Confetti shower** falling behind the content for a few seconds.
+- **Triple-icon flourish**: a smaller party-popper-style icon on the left (rotated outward), a large green checkmark-seal in the centre, and a mirrored party-popper on the right. All scale-in with a bouncy spring on appear.
+- **"Solved!" title** in large extra-bold rounded type, with a green→blue gradient.
+- **Subtitle**: `<displayLabel> · <Difficulty>`, where `displayLabel` is "Daily · MMM d" for daily puzzles and "Puzzle #N" for generated. Elapsed time and mistake count below.
+- **Done button** — dismisses the sheet **and** returns to Home in one action.
 
 The sheet does not appear if the puzzle is already solved at app launch (avoids spurious fanfare from a corrupted-save edge case).
 
@@ -320,7 +328,7 @@ If everything in the requested tier is excluded, fall back to any puzzle in that
 
 ## 15. Lifecycle Behaviours
 
-- **App launch**: load history + saves from persistence. If a most-recent save exists, set the runtime game state to that save (so the data is ready for Continue) but **start on Home, not in Playing**. Do not auto-resume into the puzzle.
+- **App launch**: load history + saves from persistence. If a most-recent save exists, set the runtime game state to that save (so the data is ready for Continue) but **start on Home, not in Playing**. Do not auto-resume into the puzzle. In the background, attempt to refresh the daily cache via `GET /v1/daily/today` and flush any rows in `sudoku.pending_scores.v1` (only when authenticated). Failures are silent — the user can still play from cached / fallback dailies.
 - **App background / inactive**: auto-pause the timer (§12). Saves are already up-to-date because every state-changing action calls saveProgress.
 - **App foreground / active**: auto-resume the timer iff we auto-paused it. Manual pauses survive.
 - **Solve**: stop the timer permanently, append a `PuzzleResult` to history, remove the puzzle's in-progress save, show the Solved sheet (only if on Playing screen).
@@ -338,17 +346,92 @@ Persisted preferences:
 
 ---
 
-## 17. Future: Leaderboards (cross-platform)
+## 17. Identity, Groups & Leaderboards
 
-Not yet implemented. Design constraints when added:
+The social layer of the app. Implemented as a Cloudflare Workers backend (D1 + Resend) at `sudoku.appfoundry.cc`.
 
-- Anchor is the daily puzzle. One leaderboard per day, score = elapsedSeconds (lower is better), tiebreaker = completion timestamp (earlier wins).
-- Must work on both iOS and Android with shared data, so neither Game Center alone nor Google Play Games Services alone is sufficient. A small shared backend is required.
-- Identity model: friends-group, low friction. A simple display name + opaque user ID is sufficient — no social graph or follow/friend system needed initially.
-- Score submission happens at the moment of solve, ideally with retry/queue if offline.
-- Leaderboard view: top N for today's daily, plus the user's rank if outside top N.
+### 17.1 Backend stack
 
-Backend candidates: Firebase, Supabase, or a small Cloudflare Worker + KV. All fit a friends-group on free tiers.
+- **Runtime**: Cloudflare Workers (TypeScript).
+- **Database**: Cloudflare D1 (SQLite).
+- **Email delivery**: Resend, sending from `noreply@appfoundry.cc`.
+- **Domain**: `sudoku.appfoundry.cc`, configured in the user's existing `appfoundry.cc` Cloudflare zone.
+- **Tier**: free across the board; usage at this scale (a small group of friends) is well inside every free quota.
+
+### 17.2 Identity
+
+Email + 6-digit OTP. No passwords, no third-party sign-in.
+
+**Flow:**
+
+1. User enters their email → app calls `POST /v1/auth/start { email }`. Server generates a 6-digit numeric code, stores `sha256(code)` with a 15-minute TTL and a 5-attempt cap, and emails the code via Resend.
+2. User types the code → app calls `POST /v1/auth/verify { email, code }`. Server validates, deletes the code row on success, creates the user if new, issues a 32-byte random bearer token (stored as `sha256(token)` in `auth_tokens`), and returns `{ token, user, needs_display_name }`.
+3. App stores the raw token in **Keychain (iOS) / EncryptedSharedPreferences (Android)** — never in plain UserDefaults / DataStore. Sends `Authorization: Bearer <token>` on subsequent authenticated calls.
+4. New users are immediately prompted to set a display name (`PUT /v1/me { display_name }`). Display names are global, one per user, duplicates allowed across users.
+
+Tokens never expire; revocable by deleting the `auth_tokens` row server-side.
+
+### 17.3 Groups
+
+A user can be in multiple groups simultaneously. Each group has a 6-character base32 invite code (no ambiguous characters: 0/O/1/I/L excluded).
+
+**Endpoints:**
+
+- `POST /v1/groups { name }` → creates a group, the caller is its first member, returns `{ group, invite_code }`.
+- `POST /v1/groups/join { invite_code }` → joins the matching group, returns `{ group }`.
+- `GET /v1/me/groups` → the caller's groups.
+- `GET /v1/groups/:id/members` → roster of a group the caller belongs to.
+- `DELETE /v1/groups/:id/members/me` → leave a group.
+
+**Onboarding (first sign-in):** after display-name is set, the app shows a one-time "you're not in any groups yet" screen with two buttons — *Create a group* and *Join with a code*. Either is skippable; the user can play the daily as a signed-in solo player and add groups from settings later.
+
+**Rules:**
+
+- The daily puzzle is global. Groups do **not** fork the puzzle.
+- Score is global per user (one row per `(user_id, puzzle_id)`). Leaderboard view is per-group: filtered through `group_members`.
+- Display name is global, one per user.
+- A user signed-in with no groups can still play and score, but no leaderboard view is meaningful.
+
+### 17.4 Leaderboards
+
+Anchored on the daily puzzle. One leaderboard per `(group, puzzle_id)`.
+
+- **Score** = elapsed seconds (lower is better).
+- **Tiebreaker** = `completed_at` (earlier wins).
+- **Endpoints**: `POST /v1/scores { puzzle_id, elapsed_seconds, mistakes }` (idempotent — composite PK `(user_id, puzzle_id)` makes re-submission a no-op). `GET /v1/groups/:id/scores/:puzzle_id` returns the rows for that group + puzzle, sorted ascending by `elapsed_seconds`.
+- **Submission**: on solve, the app POSTs the score. Failure (offline, no auth) puts the entry in `sudoku.pending_scores.v1`, which is flushed on next authenticated app launch and after a successful sign-in. Composite PK dedup means retry is safe.
+- **View**: leaderboard sheet shows top N for today's daily within the selected group, plus the user's rank if outside top N. With ≥2 groups, a small picker (segmented control / dropdown) at the top of the sheet selects which group to view.
+- **Anonymous solves**: not posted. The fanfare offers a "Sign in to put this on the board" affordance.
+
+### 17.5 API contract (v1)
+
+Base URL: `https://sudoku.appfoundry.cc/v1`. All bodies are JSON.
+
+| Method | Path                              | Auth     | Request                                | Response                                      |
+|--------|-----------------------------------|----------|----------------------------------------|-----------------------------------------------|
+| POST   | `/auth/start`                     | none     | `{ email }`                            | `204`                                         |
+| POST   | `/auth/verify`                    | none     | `{ email, code }`                      | `{ token, user, needs_display_name }`         |
+| GET    | `/me`                             | bearer   | —                                      | `{ user }`                                    |
+| PUT    | `/me`                             | bearer   | `{ display_name }`                     | `{ user }`                                    |
+| GET    | `/me/groups`                      | bearer   | —                                      | `[{ group, member_count, invite_code }]`      |
+| POST   | `/groups`                         | bearer   | `{ name }`                             | `{ group, invite_code }`                      |
+| POST   | `/groups/join`                    | bearer   | `{ invite_code }`                      | `{ group }`                                   |
+| GET    | `/groups/:id/members`             | bearer   | —                                      | `[{ user }]`                                  |
+| DELETE | `/groups/:id/members/me`          | bearer   | —                                      | `204`                                         |
+| GET    | `/daily/today`                    | none     | —                                      | `{ today: Puzzle, tomorrow: Puzzle }`         |
+| GET    | `/daily/:puzzle_id`               | none     | —                                      | `{ puzzle: Puzzle }`                          |
+| POST   | `/scores`                         | bearer   | `{ puzzle_id, elapsed_seconds, mistakes }` | `{ rank }`                                |
+| GET    | `/groups/:id/scores/:puzzle_id`   | bearer   | —                                      | `[{ display_name, elapsed_seconds, completed_at, rank }]` |
+
+`Puzzle` payload: `{ puzzle_id: int, date: "YYYY-MM-DD", difficulty: "medium", givens: int[9][9], solution: int[9][9] }`. `User`: `{ id, display_name }`. `Group`: `{ id, name }`.
+
+### 17.6 Deferred (post-v1)
+
+- **Per-group timezone.** A `groups.timezone TEXT` column + per-group resolution of "today's" date. Users in two groups in different timezones would see two different "today" puzzles in the same UTC instant. Deferred until anyone plays the app outside `Australia/Sydney`.
+- **Live realtime co-op / competitive.** Cloudflare Durable Objects + WebSockets, room key = `match_id` (UUID), independent of `group_id`. Friends-group picker pulls invitable people from the user's groups but a match itself isn't bound to one.
+- **Async buddy progress.** Periodic `POST /v1/me/progress { puzzle_id, cells_filled_count, elapsed_seconds }` while playing; visible from the leaderboard view as "Alice is 47/81 at 03:12". Same HTTP stack as scoring, no new infra.
+- **Deferred-deeplink group join.** Tap an invite link → install app → after sign-in, automatically joined to the inviting group.
+- **Group admin actions.** Rename group, rotate invite code, kick member, transfer ownership.
 
 ---
 

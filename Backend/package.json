@@ -1,0 +1,21 @@
+{
+  "name": "sudoku-api",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Cloudflare Workers backend for the cross-platform Sudoku app. See ../SPEC.md §17.",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "typecheck": "tsc --noEmit",
+    "db:create": "wrangler d1 create sudoku",
+    "db:migrate:local": "wrangler d1 migrations apply sudoku --local",
+    "db:migrate:remote": "wrangler d1 migrations apply sudoku --remote",
+    "db:console:local": "wrangler d1 execute sudoku --local --command",
+    "db:console:remote": "wrangler d1 execute sudoku --remote --command"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^4.20260101.0",
+    "typescript": "^5.5.0",
+    "wrangler": "^4.86.0"
+  }
+}

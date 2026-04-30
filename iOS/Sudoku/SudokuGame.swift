@@ -443,6 +443,14 @@ final class SudokuGame: ObservableObject {
         loadPuzzle(next)
     }
 
+    /// Load a daily puzzle that's already been resolved by the caller —
+    /// typically `DailyPuzzleStore.ensureToday()`, which handles the
+    /// server-fetch + offline-fallback logic and returns a ready `Puzzle`.
+    func startDaily(puzzle: Puzzle) {
+        saveProgress()
+        loadPuzzle(puzzle)
+    }
+
     // MARK: - Highlight helpers
 
     func isHighlighted(row: Int, col: Int) -> Bool {

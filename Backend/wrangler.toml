@@ -1,0 +1,35 @@
+name = "sudoku-api"
+main = "src/index.ts"
+compatibility_date = "2026-04-29"
+
+# Routing — bind sudoku.appfoundry.cc to this Worker.
+# `custom_domain = true` makes Cloudflare manage the DNS record for this
+# subdomain. If a manual A/CNAME for sudoku.appfoundry.cc already exists in the
+# zone, the first `wrangler deploy` will fail with a clear conflict message —
+# delete that manual record in the dashboard, then re-deploy.
+[[routes]]
+pattern = "sudoku.appfoundry.cc"
+custom_domain = true
+
+# Plain (non-secret) vars. Email-from address and the timezone used to derive
+# "today's" puzzle date.
+[vars]
+EMAIL_FROM = "Sudoku <noreply@appfoundry.cc>"
+DAILY_TIMEZONE = "Australia/Sydney"
+
+# Secrets (do NOT put them here — they're set via `wrangler secret put`):
+#   RESEND_API_KEY    Resend API key for sending OTP emails.
+
+# D1 database. Run `npm run db:create`, then paste the returned database_id
+# here, replacing the placeholder.
+[[d1_databases]]
+binding = "DB"
+database_name = "sudoku"
+database_id = "fc1e0bcc-a5e6-4075-b786-fe248ecd118d"
+migrations_dir = "migrations"
+
+# Hourly cron — ensures today's and tomorrow's daily puzzles exist in D1, so
+# user-facing requests never trigger a slow generation. Idempotent: a no-op if
+# both rows already exist.
+[triggers]
+crons = ["0 * * * *"]

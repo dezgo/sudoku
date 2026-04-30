@@ -7,8 +7,16 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import android.content.Intent
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.outlined.AccountCircle
+import androidx.compose.material.icons.outlined.Share
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.SegmentedButton
@@ -16,18 +24,27 @@ import androidx.compose.material3.SegmentedButtonDefaults
 import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.derekgillett.sudoku.data.AppearancePreference
+import com.derekgillett.sudoku.data.AuthRepository
+import com.derekgillett.sudoku.data.GroupsRepository
 import com.derekgillett.sudoku.data.PreferencesRepository
+import com.derekgillett.sudoku.network.ApiGroup
 import com.derekgillett.sudoku.state.SudokuGameViewModel
 import kotlinx.coroutines.launch
 
@@ -36,12 +53,21 @@ import kotlinx.coroutines.launch
 fun SettingsSheet(
     viewModel: SudokuGameViewModel,
     prefsRepo: PreferencesRepository,
+    authRepo: AuthRepository,
+    groupsRepo: GroupsRepository,
+    onSignIn: () -> Unit,
     onDismiss: () -> Unit
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val state by viewModel.state.collectAsState()
     val prefs by prefsRepo.preferences.collectAsState(initial = null)
+    val user by authRepo.user.collectAsState()
+    val groups by groupsRepo.groups.collectAsState()
     val scope = rememberCoroutineScope()
+    val context = LocalContext.current
+
+    var showingAddGroup by remember { mutableStateOf(false) }
+    var leavingGroup: ApiGroup? by remember { mutableStateOf(null) }
 
     ModalBottomSheet(
         onDismissRequest = onDismiss,
@@ -56,6 +82,121 @@ fun SettingsSheet(
                 fontWeight = FontWeight.Bold,
                 modifier = Modifier.padding(bottom = 16.dp)
             )
+
+            // Account section
+            Text(
+                "Account",
+                style = MaterialTheme.typography.titleMedium,
+                modifier = Modifier.padding(vertical = 4.dp)
+            )
+            val displayName = user?.displayName
+            if (displayName != null) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 6.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(Icons.Outlined.AccountCircle, contentDescription = null)
+                    Spacer(Modifier.size(8.dp))
+                    Text(displayName, style = MaterialTheme.typography.bodyLarge)
+                }
+                TextButton(
+                    onClick = {
+                        authRepo.signOut()
+                        scope.launch { groupsRepo.clear() }
+                    }
+                ) {
+                    Text("Sign out", color = MaterialTheme.colorScheme.error)
+                }
+            } else if (authRepo.isSignedIn) {
+                TextButton(onClick = onSignIn) {
+                    Text("Set display name")
+                }
+            } else {
+                TextButton(onClick = onSignIn) {
+                    Icon(Icons.Outlined.AccountCircle, contentDescription = null)
+                    Spacer(Modifier.size(8.dp))
+                    Text("Sign in")
+                }
+            }
+
+            // Groups section (only when signed in)
+            if (authRepo.isSignedIn) {
+                HorizontalDivider(modifier = Modifier.padding(vertical = 12.dp))
+                Text(
+                    "Groups",
+                    style = MaterialTheme.typography.titleMedium,
+                    modifier = Modifier.padding(vertical = 4.dp)
+                )
+                groups.forEach { item ->
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 6.dp)
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(item.group.name, style = MaterialTheme.typography.bodyLarge)
+                                Text(
+                                    "${item.memberCount} member${if (item.memberCount == 1) "" else "s"}",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                            TextButton(onClick = { leavingGroup = item.group }) {
+                                Text("Leave", color = MaterialTheme.colorScheme.error)
+                            }
+                        }
+                        item.inviteCode?.let { code ->
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(top = 2.dp)
+                            ) {
+                                Text(
+                                    "Code",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                                Spacer(Modifier.size(8.dp))
+                                Text(
+                                    code,
+                                    style = MaterialTheme.typography.bodySmall,
+                                    fontFamily = FontFamily.Monospace
+                                )
+                                Spacer(Modifier.weight(1f))
+                                IconButton(onClick = {
+                                    val intent = Intent().apply {
+                                        action = Intent.ACTION_SEND
+                                        putExtra(Intent.EXTRA_TEXT, "Join my Sudoku group with code: $code")
+                                        type = "text/plain"
+                                    }
+                                    context.startActivity(Intent.createChooser(intent, null))
+                                }) {
+                                    Icon(
+                                        Icons.Outlined.Share,
+                                        contentDescription = "Share invite",
+                                        modifier = Modifier.size(18.dp)
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+                TextButton(onClick = { showingAddGroup = true }) {
+                    Icon(Icons.Filled.Add, contentDescription = null)
+                    Spacer(Modifier.size(6.dp))
+                    Text("Add a group")
+                }
+            }
+
+            HorizontalDivider(modifier = Modifier.padding(vertical = 12.dp))
 
             // Highlighting section
             Text(
@@ -99,6 +240,34 @@ fun SettingsSheet(
             }
             Spacer(Modifier.size(24.dp))
         }
+    }
+
+    if (showingAddGroup) {
+        GroupOnboardingSheet(
+            groupsRepo = groupsRepo,
+            onDone = { showingAddGroup = false },
+            onSkip = { showingAddGroup = false }
+        )
+    }
+
+    leavingGroup?.let { group ->
+        AlertDialog(
+            onDismissRequest = { leavingGroup = null },
+            title = { Text("Leave group?") },
+            text = { Text("You'll stop seeing the leaderboard for ${group.name}.") },
+            confirmButton = {
+                TextButton(onClick = {
+                    val target = group
+                    leavingGroup = null
+                    scope.launch { runCatching { groupsRepo.leave(target.id) } }
+                }) {
+                    Text("Leave", color = MaterialTheme.colorScheme.error)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { leavingGroup = null }) { Text("Cancel") }
+            }
+        )
     }
 }
 

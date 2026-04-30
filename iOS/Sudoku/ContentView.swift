@@ -1,7 +1,6 @@
 //
 //  ContentView.swift
 //  Sudoku
-//  Created by Derek Gillett on 27/4/2026.
 //
 
 import SwiftUI
@@ -15,6 +14,11 @@ struct ContentView: View {
     @AppStorage("sudoku.difficulty") private var difficulty: Difficulty = .medium
     @AppStorage("sudoku.appearance") private var appearance: AppearancePreference = .system
     @Environment(\.scenePhase) private var scenePhase
+
+    @EnvironmentObject private var auth: AuthStore
+    @EnvironmentObject private var groupsStore: GroupsStore
+    @EnvironmentObject private var dailyStore: DailyPuzzleStore
+
     @StateObject private var history: PuzzleHistory
     @StateObject private var store: GameStore
     @StateObject private var game: SudokuGame
@@ -23,7 +27,9 @@ struct ContentView: View {
     @State private var showingSettings = false
     @State private var showingNewGame = false
     @State private var showingSolved = false
+    @State private var showingSignIn = false
     @State private var confirmingReset = false
+    @State private var replayingDaily: PuzzleResult?
 
     init() {
         let h = PuzzleHistory()
@@ -44,21 +50,29 @@ struct ContentView: View {
         Group {
             switch phase {
             case .home:
-                let today = Date()
-                let dailyID = DailyPuzzle.id(for: today)
                 HomeView(
                     mostRecentSave: store.mostRecent,
-                    dailyDate: today,
-                    dailyStatus: dailyStatus(dailyID: dailyID),
-                    dailyElapsed: store.saves[dailyID]?.elapsedSeconds,
+                    dailyDate: Date(),
+                    dailyPuzzleID: resolvedDailyID,
+                    dailyStatus: dailyStatus(dailyID: resolvedDailyID),
+                    dailyElapsed: store.saves[resolvedDailyID]?.elapsedSeconds,
+                    signedInDisplayName: auth.displayName,
                     onDaily: startDaily,
+                    onReplayDaily: { replayDaily(dailyID: resolvedDailyID) },
                     onContinue: continueMostRecent,
                     onNewGame: { showingNewGame = true },
                     onShowGames: { showingHistory = true },
-                    onShowSettings: { showingSettings = true }
+                    onShowSettings: { showingSettings = true },
+                    onSignIn: { showingSignIn = true }
                 )
             case .playing:
                 gameView
+            }
+        }
+        .task {
+            await dailyStore.refresh()
+            if auth.isSignedIn {
+                await groupsStore.refresh()
             }
         }
         .onChange(of: game.isSolved) { _, isSolved in
@@ -69,8 +83,6 @@ struct ContentView: View {
                 elapsedSeconds: game.elapsedSeconds,
                 puzzle: game.currentPuzzle
             ))
-            // Only celebrate if the user actually solved it from the playing
-            // screen — guards against an already-solved state on app launch.
             if phase == .playing {
                 showingSolved = true
             }
@@ -92,10 +104,15 @@ struct ContentView: View {
                 phase = .playing
             }
         }
+        .sheet(isPresented: $showingSignIn) {
+            SignInView()
+        }
+        .sheet(item: $replayingDaily) { result in
+            CompletedBoardView(result: result)
+        }
         .sheet(isPresented: $showingSolved) {
             SolvedView(
-                puzzleID: game.puzzleID,
-                difficulty: game.currentPuzzle.difficulty,
+                puzzle: game.currentPuzzle,
                 elapsedSeconds: game.elapsedSeconds,
                 mistakeCount: game.mistakeCount
             ) {
@@ -108,6 +125,10 @@ struct ContentView: View {
             switch newPhase {
             case .active:
                 game.enterForeground()
+                Task {
+                    await dailyStore.refresh()
+                    if auth.isSignedIn { await groupsStore.refresh() }
+                }
             case .background, .inactive:
                 game.enterBackground()
             @unknown default:
@@ -130,7 +151,7 @@ struct ContentView: View {
 
     private var header: some View {
         HStack(spacing: 12) {
-            Text("Sudoku #\(game.puzzleID) · \(game.currentPuzzle.difficulty.label)")
+            Text(verbatim: "\(game.currentPuzzle.displayLabel) · \(game.currentPuzzle.difficulty.label)")
                 .font(.title3.weight(.bold))
             if game.isSolved {
                 Image(systemName: "checkmark.seal.fill")
@@ -197,9 +218,18 @@ struct ContentView: View {
         phase = .playing
     }
 
+    /// Resolves today's daily via the server-backed store, falls back to the
+    /// local generator if nothing's reachable, then enters the playing phase.
     private func startDaily() {
-        game.startDaily()
-        phase = .playing
+        Task {
+            let (puzzle, _) = await dailyStore.ensureToday()
+            game.startDaily(puzzle: puzzle)
+            phase = .playing
+        }
+    }
+
+    private func replayDaily(dailyID: Int) {
+        replayingDaily = history.results.first(where: { $0.puzzleID == dailyID })
     }
 
     private func dailyStatus(dailyID: Int) -> DailyStatus {
@@ -212,8 +242,14 @@ struct ContentView: View {
         return .notStarted
     }
 
-    /// Pause the game (so the timer stops accumulating off-screen) and
-    /// return to home.
+    /// Server-known daily ID when we have a cache, else fall back to local
+    /// date math. The two will agree for any device on Sydney time and may
+    /// differ by ±1 day across timezones — a tradeoff we accept while the
+    /// daily is anchored to one server timezone (SPEC §17.6).
+    private var resolvedDailyID: Int {
+        dailyStore.today?.id ?? DailyPuzzle.id(for: Date())
+    }
+
     private func goHome() {
         if !game.isPaused {
             game.togglePause()
@@ -224,4 +260,7 @@ struct ContentView: View {
 
 #Preview {
     ContentView()
+        .environmentObject(AuthStore(client: APIClient()))
+        .environmentObject(GroupsStore(client: APIClient(), auth: AuthStore(client: APIClient())))
+        .environmentObject(DailyPuzzleStore(client: APIClient(), fallbackProvider: GeneratedPuzzleProvider()))
 }

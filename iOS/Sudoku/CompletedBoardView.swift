@@ -14,7 +14,8 @@ struct CompletedBoardView: View {
 
     var body: some View {
         NavigationStack {
-            VStack(spacing: 16) {
+            VStack(spacing: 12) {
+                fanfare
                 summary
                 if let puzzle = result.puzzle {
                     board(puzzle: puzzle)
@@ -23,13 +24,27 @@ struct CompletedBoardView: View {
                 Spacer()
             }
             .padding(.vertical, 12)
-            .navigationTitle("Puzzle #\(result.puzzleID)")
+            .navigationTitle(result.puzzle?.displayLabel ?? "Puzzle #\(result.puzzleID)")
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
                     Button("Done") { dismiss() }
                 }
             }
         }
+    }
+
+    /// Bouncy "Solved!" header — animation plays once on appear, then
+    /// the view settles into the read-only board below.
+    private var fanfare: some View {
+        VStack(spacing: 6) {
+            Image(systemName: "checkmark.seal.fill")
+                .font(.system(size: 56))
+                .foregroundStyle(.green)
+                .symbolEffect(.bounce, options: .nonRepeating)
+            Text("Solved!")
+                .font(.title2.weight(.bold))
+        }
+        .padding(.top, 4)
     }
 
     private var summary: some View {
