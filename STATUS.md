@@ -1,6 +1,6 @@
 # Sudoku — Project Status
 
-_Last updated: 2026-04-29_
+_Last updated: 2026-04-30_
 
 Two platforms (iOS + Android) targeting the same behavioural contract in [`SPEC.md`](SPEC.md), backed by a small Cloudflare Workers backend.
 
@@ -27,16 +27,6 @@ Two platforms (iOS + Android) targeting the same behavioural contract in [`SPEC.
 - Live realtime co-op / competitive (Phase 4).
 - Per-group timezone (currently global Sydney).
 - Cross-session Undo persistence; per-tier dailies; rule-vs-solution mistake toggle.
-
-## Pending deploys / rebuilds
-
-The latest changes (foreground refresh + invite-code surfacing in Settings) are coded but **not yet propagated**:
-
-1. `cd Backend && npm run deploy` — picks up the `invite_code` field in `/v1/me/groups` response.
-2. Rebuild iOS in Xcode — picks up `scenePhase`-foreground refresh of groups + the new Settings → Groups invite-code display with `ShareLink`.
-3. Rebuild Android in Studio — picks up the lifecycle-observer refresh + the new Settings → Groups invite-code display with Share intent.
-
-Until these land, the kill+reopen workaround is needed to see membership changes, and the only way to recover an invite code is the D1 query (see "Operational notes" below).
 
 ## Roadmap
 
