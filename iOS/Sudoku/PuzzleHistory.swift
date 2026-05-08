@@ -33,6 +33,18 @@ final class PuzzleHistory: ObservableObject {
         save()
     }
 
+    /// Merge in remote-known completions (typically pulled on sign-in).
+    /// Local entries win on conflict — they were probably the source of the
+    /// remote score in the first place, and we don't want to clobber a
+    /// freshly-recorded local solve with the round-tripped server copy.
+    func mergeRemote(_ remote: [PuzzleResult]) {
+        let existingIDs = Set(results.map { $0.puzzleID })
+        let newOnes = remote.filter { !existingIDs.contains($0.puzzleID) }
+        guard !newOnes.isEmpty else { return }
+        results = (results + newOnes).sorted { $0.completedAt > $1.completedAt }
+        save()
+    }
+
     func clear() {
         results = []
         save()

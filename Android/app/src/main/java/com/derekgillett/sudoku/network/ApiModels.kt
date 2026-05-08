@@ -53,6 +53,138 @@ data class JoinGroupResponse(val group: ApiGroup)
 @Serializable
 data class UserResponse(val user: ApiUser)
 
+/** Reply from `GET /v1/version` — drives the in-app update prompt. */
+@Serializable
+data class VersionInfo(
+    val current: String,
+    @SerialName("min_required") val minRequired: String,
+    @SerialName("store_url") val storeUrl: String
+)
+
+@Serializable
+data class VersionResponse(
+    val ios: VersionInfo,
+    val android: VersionInfo
+)
+
+/** Members-roster row: a user plus their all-time daily-puzzle stats. */
+/** A completed-daily record returned by `GET /me/scores`. Givens + solution
+ *  are included so the client can replay the completed board without a
+ *  second round-trip. */
+@Serializable
+data class RemoteScore(
+    @SerialName("puzzle_id") val puzzleId: Int,
+    @SerialName("elapsed_seconds") val elapsedSeconds: Int,
+    val mistakes: Int = 0,
+    @SerialName("completed_at") val completedAt: Long,
+    @SerialName("hints_used") val hintsUsed: Int = 0,
+    @SerialName("pencil_assists_used") val pencilAssistsUsed: Int = 0,
+    @SerialName("highlight_mistakes_was_on") val highlightMistakesWasOn: Boolean = true,
+    @SerialName("highlight_rules_was_on") val highlightRulesWasOn: Boolean = true,
+    @Serializable(with = DifficultyLowercaseSerializer::class)
+    val difficulty: Difficulty,
+    val date: String,
+    val givens: List<List<Int>>,
+    val solution: List<List<Int>>
+)
+
+@Serializable
+data class MyScoresResponse(val scores: List<RemoteScore> = emptyList())
+
+@Serializable
+data class GroupMember(
+    val user: ApiUser,
+    @SerialName("dailies_completed") val dailiesCompleted: Int = 0,
+    @SerialName("last_completed_at") val lastCompletedAt: Long? = null
+)
+
+// MARK: - Multiplayer DTOs
+
+@Serializable
+data class MultiplayerGame(
+    val id: String,
+    @SerialName("puzzle_id") val puzzleId: Int,
+    @Serializable(with = DifficultyLowercaseSerializer::class)
+    val difficulty: Difficulty,
+    val status: MultiplayerStatus,
+    @SerialName("active_player_id") val activePlayerId: String? = null,
+    @SerialName("turn_deadline") val turnDeadline: Long? = null,
+    @SerialName("turn_duration_seconds") val turnDurationSeconds: Int,
+    @SerialName("competitive_mode") val competitiveMode: Boolean = false,
+    @SerialName("created_by") val createdBy: String,
+    @SerialName("created_at") val createdAt: Long,
+    @SerialName("completed_at") val completedAt: Long? = null,
+    @SerialName("winner_id") val winnerId: String? = null,
+    @SerialName("invite_code") val inviteCode: String,
+    @SerialName("is_my_turn") val isMyTurn: Boolean = false,
+    @SerialName("time_remaining_seconds") val timeRemainingSeconds: Int? = null
+)
+
+@Serializable
+enum class MultiplayerStatus {
+    @SerialName("pending") PENDING,
+    @SerialName("active") ACTIVE,
+    @SerialName("completed") COMPLETED,
+    @SerialName("abandoned") ABANDONED
+}
+
+@Serializable
+data class MultiplayerPlayer(
+    val user: ApiUser,
+    @SerialName("join_order") val joinOrder: Int,
+    val status: MultiplayerPlayerStatus,
+    @SerialName("joined_at") val joinedAt: Long? = null
+)
+
+@Serializable
+enum class MultiplayerPlayerStatus {
+    @SerialName("invited") INVITED,
+    @SerialName("joined") JOINED,
+    @SerialName("declined") DECLINED,
+    @SerialName("left") LEFT
+}
+
+@Serializable
+data class MultiplayerMove(
+    @SerialName("move_index") val moveIndex: Int,
+    @SerialName("player_id") val playerId: String,
+    val row: Int,
+    val col: Int,
+    val value: Int,
+    @SerialName("was_correct") val wasCorrect: Boolean,
+    @SerialName("placed_at") val placedAt: Long
+)
+
+@Serializable
+data class MultiplayerGameDetail(
+    val game: MultiplayerGame,
+    val players: List<MultiplayerPlayer>,
+    val moves: List<MultiplayerMove>,
+    val board: List<List<Int>>
+)
+
+@Serializable
+data class MultiplayerCreateResponse(
+    val game: MultiplayerGame,
+    @SerialName("invite_code") val inviteCode: String
+)
+
+@Serializable
+data class MultiplayerListResponse(
+    @SerialName("in_progress") val inProgress: List<MultiplayerGame> = emptyList(),
+    val completed: List<MultiplayerGame> = emptyList()
+)
+
+@Serializable
+data class MultiplayerMoveResponse(
+    val move: MultiplayerMove,
+    val game: MultiplayerGame,
+    val board: List<List<Int>>
+)
+
+@Serializable
+internal data class MultiplayerGameWrap(val game: MultiplayerGame)
+
 @Serializable
 data class PuzzleResponse(
     @SerialName("puzzle_id") val puzzleId: Int,
@@ -83,9 +215,26 @@ data class ScoreSubmitResponse(val rank: Int)
 data class LeaderboardEntry(
     @SerialName("display_name") val displayName: String?,
     @SerialName("elapsed_seconds") val elapsedSeconds: Int,
+    /** What the server used for ranking (raw + mistake penalty). Defaults to
+     *  elapsedSeconds for backwards-compat with pre-effective_seconds servers. */
+    @SerialName("effective_seconds") val effectiveSeconds: Int = -1,
     @SerialName("completed_at") val completedAt: Long,
-    val rank: Int
-)
+    val rank: Int,
+    // Assist markers — defaults make older server responses (pre-migration
+    // 0002) decode cleanly. Pessimistic defaults: assume each assist *was*
+    // used so we don't falsely award the Purist badge to old rows.
+    @SerialName("hints_used") val hintsUsed: Int = 1,
+    @SerialName("pencil_assists_used") val pencilAssistsUsed: Int = 1,
+    @SerialName("highlight_mistakes_was_on") val highlightMistakesWasOn: Boolean = true,
+    @SerialName("highlight_rules_was_on") val highlightRulesWasOn: Boolean = true,
+    // Server-derived from raw mistake count. Default false so older
+    // responses don't falsely award the Flawless badge.
+    val flawless: Boolean = false
+) {
+    /** Effective seconds, falling back to raw if the server didn't send it. */
+    val effectiveSecondsOrFallback: Int
+        get() = if (effectiveSeconds > 0) effectiveSeconds else elapsedSeconds
+}
 
 /**
  * The server emits Difficulty as lowercase ("medium"); the local Difficulty

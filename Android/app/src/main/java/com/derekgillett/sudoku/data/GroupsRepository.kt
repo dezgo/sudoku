@@ -8,6 +8,7 @@ import com.derekgillett.sudoku.network.ApiClient
 import com.derekgillett.sudoku.network.ApiGroup
 import com.derekgillett.sudoku.network.CreateGroupResponse
 import com.derekgillett.sudoku.network.GroupListItem
+import com.derekgillett.sudoku.network.GroupMember
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -76,6 +77,11 @@ class GroupsRepository(
         val token = auth.token.value ?: return
         client.leaveGroup(token, groupId)
         refresh()
+    }
+
+    suspend fun members(groupId: String): List<GroupMember> {
+        val token = auth.token.value ?: throw ApiClient.ApiException.Unknown
+        return client.groupMembers(token, groupId)
     }
 
     /** Called on sign-out to wipe the cache. */

@@ -15,10 +15,18 @@ struct GroupOnboardingView: View {
 
     let onDone: () -> Void
     let onSkip: () -> Void
+    let initialMode: Mode
 
     enum Mode: Equatable { case picker, creating, joining }
 
-    @State private var mode: Mode = .picker
+    @State private var mode: Mode
+
+    init(onDone: @escaping () -> Void, onSkip: @escaping () -> Void, initialMode: Mode = .picker) {
+        self.onDone = onDone
+        self.onSkip = onSkip
+        self.initialMode = initialMode
+        _mode = State(initialValue: initialMode)
+    }
     @State private var groupName: String = ""
     @State private var inviteCode: String = ""
     @State private var inviteCodeShown: String?  // shown after creating
@@ -101,8 +109,10 @@ struct GroupOnboardingView: View {
                 .controlSize(.large)
                 .disabled(groupName.trimmingCharacters(in: .whitespaces).isEmpty || isBusy)
 
-                Button("Back") { mode = .picker }
-                    .font(.footnote)
+                if initialMode == .picker {
+                    Button("Back") { mode = .picker }
+                        .font(.footnote)
+                }
             }
         }
     }
@@ -166,8 +176,10 @@ struct GroupOnboardingView: View {
             .controlSize(.large)
             .disabled(inviteCode.trimmingCharacters(in: .whitespaces).count != 6 || isBusy)
 
-            Button("Back") { mode = .picker }
-                .font(.footnote)
+            if initialMode == .picker {
+                Button("Back") { mode = .picker }
+                    .font(.footnote)
+            }
         }
     }
 

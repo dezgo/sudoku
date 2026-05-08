@@ -16,13 +16,27 @@ data class GameState(
     val mode: InputMode = InputMode.NORMAL,
     val elapsedSeconds: Int = 0,
     val mistakeCount: Int = 0,
+    val hintsUsed: Int = 0,
+    val pencilAssistsUsed: Int = 0,
     val isPaused: Boolean = false,
     val highlightMistakes: Boolean = true,
     val highlightConstraints: Boolean = true,
+    val soundEffects: Boolean = true,
+    /** Sticky flags: once true during a solve, stay true even after the
+     * user toggles the assist off. Persisted in GameSave so a multi-session
+     * solve can't lose track. Drives the "Purist" leaderboard badge. */
+    val highlightMistakesEverOn: Boolean = true,
+    val highlightConstraintsEverOn: Boolean = true,
     val lastPlacementInfo: PlacementUndo? = null
 ) {
     val puzzleID: Int get() = puzzle.id
     val difficulty: Difficulty get() = puzzle.difficulty
+
+    /** True if any empty cell has at least one pencil mark. Used by the
+     * tutor's empty-state copy so it can tell whether the user needs to
+     * pencil first or has hit our technique vocabulary. */
+    val hasAnyPencilMarks: Boolean
+        get() = cells.any { row -> row.any { it.notes.isNotEmpty() } }
 
     val isSolved: Boolean
         get() {

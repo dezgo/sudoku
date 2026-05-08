@@ -12,10 +12,27 @@ pattern = "sudoku.appfoundry.cc"
 custom_domain = true
 
 # Plain (non-secret) vars. Email-from address and the timezone used to derive
-# "today's" puzzle date.
+# "today's" puzzle date. Plus per-platform version pins for the in-app
+# update prompt — clients fetch /v1/version on launch and surface a banner
+# / blocker if their bundle is behind.
+#
+# IMPORTANT — update rule for the version pins:
+#   Only bump *_CURRENT_VERSION *AFTER* you've confirmed the release is
+#   actually live in the store (App Store / Play Store), NOT when you
+#   upload it. Otherwise the in-app banner will tell users an update is
+#   available before the store has it, and they'll tap "Update" only to
+#   find no new version waiting.
+#
+#   *_MIN_REQUIRED_VERSION should only move when you ship a backend-breaking
+#   change that older clients can't tolerate. Treat this as the "force
+#   update" tripwire — rarely touched.
 [vars]
 EMAIL_FROM = "Sudoku <noreply@appfoundry.cc>"
 DAILY_TIMEZONE = "Australia/Sydney"
+IOS_CURRENT_VERSION = "1.0.6"
+IOS_MIN_REQUIRED_VERSION = "1.0.6"
+ANDROID_CURRENT_VERSION = "1.0.6"
+ANDROID_MIN_REQUIRED_VERSION = "1.0.6"
 
 # Secrets (do NOT put them here — they're set via `wrangler secret put`):
 #   RESEND_API_KEY    Resend API key for sending OTP emails.
@@ -28,8 +45,11 @@ database_name = "sudoku"
 database_id = "fc1e0bcc-a5e6-4075-b786-fe248ecd118d"
 migrations_dir = "migrations"
 
-# Hourly cron — ensures today's and tomorrow's daily puzzles exist in D1, so
-# user-facing requests never trigger a slow generation. Idempotent: a no-op if
-# both rows already exist.
+# Crons:
+#   "0 * * * *"  — hourly: ensure today's + tomorrow's daily puzzles exist
+#                  in D1 so user-facing requests never trigger slow generation.
+#                  Idempotent: no-op if both rows are already there.
+#   "* * * * *"  — every minute: scan multiplayer games for expired turns and
+#                  trigger forfeits (records skip + rotates active player).
 [triggers]
-crons = ["0 * * * *"]
+crons = ["0 * * * *", "* * * * *"]

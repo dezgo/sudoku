@@ -1,8 +1,11 @@
 package com.derekgillett.sudoku
 
 import android.content.Context
+import com.derekgillett.sudoku.audio.SoundManager
 import com.derekgillett.sudoku.data.AuthRepository
+import com.derekgillett.sudoku.data.CoachRepository
 import com.derekgillett.sudoku.data.DailyPuzzleRepository
+import com.derekgillett.sudoku.data.MultiplayerRepository
 import com.derekgillett.sudoku.data.GameSaveRepository
 import com.derekgillett.sudoku.data.GroupsRepository
 import com.derekgillett.sudoku.data.PreferencesRepository
@@ -22,10 +25,13 @@ class AppContainer(context: Context) {
     val historyRepo = PuzzleHistoryRepository(context.sudokuDataStore)
     val saveRepo = GameSaveRepository(context.sudokuDataStore)
     val prefsRepo = PreferencesRepository(context.sudokuDataStore)
+    val soundManager = SoundManager(context)
 
     val apiClient = ApiClient()
     val authRepo = AuthRepository(context, apiClient)
     val groupsRepo = GroupsRepository(context.sudokuDataStore, apiClient, authRepo)
     val dailyRepo = DailyPuzzleRepository(context.sudokuDataStore, apiClient, provider)
     val scoresRepo = ScoresRepository(context.sudokuDataStore, apiClient, authRepo)
+    val coachRepo = CoachRepository(context.sudokuDataStore)
+    val multiplayerRepo = MultiplayerRepository(apiClient, authRepo)
 }

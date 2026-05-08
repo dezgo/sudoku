@@ -14,10 +14,12 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.List
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.People
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.outlined.AccountCircle
 import androidx.compose.material.icons.outlined.CalendarToday
+import androidx.compose.material.icons.outlined.School
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
@@ -62,6 +64,8 @@ fun HomeScreen(
     dailyRepo: DailyPuzzleRepository,
     onSignIn: () -> Unit,
     onShowLeaderboard: () -> Unit,
+    onShowCoach: () -> Unit,
+    onShowMultiplayer: () -> Unit,
     onStartDaily: (isOffline: Boolean) -> Unit
 ) {
     val saves by viewModel.saves.collectAsState(initial = emptyMap())
@@ -100,7 +104,7 @@ fun HomeScreen(
         ) {
             Spacer(Modifier.weight(1f))
             Text(
-                text = "Sudoku",
+                text = "Sudoku Crew",
                 fontSize = 56.sp,
                 fontWeight = FontWeight.Bold,
                 textAlign = TextAlign.Center
@@ -150,6 +154,24 @@ fun HomeScreen(
                 Icon(Icons.Filled.Add, contentDescription = null)
                 Spacer(Modifier.size(8.dp))
                 Text("New Game")
+            }
+            Spacer(Modifier.height(14.dp))
+            OutlinedButton(
+                onClick = onShowMultiplayer,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Icon(Icons.Filled.People, contentDescription = null)
+                Spacer(Modifier.size(8.dp))
+                Text("Multiplayer")
+            }
+            Spacer(Modifier.height(14.dp))
+            OutlinedButton(
+                onClick = onShowCoach,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Icon(Icons.Outlined.School, contentDescription = null)
+                Spacer(Modifier.size(8.dp))
+                Text("Coach")
             }
             Spacer(Modifier.height(14.dp))
             OutlinedButton(
@@ -319,7 +341,7 @@ private fun ContinueButton(save: GameSave, onClick: () -> Unit) {
         }
         Spacer(Modifier.height(4.dp))
         Text(
-            "${save.puzzle.displayLabel} · ${save.puzzle.difficulty.label} · ${formatTime(save.elapsedSeconds)}",
+            "${save.puzzle.displayLabel} · ${formatTime(save.elapsedSeconds)}",
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )

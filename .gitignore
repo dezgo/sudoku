@@ -37,6 +37,12 @@ Android/app/*.iml
 Android/.cxx/
 Android/.externalNativeBuild/
 
+# Release signing — never commit the keystore or its passwords.
+Android/keystore.properties
+Android/keystores/
+*.jks
+*.keystore
+
 # Kotlin
 *.class
 *.kotlin_module

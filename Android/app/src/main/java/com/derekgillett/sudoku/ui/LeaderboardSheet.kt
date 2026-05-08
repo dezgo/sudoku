@@ -1,5 +1,6 @@
 package com.derekgillett.sudoku.ui
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -12,7 +13,15 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
+import androidx.compose.material.icons.filled.Star
+import androidx.compose.material.icons.outlined.AutoFixOff
+import androidx.compose.material.icons.outlined.Info
+import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.outlined.LightbulbCircle
 import androidx.compose.material.icons.outlined.Person
+import androidx.compose.material.icons.outlined.RemoveRedEye
+import androidx.compose.material.icons.outlined.Shield
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
@@ -53,7 +62,11 @@ fun LeaderboardSheet(
     authRepo: AuthRepository,
     groupsRepo: GroupsRepository,
     scoresRepo: ScoresRepository,
-    onDismiss: () -> Unit
+    onDismiss: () -> Unit,
+    /** When the viewer just finished the puzzle themselves, the host can pass
+     *  in the local mistake count so tapping their own row in the player
+     *  detail sheet shows the exact penalty math. */
+    ownMistakeCount: Int? = null
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val groups by groupsRepo.groups.collectAsState()
@@ -66,6 +79,8 @@ fun LeaderboardSheet(
     var rows by remember { mutableStateOf<List<LeaderboardEntry>>(emptyList()) }
     var isLoading by remember { mutableStateOf(false) }
     var errorMessage by remember { mutableStateOf<String?>(null) }
+    var showingBadgeLegend by remember { mutableStateOf(false) }
+    var selectedEntry by remember { mutableStateOf<LeaderboardEntry?>(null) }
 
     LaunchedEffect(selectedGroupId, puzzleId) {
         val gid = selectedGroupId ?: return@LaunchedEffect
@@ -92,11 +107,26 @@ fun LeaderboardSheet(
                 .padding(horizontal = 16.dp, vertical = 16.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            Text(
-                "Leaderboard",
-                style = MaterialTheme.typography.titleLarge,
-                fontWeight = FontWeight.SemiBold
-            )
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Text(
+                    "Leaderboard",
+                    style = MaterialTheme.typography.titleLarge,
+                    fontWeight = FontWeight.SemiBold
+                )
+                androidx.compose.material3.IconButton(
+                    onClick = { showingBadgeLegend = true },
+                    modifier = Modifier.size(32.dp)
+                ) {
+                    Icon(
+                        androidx.compose.material.icons.Icons.Outlined.Info,
+                        contentDescription = "What do the badges mean?",
+                        modifier = Modifier.size(20.dp)
+                    )
+                }
+            }
             Spacer(Modifier.height(4.dp))
             Text(
                 puzzleLabel,
@@ -175,7 +205,8 @@ fun LeaderboardSheet(
                                 items(top, key = { it.rank }) { entry ->
                                     LeaderboardRow(
                                         entry = entry,
-                                        highlight = myName != null && entry.displayName == myName
+                                        highlight = myName != null && entry.displayName == myName,
+                                        onClick = { selectedEntry = entry }
                                     )
                                 }
                                 if (pinnedRow != null) {
@@ -188,7 +219,13 @@ fun LeaderboardSheet(
                                             modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
                                         )
                                     }
-                                    item { LeaderboardRow(entry = pinnedRow, highlight = true) }
+                                    item {
+                                        LeaderboardRow(
+                                            entry = pinnedRow,
+                                            highlight = true,
+                                            onClick = { selectedEntry = pinnedRow }
+                                        )
+                                    }
                                 }
                             }
                         }
@@ -197,14 +234,33 @@ fun LeaderboardSheet(
             }
         }
     }
+
+    if (showingBadgeLegend) {
+        BadgeLegendSheet(onDismiss = { showingBadgeLegend = false })
+    }
+
+    selectedEntry?.let { entry ->
+        val isMe = user?.displayName != null && user?.displayName == entry.displayName
+        LeaderboardEntryDetailSheet(
+            entry = entry,
+            isMe = isMe,
+            myMistakeCount = if (isMe) ownMistakeCount else null,
+            onDismiss = { selectedEntry = null }
+        )
+    }
 }
 
 @Composable
-private fun LeaderboardRow(entry: LeaderboardEntry, highlight: Boolean) {
+private fun LeaderboardRow(
+    entry: LeaderboardEntry,
+    highlight: Boolean,
+    onClick: () -> Unit
+) {
     val color = if (highlight) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
     Row(
         modifier = Modifier
             .fillMaxWidth()
+            .clickable(onClick = onClick)
             .padding(horizontal = 16.dp, vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
@@ -218,15 +274,61 @@ private fun LeaderboardRow(entry: LeaderboardEntry, highlight: Boolean) {
         Spacer(Modifier.size(12.dp))
         Text(
             entry.displayName ?: "—",
-            modifier = Modifier.weight(1f),
             color = color,
             fontWeight = if (highlight) FontWeight.SemiBold else FontWeight.Normal
         )
+        Spacer(Modifier.size(8.dp))
+        BadgeRow(entry)
+        Spacer(Modifier.weight(1f))
         Text(
-            formatTime(entry.elapsedSeconds),
+            formatTime(entry.effectiveSecondsOrFallback),
             color = color,
             fontWeight = if (highlight) FontWeight.SemiBold else FontWeight.Normal
         )
+        Spacer(Modifier.size(4.dp))
+        Icon(
+            Icons.AutoMirrored.Filled.KeyboardArrowRight,
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.size(18.dp)
+        )
+    }
+}
+
+/** Three independent badges — no mega-badge. Each shows when the
+ * corresponding "didn't use" condition holds. More legible than rolling
+ * three signals into one gold star. Highlighting toggles aren't surfaced
+ * — they're learning aids, not real assists. */
+@Composable
+private fun BadgeRow(entry: LeaderboardEntry) {
+    Row(
+        horizontalArrangement = Arrangement.spacedBy(4.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        if (entry.hintsUsed == 0) {
+            Icon(
+                Icons.Outlined.LightbulbCircle,
+                contentDescription = "Solo — solved without using the tutor",
+                tint = androidx.compose.ui.graphics.Color(0xFF2E7D32),
+                modifier = Modifier.size(18.dp)
+            )
+        }
+        if (entry.pencilAssistsUsed == 0) {
+            Icon(
+                Icons.Outlined.AutoFixOff,
+                contentDescription = "Manual — solved without auto-pencil",
+                tint = androidx.compose.ui.graphics.Color(0xFF8E24AA),
+                modifier = Modifier.size(18.dp)
+            )
+        }
+        if (entry.flawless) {
+            Icon(
+                Icons.Filled.CheckCircle,
+                contentDescription = "Flawless — solved without any mistakes",
+                tint = androidx.compose.ui.graphics.Color(0xFF26A69A),
+                modifier = Modifier.size(18.dp)
+            )
+        }
     }
 }
 

@@ -21,8 +21,11 @@ final class GeneratedPuzzleProvider: PuzzleProvider {
     private var dailyCache: [Int: Puzzle] = [:]
     private var nextID: Int = 1000
 
-    /// How many ready-to-go puzzles to keep cached per difficulty.
-    private static let bufferSize = 3
+    /// How many ready-to-go puzzles to keep cached per difficulty. Each
+    /// generated puzzle now runs through up-to-25 generate-and-classify
+    /// retries (technique-tier validation) so the buffer fill is genuinely
+    /// expensive — kept small to avoid CPU saturation on cold start.
+    private static let bufferSize = 1
 
     init() {
         for d in Difficulty.allCases {
@@ -96,15 +99,58 @@ final class GeneratedPuzzleProvider: PuzzleProvider {
     }
 
     private func generate(difficulty: Difficulty) -> Puzzle {
+        // Generate-and-classify loop: produce candidates and accept only
+        // those whose hardest required technique matches the requested
+        // tier. Without this, difficulty was decided by clue count alone
+        // (a crude proxy that produced "Medium" puzzles needing X-Wings
+        // and "Hard" puzzles solvable with naked singles). See SPEC §13.10.
+        let target = Self.expectedTier(for: difficulty)
         var rng = SystemRandomNumberGenerator()
-        let solution = generator.generateSolution(rng: &rng)
-        let givens = generator.makePuzzle(
-            from: solution,
-            targetGivens: Self.targetGivens(for: difficulty),
-            rng: &rng
-        )
-        let id = nextIDValue()
-        return Puzzle(id: id, difficulty: difficulty, givens: givens, solution: solution)
+        var lastFallback: Puzzle?
+        for _ in 0..<25 {
+            let solution = generator.generateSolution(rng: &rng)
+            let givens = generator.makePuzzle(
+                from: solution,
+                targetGivens: Self.targetGivens(for: difficulty),
+                rng: &rng
+            )
+            let id = nextIDValue()
+            let puzzle = Puzzle(id: id, difficulty: difficulty, givens: givens, solution: solution)
+            let cells = Self.cellsFromGivens(givens)
+            if TutorEngine.classify(cells: cells) == target {
+                return puzzle
+            }
+            // Hold onto the most recent candidate — used as a graceful
+            // fallback if 25 attempts fail to land on-tier (rare; keeps
+            // the buffer queue from starving on a slow patch).
+            lastFallback = puzzle
+        }
+        return lastFallback ?? {
+            let solution = generator.generateSolution(rng: &rng)
+            let givens = generator.makePuzzle(
+                from: solution,
+                targetGivens: Self.targetGivens(for: difficulty),
+                rng: &rng
+            )
+            return Puzzle(id: nextIDValue(), difficulty: difficulty, givens: givens, solution: solution)
+        }()
+    }
+
+    private static func expectedTier(for difficulty: Difficulty) -> TutorTechnique.Tier {
+        switch difficulty {
+        case .easy: return .simple
+        case .medium: return .medium
+        case .hard: return .hard
+        }
+    }
+
+    private static func cellsFromGivens(_ givens: [[Int]]) -> [[Cell]] {
+        givens.map { row in
+            row.map { v in
+                if v == 0 { return Cell(value: nil, isFixed: false, notes: []) }
+                return Cell(value: v, isFixed: true, notes: [])
+            }
+        }
     }
 
     private func nextIDValue() -> Int {

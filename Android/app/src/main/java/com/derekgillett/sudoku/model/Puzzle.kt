@@ -21,7 +21,8 @@ data class Puzzle(
 
     /**
      * Human-readable label for headers / lists. Dailies show as
-     * "Daily · Apr 29"; generated puzzles show as "Puzzle #1042".
+     * "Daily · Apr 29"; generated puzzles show their difficulty alone
+     * (the puzzle ID is an internal counter that no player cares about).
      */
     val displayLabel: String
         get() {
@@ -33,8 +34,8 @@ data class Puzzle(
                     val date = java.time.LocalDate.of(year, month, day)
                     val fmt = java.time.format.DateTimeFormatter.ofPattern("MMM d")
                     "Daily · ${date.format(fmt)}"
-                }.getOrDefault("Puzzle #$id")
+                }.getOrDefault(difficulty.label)
             }
-            return "Puzzle #$id"
+            return difficulty.label
         }
 }

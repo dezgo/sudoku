@@ -25,6 +25,13 @@ struct LeaderboardView: View {
     @State private var rows: [LeaderboardEntry] = []
     @State private var isLoading = false
     @State private var errorMessage: String?
+    @State private var showingBadgeLegend = false
+    @State private var selectedEntry: LeaderboardEntry?
+    /// When the user just solved the daily themselves, the host can pass
+    /// in their local mistake count so the player-detail sheet for "you"
+    /// shows the exact penalty math. Other players' detail sheets only
+    /// show raw vs effective time, never the mistake count.
+    var ownMistakeCount: Int? = nil
 
     @Environment(\.dismiss) private var dismiss
 
@@ -34,9 +41,26 @@ struct LeaderboardView: View {
                 .navigationTitle("Leaderboard")
                 .navigationBarTitleDisplayMode(.inline)
                 .toolbar {
+                    ToolbarItem(placement: .topBarLeading) {
+                        Button {
+                            showingBadgeLegend = true
+                        } label: {
+                            Image(systemName: "info.circle")
+                        }
+                    }
                     ToolbarItem(placement: .confirmationAction) {
                         Button("Done") { dismiss() }
                     }
+                }
+                .sheet(isPresented: $showingBadgeLegend) {
+                    BadgeLegendView()
+                }
+                .sheet(item: $selectedEntry) { entry in
+                    LeaderboardEntryDetailView(
+                        entry: entry,
+                        isMe: isMe(entry),
+                        myMistakeCount: isMe(entry) ? ownMistakeCount : nil
+                    )
                 }
                 .task {
                     if selectedGroupID == nil {
@@ -160,20 +184,59 @@ struct LeaderboardView: View {
     }
 
     private func row(_ entry: LeaderboardEntry, highlight: Bool) -> some View {
-        HStack(spacing: 12) {
-            Text("\(entry.rank)")
-                .font(.headline.monospacedDigit())
-                .foregroundStyle(highlight ? Color.accentColor : .primary)
-                .frame(width: 32, alignment: .trailing)
-            Text(entry.displayName ?? "—")
-                .font(.body)
-                .fontWeight(highlight ? .semibold : .regular)
-            Spacer()
-            Text(formatTime(entry.elapsedSeconds))
-                .font(.body.monospacedDigit())
-                .foregroundStyle(highlight ? Color.accentColor : .primary)
+        Button {
+            selectedEntry = entry
+        } label: {
+            HStack(spacing: 12) {
+                Text("\(entry.rank)")
+                    .font(.headline.monospacedDigit())
+                    .foregroundStyle(highlight ? Color.accentColor : .primary)
+                    .frame(width: 32, alignment: .trailing)
+                Text(entry.displayName ?? "—")
+                    .font(.body)
+                    .fontWeight(highlight ? .semibold : .regular)
+                    .foregroundStyle(.primary)
+                badgeRow(for: entry)
+                Spacer()
+                Text(formatTime(entry.effectiveSeconds))
+                    .font(.body.monospacedDigit())
+                    .foregroundStyle(highlight ? Color.accentColor : .primary)
+                Image(systemName: "chevron.right")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.tertiary)
+            }
+            .padding(.vertical, 2)
+            .contentShape(Rectangle())
         }
-        .padding(.vertical, 2)
+        .buttonStyle(.plain)
+    }
+
+    /// Three independent badges — no mega-badge. Each shows when the
+    /// corresponding "didn't use" condition holds. Three icons max, still
+    /// uncluttered, more legible than rolling everything into a single
+    /// gold star (where you couldn't tell which conditions earned it).
+    /// The highlighting toggles aren't surfaced — they're learning aids,
+    /// not real assists.
+    @ViewBuilder
+    private func badgeRow(for entry: LeaderboardEntry) -> some View {
+        HStack(spacing: 4) {
+            if entry.hintsUsed == 0 {
+                Image(systemName: "lightbulb.slash")
+                    .foregroundStyle(.green)
+                    .help("Solo — solved without using the tutor")
+            }
+            if entry.pencilAssistsUsed == 0 {
+                Image(systemName: "wand.and.stars.inverse")
+                    .foregroundStyle(.purple)
+                    .help("Manual — solved without auto-pencil")
+            }
+            if entry.flawless {
+                Image(systemName: "checkmark.seal.fill")
+                    .foregroundStyle(.mint)
+                    .help("Flawless — solved without any mistakes")
+            }
+        }
+        .font(.subheadline)
     }
 
     private var myRow: LeaderboardEntry? {

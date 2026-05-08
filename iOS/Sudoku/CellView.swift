@@ -12,6 +12,8 @@ struct CellView: View {
     let isMatching: Bool
     let isError: Bool
     let isLocked: Bool
+    var tutorHighlight: TutorHighlight.Kind? = nil
+    var tutorCandidateColors: [Int: Color] = [:]
 
     var body: some View {
         ZStack {
@@ -28,6 +30,13 @@ struct CellView: View {
     }
 
     private var background: Color {
+        if let kind = tutorHighlight {
+            switch kind {
+            case .target: return Color.green.opacity(0.45)
+            case .eliminator: return Color.orange.opacity(0.30)
+            case .focus: return Color.blue.opacity(0.18)
+            }
+        }
         if isSelected { return Color.yellow.opacity(0.55) }
         if isMatching { return Color.accentColor.opacity(0.45) }
         if isHighlighted { return Color.accentColor.opacity(0.30) }
@@ -41,6 +50,9 @@ struct CellView: View {
                 .font(.system(size: 24, weight: isLocked ? .bold : .regular, design: .rounded))
                 .foregroundStyle(valueColor)
         } else if !cell.notes.isEmpty {
+            // Always render the user's own pencil marks. Tutor calls out
+            // specific digits by tinting them — never synthesises marks the
+            // user didn't write.
             notesGrid
         }
     }
@@ -53,9 +65,11 @@ struct CellView: View {
                     HStack(spacing: 0) {
                         ForEach(0..<3, id: \.self) { c in
                             let n = r * 3 + c + 1
-                            Text(cell.notes.contains(n) ? "\(n)" : " ")
+                            let isUserMarked = cell.notes.contains(n)
+                            let tint = isUserMarked ? (tutorCandidateColors[n] ?? .secondary) : .secondary
+                            Text(isUserMarked ? "\(n)" : " ")
                                 .font(.system(size: 13, weight: .regular, design: .rounded))
-                                .foregroundStyle(.secondary)
+                                .foregroundStyle(tint)
                                 .frame(width: side, height: side)
                         }
                     }

@@ -1,7 +1,10 @@
 package com.derekgillett.sudoku.generator
 
+import com.derekgillett.sudoku.model.Cell
 import com.derekgillett.sudoku.model.Difficulty
 import com.derekgillett.sudoku.model.Puzzle
+import com.derekgillett.sudoku.state.TutorEngine
+import com.derekgillett.sudoku.state.TutorTechnique
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -80,24 +83,48 @@ class GeneratedPuzzleProvider : PuzzleProvider {
     }
 
     private fun generate(difficulty: Difficulty): Puzzle {
+        // Generate-and-classify loop: produce candidates and accept only
+        // those whose hardest required technique matches the requested
+        // tier. Without this, difficulty was decided by clue count alone
+        // (a crude proxy that produced "Medium" puzzles needing X-Wings
+        // and "Hard" puzzles solvable with naked singles). Mirrors the
+        // iOS PuzzleGenerator and matches SPEC §13.10.
         val rng = Random.Default
-        val solution = generator.generateSolution(rng)
-        val givens = generator.makePuzzle(
-            solution = solution,
-            targetGivens = targetGivens(difficulty),
-            rng = rng
-        )
-        val id = synchronized(lock) {
-            val cur = nextID
-            nextID++
-            cur
+        val target = expectedTier(difficulty)
+        var lastFallback: Puzzle? = null
+        for (attempt in 0 until 25) {
+            val solution = generator.generateSolution(rng)
+            val givens = generator.makePuzzle(
+                solution = solution,
+                targetGivens = targetGivens(difficulty),
+                rng = rng
+            )
+            val id = synchronized(lock) {
+                val cur = nextID
+                nextID++
+                cur
+            }
+            val puzzle = Puzzle(id = id, difficulty = difficulty, givens = givens, solution = solution)
+            val cells = cellsFromGivens(givens)
+            if (TutorEngine.classify(cells) == target) return puzzle
+            // Hold onto the most recent — graceful fallback if 25 attempts
+            // fail to land on-tier (rare).
+            lastFallback = puzzle
         }
-        return Puzzle(
-            id = id,
-            difficulty = difficulty,
-            givens = givens,
-            solution = solution
-        )
+        return lastFallback ?: run {
+            val solution = generator.generateSolution(rng)
+            val givens = generator.makePuzzle(
+                solution = solution,
+                targetGivens = targetGivens(difficulty),
+                rng = rng
+            )
+            val id = synchronized(lock) {
+                val cur = nextID
+                nextID++
+                cur
+            }
+            Puzzle(id = id, difficulty = difficulty, givens = givens, solution = solution)
+        }
     }
 
     private fun targetGivens(difficulty: Difficulty): Int = when (difficulty) {
@@ -106,7 +133,24 @@ class GeneratedPuzzleProvider : PuzzleProvider {
         Difficulty.HARD -> 26
     }
 
+    private fun expectedTier(difficulty: Difficulty): TutorTechnique.Tier = when (difficulty) {
+        Difficulty.EASY -> TutorTechnique.Tier.SIMPLE
+        Difficulty.MEDIUM -> TutorTechnique.Tier.MEDIUM
+        Difficulty.HARD -> TutorTechnique.Tier.HARD
+    }
+
+    private fun cellsFromGivens(givens: List<List<Int>>): List<List<Cell>> =
+        givens.map { row ->
+            row.map { v ->
+                if (v == 0) Cell(value = null, isFixed = false, notes = emptySet())
+                else Cell(value = v, isFixed = true, notes = emptySet())
+            }
+        }
+
     companion object {
-        private const val BUFFER_SIZE = 3
+        // Each generated puzzle now runs through up-to-25 generate-and-classify
+        // retries (technique-tier validation) so the buffer fill is genuinely
+        // expensive — kept small to avoid CPU saturation on cold start.
+        private const val BUFFER_SIZE = 1
     }
 }

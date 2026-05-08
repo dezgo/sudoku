@@ -1,5 +1,8 @@
 package com.derekgillett.sudoku.ui
 
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.spring
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -13,18 +16,15 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.tween
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CalendarMonth
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
+import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.draw.scale
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -33,11 +33,17 @@ import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Text
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.derekgillett.sudoku.SudokuApplication
+import com.derekgillett.sudoku.audio.SoundManager
 import com.derekgillett.sudoku.model.Puzzle
 import com.derekgillett.sudoku.model.PuzzleResult
 
@@ -49,79 +55,125 @@ fun CompletedBoardSheet(
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val puzzle = result.puzzle ?: run { onDismiss(); return }
+    val context = LocalContext.current
+    LaunchedEffect(Unit) {
+        val app = context.applicationContext as? SudokuApplication
+        app?.container?.soundManager?.play(SoundManager.Effect.SOLVED)
+    }
 
     ModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = sheetState
     ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 8.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp)
-        ) {
-            FanfareHeader()
-            Text(
-                "${puzzle.displayLabel} · ${puzzle.difficulty.label}",
-                fontSize = 22.sp,
-                fontWeight = FontWeight.Bold,
-                modifier = Modifier.padding(horizontal = 8.dp)
-            )
-            Row(
-                modifier = Modifier.padding(horizontal = 8.dp),
-                horizontalArrangement = Arrangement.spacedBy(20.dp),
-                verticalAlignment = Alignment.CenterVertically
+        Box(modifier = Modifier.fillMaxWidth()) {
+            Confetti(modifier = Modifier.matchParentSize())
+
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 8.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(Icons.Filled.CalendarMonth, contentDescription = null)
-                    Text(
-                        " " + formatDateTime(result.completedAt),
-                        style = MaterialTheme.typography.bodyMedium
-                    )
+                FanfareHeader()
+                Text(
+                    puzzle.displayLabel,
+                    fontSize = 22.sp,
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier.padding(horizontal = 8.dp)
+                )
+                Row(
+                    modifier = Modifier.padding(horizontal = 8.dp),
+                    horizontalArrangement = Arrangement.spacedBy(20.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(Icons.Filled.CalendarMonth, contentDescription = null)
+                        Text(
+                            " " + formatDateTime(result.completedAt),
+                            style = MaterialTheme.typography.bodyMedium
+                        )
+                    }
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(Icons.Filled.Schedule, contentDescription = null)
+                        Text(
+                            " " + formatTime(result.elapsedSeconds),
+                            style = MaterialTheme.typography.bodyMedium
+                        )
+                    }
                 }
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(Icons.Filled.Schedule, contentDescription = null)
-                    Text(
-                        " " + formatTime(result.elapsedSeconds),
-                        style = MaterialTheme.typography.bodyMedium
-                    )
-                }
+                ReadOnlyBoard(puzzle)
             }
-            ReadOnlyBoard(puzzle)
         }
     }
 }
 
 /**
- * Bouncy "Solved!" header — animation plays once on appear, then the view
- * settles into the read-only board below. Mirrors iOS's symbolEffect(.bounce).
+ * Fanfare header — triple-icon flourish and gradient "Solved!" title.
+ * Mirrors the live solve fanfare so revisiting a completed puzzle replays
+ * the celebration. Confetti is drawn by the caller as a sibling overlay.
  */
 @Composable
 private fun FanfareHeader() {
-    var triggered by remember { mutableStateOf(false) }
-    val scale by animateFloatAsState(
-        targetValue = if (triggered) 1f else 0.4f,
-        animationSpec = tween(durationMillis = 380),
-        label = "fanfare-scale"
-    )
-    LaunchedEffect(Unit) { triggered = true }
+    val iconScale = remember { Animatable(0.4f) }
+    val titleScale = remember { Animatable(0.7f) }
+
+    LaunchedEffect(Unit) {
+        iconScale.animateTo(1f, spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessLow))
+    }
+    LaunchedEffect(Unit) {
+        kotlinx.coroutines.delay(100)
+        titleScale.animateTo(1f, spring(dampingRatio = Spring.DampingRatioLowBouncy, stiffness = Spring.StiffnessLow))
+    }
+
     Column(
         modifier = Modifier.fillMaxWidth(),
         horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(6.dp)
+        verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
+        IconRow(scale = iconScale.value)
+        Text(
+            text = "Solved!",
+            fontSize = 36.sp,
+            fontWeight = FontWeight.ExtraBold,
+            fontFamily = FontFamily.Default,
+            style = TextStyle(
+                brush = Brush.linearGradient(
+                    colors = listOf(Color(0xFF2E7D32), Color(0xFF1565C0))
+                )
+            ),
+            modifier = Modifier.scale(titleScale.value)
+        )
+    }
+}
+
+@Composable
+private fun IconRow(scale: Float) {
+    Row(
+        horizontalArrangement = Arrangement.spacedBy(14.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = Modifier.scale(scale)
+    ) {
+        Icon(
+            imageVector = Icons.Filled.CheckCircle,  // popper-style not in core icons
+            contentDescription = null,
+            tint = Color(0xFFFB8C00),
+            modifier = Modifier
+                .size(40.dp)
+                .rotate(-20f)
+        )
         Icon(
             imageVector = Icons.Filled.CheckCircle,
             contentDescription = null,
             tint = Color(0xFF2E7D32),
-            modifier = Modifier
-                .size(56.dp)
-                .scale(scale)
+            modifier = Modifier.size(64.dp)
         )
-        Text(
-            "Solved!",
-            fontSize = 22.sp,
-            fontWeight = FontWeight.Bold
+        Icon(
+            imageVector = Icons.Filled.CheckCircle,
+            contentDescription = null,
+            tint = Color(0xFF8E24AA),
+            modifier = Modifier
+                .size(40.dp)
+                .rotate(20f)
         )
     }
 }

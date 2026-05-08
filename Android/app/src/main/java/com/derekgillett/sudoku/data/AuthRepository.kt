@@ -110,6 +110,15 @@ class AuthRepository(
         _user.value = null
     }
 
+    /** Hard-delete the account on the server, then clear all local auth.
+     *  Throws on network / server failure so the caller can surface the
+     *  error. Required by App Store Guideline 5.1.1(v). */
+    suspend fun deleteAccount() {
+        val token = _token.value ?: return
+        client.deleteMe(token)
+        signOut()
+    }
+
     private fun persistToken(token: String) {
         prefs.edit().putString(KEY_TOKEN, token).apply()
         _token.value = token

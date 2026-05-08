@@ -101,8 +101,19 @@ final class AuthStore: ObservableObject {
         UserDefaults.standard.removeObject(forKey: userKey)
     }
 
-    // MARK: - Persistence
+    /// Hard-delete the account on the server, then clear all local auth.
+    /// Throws on network / server failure — the caller surfaces the error
+    /// so the user can retry. App Store Guideline 5.1.1(v) requires this
+    /// path to be reachable in-app.
+    func deleteAccount() async throws {
+        guard let token else { return }
+        try await client.deleteMe(token: token)
+        // Successful server delete → wipe local state.
+        signOut()
+    }
 
+    // MARK: - Persistence
+	
     private static func loadUser() -> APIUser? {
         guard let data = UserDefaults.standard.data(forKey: "sudoku.identity.v1") else { return nil }
         return try? JSONDecoder().decode(APIUser.self, from: data)

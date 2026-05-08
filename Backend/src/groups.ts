@@ -84,17 +84,33 @@ export async function getGroupMembers(
     .first();
   if (!member) return jsonError(403, 'not_a_member');
 
+  // Per-member stats (all-time across every daily): how many they've solved
+  // and when they last solved one. LEFT JOIN so zero-score users still appear.
   const result = await env.DB.prepare(
-    `SELECT u.id, u.display_name
+    `SELECT u.id,
+            u.display_name,
+            COUNT(s.puzzle_id)  AS dailies_completed,
+            MAX(s.completed_at) AS last_completed_at
        FROM group_members gm
        JOIN users u ON u.id = gm.user_id
+       LEFT JOIN scores s ON s.user_id = u.id
       WHERE gm.group_id = ?
+      GROUP BY u.id, u.display_name, gm.joined_at
       ORDER BY gm.joined_at ASC`,
   )
     .bind(groupId)
-    .all<{ id: string; display_name: string | null }>();
+    .all<{
+      id: string;
+      display_name: string | null;
+      dailies_completed: number;
+      last_completed_at: number | null;
+    }>();
 
-  const users = (result.results ?? []).map((r) => ({ user: { id: r.id, display_name: r.display_name } }));
+  const users = (result.results ?? []).map((r) => ({
+    user: { id: r.id, display_name: r.display_name },
+    dailies_completed: r.dailies_completed ?? 0,
+    last_completed_at: r.last_completed_at,
+  }));
   return jsonOk(users);
 }
 

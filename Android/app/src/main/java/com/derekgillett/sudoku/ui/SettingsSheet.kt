@@ -1,5 +1,6 @@
 package com.derekgillett.sudoku.ui
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -11,6 +12,7 @@ import android.content.Intent
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.outlined.AccountCircle
+import androidx.compose.material.icons.outlined.QrCode
 import androidx.compose.material.icons.outlined.Share
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -44,6 +46,7 @@ import com.derekgillett.sudoku.data.AppearancePreference
 import com.derekgillett.sudoku.data.AuthRepository
 import com.derekgillett.sudoku.data.GroupsRepository
 import com.derekgillett.sudoku.data.PreferencesRepository
+import com.derekgillett.sudoku.network.ApiClient
 import com.derekgillett.sudoku.network.ApiGroup
 import com.derekgillett.sudoku.state.SudokuGameViewModel
 import kotlinx.coroutines.launch
@@ -67,7 +70,12 @@ fun SettingsSheet(
     val context = LocalContext.current
 
     var showingAddGroup by remember { mutableStateOf(false) }
+    var addGroupInitialMode by remember { mutableStateOf(OnboardingMode.PICKER) }
+    var viewingMembersOf: ApiGroup? by remember { mutableStateOf(null) }
     var leavingGroup: ApiGroup? by remember { mutableStateOf(null) }
+    var confirmingDeleteAccount by remember { mutableStateOf(false) }
+    var deleteAccountError: String? by remember { mutableStateOf(null) }
+    var isDeletingAccount by remember { mutableStateOf(false) }
 
     ModalBottomSheet(
         onDismissRequest = onDismiss,
@@ -109,6 +117,22 @@ fun SettingsSheet(
                 ) {
                     Text("Sign out", color = MaterialTheme.colorScheme.error)
                 }
+                TextButton(
+                    onClick = { confirmingDeleteAccount = true },
+                    enabled = !isDeletingAccount
+                ) {
+                    Text(
+                        if (isDeletingAccount) "Deleting…" else "Delete account",
+                        color = MaterialTheme.colorScheme.error
+                    )
+                }
+                deleteAccountError?.let {
+                    Text(
+                        it,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.error
+                    )
+                }
             } else if (authRepo.isSignedIn) {
                 TextButton(onClick = onSignIn) {
                     Text("Set display name")
@@ -140,7 +164,12 @@ fun SettingsSheet(
                             horizontalArrangement = Arrangement.SpaceBetween,
                             modifier = Modifier.fillMaxWidth()
                         ) {
-                            Column(modifier = Modifier.weight(1f)) {
+                            Column(
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .clickable { viewingMembersOf = item.group }
+                                    .padding(vertical = 4.dp)
+                            ) {
                                 Text(item.group.name, style = MaterialTheme.typography.bodyLarge)
                                 Text(
                                     "${item.memberCount} member${if (item.memberCount == 1) "" else "s"}",
@@ -189,10 +218,21 @@ fun SettingsSheet(
                         }
                     }
                 }
-                TextButton(onClick = { showingAddGroup = true }) {
+                TextButton(onClick = {
+                    addGroupInitialMode = OnboardingMode.CREATING
+                    showingAddGroup = true
+                }) {
                     Icon(Icons.Filled.Add, contentDescription = null)
                     Spacer(Modifier.size(6.dp))
-                    Text("Add a group")
+                    Text("Create a group")
+                }
+                TextButton(onClick = {
+                    addGroupInitialMode = OnboardingMode.JOINING
+                    showingAddGroup = true
+                }) {
+                    Icon(Icons.Outlined.QrCode, contentDescription = null)
+                    Spacer(Modifier.size(6.dp))
+                    Text("Join with a code")
                 }
             }
 
@@ -213,6 +253,20 @@ fun SettingsSheet(
                 label = "Highlight rules",
                 value = state?.highlightConstraints ?: true,
                 onChange = { viewModel.setHighlightConstraints(it) }
+            )
+
+            HorizontalDivider(modifier = Modifier.padding(vertical = 12.dp))
+
+            // Sounds section
+            Text(
+                "Sounds",
+                style = MaterialTheme.typography.titleMedium,
+                modifier = Modifier.padding(vertical = 4.dp)
+            )
+            ToggleRow(
+                label = "Sound effects",
+                value = prefs?.soundEffects ?: true,
+                onChange = { v -> scope.launch { prefsRepo.setSoundEffects(v) } }
             )
 
             HorizontalDivider(modifier = Modifier.padding(vertical = 12.dp))
@@ -246,7 +300,17 @@ fun SettingsSheet(
         GroupOnboardingSheet(
             groupsRepo = groupsRepo,
             onDone = { showingAddGroup = false },
-            onSkip = { showingAddGroup = false }
+            onSkip = { showingAddGroup = false },
+            initialMode = addGroupInitialMode
+        )
+    }
+
+    viewingMembersOf?.let { group ->
+        GroupMembersSheet(
+            group = group,
+            groupsRepo = groupsRepo,
+            authRepo = authRepo,
+            onDismiss = { viewingMembersOf = null }
         )
     }
 
@@ -266,6 +330,43 @@ fun SettingsSheet(
             },
             dismissButton = {
                 TextButton(onClick = { leavingGroup = null }) { Text("Cancel") }
+            }
+        )
+    }
+
+    if (confirmingDeleteAccount) {
+        AlertDialog(
+            onDismissRequest = { confirmingDeleteAccount = false },
+            title = { Text("Delete your account?") },
+            text = {
+                Text(
+                    "This permanently erases your account, daily history, group memberships, and any games you've played. This can't be undone."
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    confirmingDeleteAccount = false
+                    isDeletingAccount = true
+                    deleteAccountError = null
+                    scope.launch {
+                        try {
+                            authRepo.deleteAccount()
+                            groupsRepo.clear()
+                            onDismiss()
+                        } catch (_: ApiClient.ApiException.Offline) {
+                            deleteAccountError = "You're offline. Try again when you're back online."
+                        } catch (_: Exception) {
+                            deleteAccountError =
+                                "Couldn't delete your account. Please try again or contact support."
+                        }
+                        isDeletingAccount = false
+                    }
+                }) {
+                    Text("Delete", color = MaterialTheme.colorScheme.error)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { confirmingDeleteAccount = false }) { Text("Cancel") }
             }
         )
     }

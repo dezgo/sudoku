@@ -3,12 +3,18 @@
 
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+    <!-- API 33+ runtime permission for showing notifications. Pre-API-33
+         Android grants it implicitly. We pair this with a custom in-app
+         pre-prompt so the system dialog isn't the user's first warning. -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
     <application
         android:name=".SudokuApplication"
         android:allowBackup="true"
         android:dataExtractionRules="@xml/data_extraction_rules"
         android:fullBackupContent="@xml/backup_rules"
+        android:icon="@mipmap/ic_launcher"
+        android:roundIcon="@mipmap/ic_launcher_round"
         android:label="@string/app_name"
         android:supportsRtl="true"
         android:theme="@style/Theme.Sudoku">
@@ -19,6 +25,17 @@
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+            <!-- App Links: opens https://sudoku.appfoundry.cc/m/<code> directly
+                 in the app. autoVerify pairs with /.well-known/assetlinks.json
+                 served by the Cloudflare Worker. -->
+            <intent-filter android:autoVerify="true">
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="https"
+                      android:host="sudoku.appfoundry.cc"
+                      android:pathPrefix="/m/" />
             </intent-filter>
         </activity>
     </application>

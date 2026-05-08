@@ -17,6 +17,15 @@ export async function authStart(req: Request, env: Env): Promise<Response> {
   const email = body?.email?.trim().toLowerCase();
   if (!email || !EMAIL_RE.test(email)) return jsonError(400, 'invalid_email');
 
+  // Reviewer bypass: short-circuit the Resend send so app-store reviewers
+  // can sign in without needing to read an email inbox. The OTP for the
+  // configured email is fixed (REVIEWER_OTP_CODE) and never written to the
+  // auth_codes table — authVerify checks the env var directly for that
+  // email. Real users hit the normal flow below.
+  if (env.REVIEWER_EMAIL && env.REVIEWER_OTP_CODE && email === env.REVIEWER_EMAIL.toLowerCase()) {
+    return new Response(null, { status: 204 });
+  }
+
   const code = generateOtpCode();
   const codeHash = await sha256(code);
   const expiresAt = Date.now() + CODE_TTL_MS;
@@ -38,31 +47,47 @@ export async function authVerify(req: Request, env: Env): Promise<Response> {
   const code = body?.code?.trim();
   if (!email || !code) return jsonError(400, 'missing_fields');
 
-  const row = await env.DB.prepare(
-    'SELECT code_hash, expires_at, attempts FROM auth_codes WHERE email = ?',
-  )
-    .bind(email)
-    .first<{ code_hash: string; expires_at: number; attempts: number }>();
+  // Reviewer bypass — see authStart for context. Mirror of the bypass
+  // there: accept the configured fixed code for the configured email,
+  // skipping the auth_codes table entirely and falling through to the
+  // normal user/session creation below.
+  const isReviewer =
+    !!env.REVIEWER_EMAIL &&
+    !!env.REVIEWER_OTP_CODE &&
+    email === env.REVIEWER_EMAIL.toLowerCase();
 
-  if (!row) return jsonError(400, 'no_pending_code');
-  if (row.expires_at < Date.now()) {
-    await env.DB.prepare('DELETE FROM auth_codes WHERE email = ?').bind(email).run();
-    return jsonError(400, 'code_expired');
-  }
-  if (row.attempts >= MAX_ATTEMPTS) {
-    await env.DB.prepare('DELETE FROM auth_codes WHERE email = ?').bind(email).run();
-    return jsonError(400, 'too_many_attempts');
-  }
-
-  const codeHash = await sha256(code);
-  if (codeHash !== row.code_hash) {
-    await env.DB.prepare('UPDATE auth_codes SET attempts = attempts + 1 WHERE email = ?')
+  if (isReviewer) {
+    if (code !== env.REVIEWER_OTP_CODE) {
+      return jsonError(400, 'wrong_code');
+    }
+    // Fall through to user / session creation below.
+  } else {
+    const row = await env.DB.prepare(
+      'SELECT code_hash, expires_at, attempts FROM auth_codes WHERE email = ?',
+    )
       .bind(email)
-      .run();
-    return jsonError(400, 'wrong_code');
-  }
+      .first<{ code_hash: string; expires_at: number; attempts: number }>();
 
-  await env.DB.prepare('DELETE FROM auth_codes WHERE email = ?').bind(email).run();
+    if (!row) return jsonError(400, 'no_pending_code');
+    if (row.expires_at < Date.now()) {
+      await env.DB.prepare('DELETE FROM auth_codes WHERE email = ?').bind(email).run();
+      return jsonError(400, 'code_expired');
+    }
+    if (row.attempts >= MAX_ATTEMPTS) {
+      await env.DB.prepare('DELETE FROM auth_codes WHERE email = ?').bind(email).run();
+      return jsonError(400, 'too_many_attempts');
+    }
+
+    const codeHash = await sha256(code);
+    if (codeHash !== row.code_hash) {
+      await env.DB.prepare('UPDATE auth_codes SET attempts = attempts + 1 WHERE email = ?')
+        .bind(email)
+        .run();
+      return jsonError(400, 'wrong_code');
+    }
+
+    await env.DB.prepare('DELETE FROM auth_codes WHERE email = ?').bind(email).run();
+  }
 
   const now = Date.now();
   let user = await env.DB.prepare('SELECT id, display_name FROM users WHERE email = ?')

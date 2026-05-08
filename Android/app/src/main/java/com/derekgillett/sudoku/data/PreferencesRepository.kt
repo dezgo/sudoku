@@ -12,6 +12,7 @@ import kotlinx.coroutines.flow.map
 data class UserPreferences(
     val highlightMistakes: Boolean = true,
     val highlightConstraints: Boolean = true,
+    val soundEffects: Boolean = true,
     val difficulty: Difficulty = Difficulty.MEDIUM,
     val appearance: AppearancePreference = AppearancePreference.SYSTEM
 )
@@ -21,6 +22,7 @@ class PreferencesRepository(private val dataStore: DataStore<Preferences>) {
     private object Keys {
         val HIGHLIGHT_MISTAKES = booleanPreferencesKey("highlight_mistakes")
         val HIGHLIGHT_CONSTRAINTS = booleanPreferencesKey("highlight_constraints")
+        val SOUND_EFFECTS = booleanPreferencesKey("sound_effects")
         val DIFFICULTY = stringPreferencesKey("difficulty")
         val APPEARANCE = stringPreferencesKey("appearance")
     }
@@ -29,6 +31,7 @@ class PreferencesRepository(private val dataStore: DataStore<Preferences>) {
         UserPreferences(
             highlightMistakes = prefs[Keys.HIGHLIGHT_MISTAKES] ?: true,
             highlightConstraints = prefs[Keys.HIGHLIGHT_CONSTRAINTS] ?: true,
+            soundEffects = prefs[Keys.SOUND_EFFECTS] ?: true,
             difficulty = prefs[Keys.DIFFICULTY]
                 ?.let { runCatching { Difficulty.valueOf(it) }.getOrNull() }
                 ?: Difficulty.MEDIUM,
@@ -44,6 +47,10 @@ class PreferencesRepository(private val dataStore: DataStore<Preferences>) {
 
     suspend fun setHighlightConstraints(value: Boolean) {
         dataStore.edit { it[Keys.HIGHLIGHT_CONSTRAINTS] = value }
+    }
+
+    suspend fun setSoundEffects(value: Boolean) {
+        dataStore.edit { it[Keys.SOUND_EFFECTS] = value }
     }
 
     suspend fun setDifficulty(value: Difficulty) {

@@ -45,7 +45,7 @@ struct SolvedView: View {
                     .animation(.spring(response: 0.5, dampingFraction: 0.7).delay(0.1), value: animateIn)
 
                 VStack(spacing: 8) {
-                    Text(verbatim: "\(puzzle.displayLabel) · \(puzzle.difficulty.label)")
+                    Text(verbatim: puzzle.displayLabel)
                         .font(.headline)
                     HStack(spacing: 24) {
                         Label(formatTime(elapsedSeconds), systemImage: "clock")

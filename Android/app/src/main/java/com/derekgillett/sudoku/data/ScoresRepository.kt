@@ -5,6 +5,7 @@ import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.stringPreferencesKey
 import com.derekgillett.sudoku.network.ApiClient
+import com.derekgillett.sudoku.network.RemoteScore
 import com.derekgillett.sudoku.network.LeaderboardEntry
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -36,7 +37,13 @@ class ScoresRepository(
         val puzzleId: Int,
         val elapsedSeconds: Int,
         val mistakes: Int,
-        val completedAt: Long
+        val completedAt: Long,
+        // Assist markers — optional for backwards compat with queued items
+        // from earlier app versions that didn't track them.
+        val hintsUsed: Int = 0,
+        val pencilAssistsUsed: Int = 0,
+        val highlightMistakesWasOn: Boolean = false,
+        val highlightRulesWasOn: Boolean = false
     )
 
     private val json = Json { ignoreUnknownKeys = true }
@@ -50,18 +57,33 @@ class ScoresRepository(
      * (offline or signed-out). Caller must already have verified the puzzle is
      * a real daily and not an offline-fallback.
      */
-    suspend fun submit(puzzleId: Int, elapsedSeconds: Int, mistakes: Int): Int? {
+    suspend fun submit(
+        puzzleId: Int,
+        elapsedSeconds: Int,
+        mistakes: Int,
+        hintsUsed: Int,
+        pencilAssistsUsed: Int,
+        highlightMistakesWasOn: Boolean,
+        highlightRulesWasOn: Boolean
+    ): Int? {
+        val pending = Pending(
+            puzzleId, elapsedSeconds, mistakes, System.currentTimeMillis(),
+            hintsUsed, pencilAssistsUsed, highlightMistakesWasOn, highlightRulesWasOn
+        )
         val token = auth.token.value
         if (token == null) {
-            enqueue(Pending(puzzleId, elapsedSeconds, mistakes, System.currentTimeMillis()))
+            enqueue(pending)
             return null
         }
         return try {
-            val rank = client.postScore(token, puzzleId, elapsedSeconds, mistakes)
+            val rank = client.postScore(
+                token, puzzleId, elapsedSeconds, mistakes,
+                hintsUsed, pencilAssistsUsed, highlightMistakesWasOn, highlightRulesWasOn
+            )
             _lastRank.value = rank
             rank
         } catch (_: ApiClient.ApiException) {
-            enqueue(Pending(puzzleId, elapsedSeconds, mistakes, System.currentTimeMillis()))
+            enqueue(pending)
             null
         }
     }
@@ -78,7 +100,11 @@ class ScoresRepository(
         val remaining = mutableListOf<Pending>()
         for (item in queue) {
             try {
-                client.postScore(token, item.puzzleId, item.elapsedSeconds, item.mistakes)
+                client.postScore(
+                    token, item.puzzleId, item.elapsedSeconds, item.mistakes,
+                    item.hintsUsed, item.pencilAssistsUsed,
+                    item.highlightMistakesWasOn, item.highlightRulesWasOn
+                )
                 // Posted (or 4xx — drop, can't recover).
             } catch (_: ApiClient.ApiException.Offline) {
                 remaining.add(item)
@@ -97,6 +123,14 @@ class ScoresRepository(
     suspend fun fetchLeaderboard(groupId: String, puzzleId: Int): List<LeaderboardEntry> {
         val token = auth.token.value ?: throw ApiClient.ApiException.Http(401, "unauthenticated")
         return client.groupScores(token, groupId, puzzleId)
+    }
+
+    /** Fetch this user's completed-daily history from the backend. Returns
+     *  empty list on failure. Used at sign-in to seed local history on a
+     *  fresh install. */
+    suspend fun fetchMyScores(): List<RemoteScore> {
+        val token = auth.token.value ?: return emptyList()
+        return runCatching { client.meScores(token) }.getOrDefault(emptyList())
     }
 
     suspend fun clear() {

@@ -11,40 +11,82 @@ import SwiftUI
 struct CompletedBoardView: View {
     let result: PuzzleResult
     @Environment(\.dismiss) private var dismiss
+    @State private var animateIn: Bool = false
 
     var body: some View {
         NavigationStack {
-            VStack(spacing: 12) {
-                fanfare
-                summary
-                if let puzzle = result.puzzle {
-                    board(puzzle: puzzle)
-                        .padding(.horizontal, 8)
+            ZStack {
+                VStack(spacing: 12) {
+                    fanfare
+                    summary
+                    if let puzzle = result.puzzle {
+                        board(puzzle: puzzle)
+                            .padding(.horizontal, 8)
+                    }
+                    Spacer()
                 }
-                Spacer()
+                .padding(.vertical, 12)
+
+                ConfettiView()
+                    .allowsHitTesting(false)
             }
-            .padding(.vertical, 12)
             .navigationTitle(result.puzzle?.displayLabel ?? "Puzzle #\(result.puzzleID)")
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
                     Button("Done") { dismiss() }
                 }
             }
+            .onAppear {
+                animateIn = true
+                SoundManager.shared.play(.solved)
+            }
         }
     }
 
-    /// Bouncy "Solved!" header — animation plays once on appear, then
-    /// the view settles into the read-only board below.
+    /// Fanfare header — confetti shower, triple-icon flourish, and gradient
+    /// "Solved!" title. Mirrors the live solve fanfare so revisiting a
+    /// completed puzzle replays the celebration.
     private var fanfare: some View {
-        VStack(spacing: 6) {
-            Image(systemName: "checkmark.seal.fill")
-                .font(.system(size: 56))
-                .foregroundStyle(.green)
-                .symbolEffect(.bounce, options: .nonRepeating)
+        VStack(spacing: 12) {
+            iconRow
+                .scaleEffect(animateIn ? 1 : 0.4)
+                .opacity(animateIn ? 1 : 0)
+                .animation(.spring(response: 0.45, dampingFraction: 0.55), value: animateIn)
+
             Text("Solved!")
-                .font(.title2.weight(.bold))
+                .font(.system(size: 40, weight: .heavy, design: .rounded))
+                .foregroundStyle(
+                    LinearGradient(
+                        colors: [.green, .blue],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    )
+                )
+                .scaleEffect(animateIn ? 1 : 0.7)
+                .opacity(animateIn ? 1 : 0)
+                .animation(.spring(response: 0.5, dampingFraction: 0.7).delay(0.1), value: animateIn)
         }
         .padding(.top, 4)
+    }
+
+    private var iconRow: some View {
+        HStack(spacing: 14) {
+            Image(systemName: "party.popper.fill")
+                .font(.system(size: 40))
+                .foregroundStyle(.orange)
+                .symbolEffect(.bounce, options: .nonRepeating)
+                .rotationEffect(.degrees(-20))
+            Image(systemName: "checkmark.seal.fill")
+                .font(.system(size: 64))
+                .foregroundStyle(.green)
+                .symbolEffect(.bounce, options: .nonRepeating)
+            Image(systemName: "party.popper.fill")
+                .font(.system(size: 40))
+                .foregroundStyle(.purple)
+                .symbolEffect(.bounce, options: .nonRepeating)
+                .rotationEffect(.degrees(20))
+                .scaleEffect(x: -1, y: 1)
+        }
     }
 
     private var summary: some View {

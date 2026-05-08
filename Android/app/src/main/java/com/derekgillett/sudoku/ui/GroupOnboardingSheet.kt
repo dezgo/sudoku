@@ -47,30 +47,37 @@ import kotlinx.coroutines.launch
 fun GroupOnboardingSheet(
     groupsRepo: GroupsRepository,
     onDone: () -> Unit,
-    onSkip: () -> Unit
+    onSkip: () -> Unit,
+    initialMode: OnboardingMode = OnboardingMode.PICKER
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    val title = when (initialMode) {
+        OnboardingMode.PICKER -> "Add a group"
+        OnboardingMode.CREATING -> "Create a group"
+        OnboardingMode.JOINING -> "Join with a code"
+    }
     ModalBottomSheet(
         onDismissRequest = onSkip,
         sheetState = sheetState
     ) {
         Column(modifier = Modifier.padding(horizontal = 24.dp, vertical = 8.dp)) {
             Text(
-                "Add a group",
+                title,
                 fontSize = 22.sp,
                 fontWeight = FontWeight.Bold,
                 modifier = Modifier.padding(bottom = 16.dp)
             )
             GroupOnboardingContent(
                 groupsRepo = groupsRepo,
-                onComplete = onDone
+                onComplete = onDone,
+                initialMode = initialMode
             )
             Spacer(Modifier.size(24.dp))
         }
     }
 }
 
-private enum class OnboardingMode { PICKER, CREATING, JOINING }
+enum class OnboardingMode { PICKER, CREATING, JOINING }
 
 /**
  * Shared content used by both the standalone GroupOnboardingSheet (Settings →
@@ -79,9 +86,10 @@ private enum class OnboardingMode { PICKER, CREATING, JOINING }
 @Composable
 fun GroupOnboardingContent(
     groupsRepo: GroupsRepository,
-    onComplete: () -> Unit
+    onComplete: () -> Unit,
+    initialMode: OnboardingMode = OnboardingMode.PICKER
 ) {
-    var mode by remember { mutableStateOf(OnboardingMode.PICKER) }
+    var mode by remember { mutableStateOf(initialMode) }
     var groupName by remember { mutableStateOf("") }
     var inviteCode by remember { mutableStateOf("") }
     var createdInviteCode: String? by remember { mutableStateOf(null) }
@@ -178,8 +186,10 @@ fun GroupOnboardingContent(
                     if (busy) CircularProgressIndicator(modifier = Modifier.size(18.dp))
                     else Text("Create")
                 }
-                TextButton(onClick = { mode = OnboardingMode.PICKER }, enabled = !busy) {
-                    Text("Back")
+                if (initialMode == OnboardingMode.PICKER) {
+                    TextButton(onClick = { mode = OnboardingMode.PICKER }, enabled = !busy) {
+                        Text("Back")
+                    }
                 }
             }
         }
@@ -233,8 +243,10 @@ fun GroupOnboardingContent(
                 if (busy) CircularProgressIndicator(modifier = Modifier.size(18.dp))
                 else Text("Join")
             }
-            TextButton(onClick = { mode = OnboardingMode.PICKER }, enabled = !busy) {
-                Text("Back")
+            if (initialMode == OnboardingMode.PICKER) {
+                TextButton(onClick = { mode = OnboardingMode.PICKER }, enabled = !busy) {
+                    Text("Back")
+                }
             }
         }
     }

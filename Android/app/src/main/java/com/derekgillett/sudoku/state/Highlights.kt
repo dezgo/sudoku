@@ -8,6 +8,7 @@ object Highlights {
 
     /** True if the cell is in the selected cell's row, column, or 3×3 box. */
     fun isHighlighted(state: GameState, row: Int, col: Int): Boolean {
+        if (!state.highlightConstraints) return false
         val sel = state.selected ?: return false
         if (sel.row == row && sel.col == col) return false
         if (sel.row == row || sel.col == col) return true
@@ -56,11 +57,10 @@ object Highlights {
     fun hasConflict(state: GameState, row: Int, col: Int): Boolean {
         val cell = state.cells[row][col]
         val v = cell.value ?: return false
+        if (cell.isFixed) return false
 
-        if (!cell.isFixed) {
-            val solution = state.puzzle.solution
-            if (solution != null) return v != solution[row][col]
-        }
+        val solution = state.puzzle.solution
+        if (solution != null) return v != solution[row][col]
 
         for (i in 0 until 9) {
             if (i != col && state.cells[row][i].value == v) return true

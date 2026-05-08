@@ -57,8 +57,7 @@ fun SolvedSheet(
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val puzzle: Puzzle? = result.puzzle
-    val titleLabel = puzzle?.let { "${it.displayLabel} · ${it.difficulty.label}" }
-        ?: "Puzzle #${result.puzzleID}"
+    val titleLabel = puzzle?.displayLabel ?: "Puzzle #${result.puzzleID}"
 
     val iconScale = remember { Animatable(0.4f) }
     val titleScale = remember { Animatable(0.7f) }

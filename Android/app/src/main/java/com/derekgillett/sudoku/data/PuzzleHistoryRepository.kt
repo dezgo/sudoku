@@ -34,6 +34,23 @@ class PuzzleHistoryRepository(private val dataStore: DataStore<Preferences>) {
         }
     }
 
+    /** Merge in remote-known completions (typically pulled on sign-in).
+     *  Local entries win on conflict — they were probably the source of the
+     *  remote score in the first place. */
+    suspend fun mergeRemote(remote: List<PuzzleResult>) {
+        if (remote.isEmpty()) return
+        dataStore.edit { prefs ->
+            val current = prefs[key]
+                ?.let { runCatching { json.decodeFromString<List<PuzzleResult>>(it) }.getOrNull() }
+                ?: emptyList()
+            val existingIds = current.map { it.puzzleID }.toSet()
+            val newOnes = remote.filter { it.puzzleID !in existingIds }
+            if (newOnes.isEmpty()) return@edit
+            val merged = (current + newOnes).sortedByDescending { it.completedAt }
+            prefs[key] = json.encodeToString(merged)
+        }
+    }
+
     suspend fun clear() {
         dataStore.edit { prefs ->
             prefs[key] = "[]"

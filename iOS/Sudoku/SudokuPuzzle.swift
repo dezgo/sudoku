@@ -37,7 +37,8 @@ struct Puzzle: Codable {
     var isDaily: Bool { id >= 19700101 && id <= 99991231 }
 
     /// Human-readable label for headers / lists. Dailies show as
-    /// "Daily · Apr 29"; generated puzzles show as "Puzzle #1042".
+    /// "Daily · Apr 29"; generated puzzles show their difficulty alone
+    /// (the puzzle ID is an internal counter that no player cares about).
     var displayLabel: String {
         if isDaily,
            let date = DateComponents(
@@ -48,7 +49,7 @@ struct Puzzle: Codable {
            ).date {
             return "Daily · " + date.formatted(.dateTime.month(.abbreviated).day())
         }
-        return "Puzzle #\(id)"
+        return difficulty.label
     }
 
 

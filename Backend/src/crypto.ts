@@ -34,6 +34,14 @@ export function generateGroupId(): string {
   return randomHex(16);
 }
 
+export function generateMultiplayerGameId(): string {
+  return randomHex(16);
+}
+
+export function generateIdempotencyKey(): string {
+  return randomHex(16);
+}
+
 export async function sha256(input: string): Promise<string> {
   const data = new TextEncoder().encode(input);
   const hash = await crypto.subtle.digest('SHA-256', data);

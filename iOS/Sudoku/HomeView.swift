@@ -24,11 +24,13 @@ struct HomeView: View {
     let onShowSettings: () -> Void
     let onSignIn: () -> Void
     let onShowLeaderboard: () -> Void
+    let onShowCoach: () -> Void
+    let onShowMultiplayer: () -> Void
 
     var body: some View {
         VStack(spacing: 0) {
             Spacer()
-            Text("Sudoku")
+            Text("Sudoku Crew")
                 .font(.system(size: 56, weight: .bold, design: .rounded))
             Spacer()
             VStack(spacing: 14) {
@@ -37,7 +39,9 @@ struct HomeView: View {
                     continueGroup(save: save)
                 }
                 leaderboardButton
+                multiplayerButton
                 newGameButton
+                coachButton
                 gamesButton
             }
             .padding(.horizontal, 48)
@@ -135,7 +139,7 @@ struct HomeView: View {
             .buttonStyle(BorderedButtonStyle())
             .controlSize(.large)
 
-            Text(verbatim: "\(save.puzzle.displayLabel) · \(save.puzzle.difficulty.label) · \(formatTime(save.elapsedSeconds))")
+            Text(verbatim: "\(save.puzzle.displayLabel) · \(formatTime(save.elapsedSeconds))")
                 .font(.caption)
                 .foregroundStyle(.secondary)
         }
@@ -162,6 +166,24 @@ struct HomeView: View {
     private var gamesButton: some View {
         Button(action: onShowGames) {
             Label("Games", systemImage: "list.bullet")
+                .frame(maxWidth: .infinity)
+        }
+        .buttonStyle(BorderedButtonStyle())
+        .controlSize(.large)
+    }
+
+    private var coachButton: some View {
+        Button(action: onShowCoach) {
+            Label("Coach", systemImage: "graduationcap")
+                .frame(maxWidth: .infinity)
+        }
+        .buttonStyle(BorderedButtonStyle())
+        .controlSize(.large)
+    }
+
+    private var multiplayerButton: some View {
+        Button(action: onShowMultiplayer) {
+            Label("Multiplayer", systemImage: "person.2.fill")
                 .frame(maxWidth: .infinity)
         }
         .buttonStyle(BorderedButtonStyle())

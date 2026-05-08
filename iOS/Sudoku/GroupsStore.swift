@@ -61,6 +61,11 @@ final class GroupsStore: ObservableObject {
         await refresh()
     }
 
+    func members(groupID: String) async throws -> [GroupMember] {
+        guard let token = auth.token else { throw APIError.unknown }
+        return try await client.groupMembers(token: token, groupID: groupID)
+    }
+
     func clear() {
         groups = []
         UserDefaults.standard.removeObject(forKey: cacheKey)

@@ -88,7 +88,7 @@ struct HistoryView: View {
     private func inProgressRow(_ save: GameSave) -> some View {
         HStack {
             VStack(alignment: .leading, spacing: 2) {
-                Text(verbatim: "\(save.puzzle.displayLabel) · \(save.puzzle.difficulty.label)")
+                Text(verbatim: save.puzzle.displayLabel)
                     .font(.headline)
                 Text(save.lastPlayedAt, format: .dateTime.day().month().hour().minute())
                     .font(.caption)
@@ -130,9 +130,7 @@ struct HistoryView: View {
     }
 
     private func headlineLabel(for result: PuzzleResult) -> String {
-        if let p = result.puzzle {
-            return "\(p.displayLabel) · \(p.difficulty.label)"
-        }
+        if let p = result.puzzle { return p.displayLabel }
         return "Puzzle #\(result.puzzleID)"
     }
 

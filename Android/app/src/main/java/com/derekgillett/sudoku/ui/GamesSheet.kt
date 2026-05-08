@@ -162,7 +162,7 @@ private fun InProgressRow(save: GameSave, onClick: () -> Unit) {
     ) {
         Column(modifier = Modifier.weight(1f)) {
             Text(
-                "${save.puzzle.displayLabel} · ${save.puzzle.difficulty.label}",
+                save.puzzle.displayLabel,
                 style = MaterialTheme.typography.titleSmall
             )
             Text(
@@ -197,9 +197,7 @@ private fun CompletedRow(result: PuzzleResult, onClick: () -> Unit) {
         verticalAlignment = Alignment.CenterVertically
     ) {
         Column(modifier = Modifier.weight(1f)) {
-            val title = result.puzzle?.let {
-                "${it.displayLabel} · ${it.difficulty.label}"
-            } ?: "Puzzle #${result.puzzleID}"
+            val title = result.puzzle?.displayLabel ?: "Puzzle #${result.puzzleID}"
             Text(title, style = MaterialTheme.typography.titleSmall)
             Text(
                 formatDateTime(result.completedAt),

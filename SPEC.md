@@ -48,13 +48,17 @@ Standard 9×9 Sudoku:
 
 ### `GameSave` (in-progress snapshot)
 
-| Field          | Type          | Meaning                                            |
-|----------------|---------------|----------------------------------------------------|
-| puzzle         | Puzzle        | Embedded so saves don't depend on the provider.    |
-| cells          | Cell[9][9]    | Current state of all cells.                        |
-| elapsedSeconds | int           | Timer at last save.                                |
-| mistakeCount   | int           | Cumulative incorrect placements this session.      |
-| lastPlayedAt   | timestamp     | Most-recent interaction time. Used for sort order. |
+| Field                     | Type          | Meaning                                                                              |
+|---------------------------|---------------|--------------------------------------------------------------------------------------|
+| puzzle                    | Puzzle        | Embedded so saves don't depend on the provider.                                      |
+| cells                     | Cell[9][9]    | Current state of all cells.                                                          |
+| elapsedSeconds            | int           | Timer at last save.                                                                  |
+| mistakeCount              | int           | Cumulative incorrect placements this session.                                        |
+| lastPlayedAt              | timestamp     | Most-recent interaction time. Used for sort order.                                   |
+| hintsUsed                 | int           | Tutor hints **viewed**. Bumped when the tutor sheet opens with a hint to show, regardless of whether the user taps Apply / Got it. Empty-state opens (no hint found) don't count. Defaults to 0; ratchets only up.   |
+| pencilAssistsUsed         | int           | Number of auto-pencil applications this session. Defaults to 0.                      |
+| highlightMistakesEverOn   | bool          | Sticky: true if the "Highlight mistakes" assist was on at any point during the solve. Defaults to true (the default toggle state). |
+| highlightConstraintsEverOn| bool          | Sticky: true if "Highlight rules" was on at any point. Defaults to true.             |
 
 ### `PuzzleResult` (completed record)
 
@@ -115,9 +119,15 @@ A puzzle is produced by:
 
 1. **Generate a random fully-solved 9×9 grid** via backtracking with shuffled digit order at each step. The first empty cell is filled, recursing.
 2. **Carve out a puzzle** by visiting cells in random order and removing each one *only if* the resulting grid still has a unique solution. Stop when the target hint count for the difficulty is reached or no more cells can be removed without ambiguity.
-3. The full pre-removal grid becomes `solution`; the carved grid becomes `givens`.
+3. **Validate the technique tier** by running the puzzle through `TutorEngine.classify(cells:)`, which solves the puzzle by repeatedly applying the easiest engine hint and tracks the *hardest* tier required. The candidate is accepted only if its max tier matches the requested difficulty:
+   - **Easy** → `TutorTechnique.Tier.simple` (only naked / hidden singles).
+   - **Medium** → `medium` (up through pair / pointing / box-line — needs at least one of those).
+   - **Hard** → `hard` (needs at least one triple / wing / fish technique).
 
-For responsiveness the generator should keep a small per-tier buffer of pre-built puzzles (background queue, lazy-fill). 3 puzzles per tier is a reasonable buffer size. A synchronous fallback is acceptable on first launch before the buffer fills.
+   Reject mismatches and regenerate. Up to 25 attempts per generation, with the most recent candidate retained as a graceful fallback if all attempts miss tier (rare). This replaces the older clue-count-only heuristic, which produced "Medium" puzzles that secretly needed X-Wings and "Hard" puzzles solvable with naked singles alone.
+4. The full pre-removal grid becomes `solution`; the carved grid becomes `givens`.
+
+For responsiveness the generator should keep a small per-tier buffer of pre-built puzzles (background queue, lazy-fill). 3 puzzles per tier is a reasonable buffer size. A synchronous fallback is acceptable on first launch before the buffer fills. The classify-and-reject loop runs on the background queue too, so the latency is hidden from the user.
 
 ### Solver
 
@@ -163,7 +173,7 @@ A green seal-style icon is shown next to the puzzle title when the grid is fully
 
 ## 9. Input Behaviour
 
-**Selection.** Tapping a cell selects it. Tapping a different cell deselects the prior. The selection is the focus point for all highlighting.
+**Selection.** Tapping a cell selects it. Tapping a different cell deselects the prior. **Tapping the already-selected cell deselects it** (a quick "show me the board with no highlights" gesture). The selection is the focus point for all highlighting.
 
 **Number pad (1–9).** Behaviour depends on what's selected:
 
@@ -203,7 +213,7 @@ When **"Highlight mistakes" is off**:
 
 A *mistake* is a user-entered value that doesn't match the puzzle's solution.
 
-- The mistake counter increments by 1 each time the user places a value (in normal mode, into a non-locked empty cell) that is wrong, **only when "Highlight mistakes" is on**. Counter resets on Reset/New Game.
+- The mistake counter increments by 1 each time the user places a value (in normal mode, into a non-locked empty cell) that doesn't match the solution. **Counts regardless of whether "Highlight mistakes" is on** — leaderboard fairness shouldn't depend on whether the player wanted real-time feedback. Visual + audio mistake feedback is still gated on the toggle (and uses the softer "creates a row/col/box conflict" rule that the red-text highlighting also uses). Counter resets on Reset/New Game.
 - Mistake feedback is solution-based: any non-matching value is flagged in red, even if it doesn't currently violate a row/col/box rule. This catches "wrong but not yet conflicting" placements that would lead to an unsolvable state.
 - Fixed cells fall back to a rule-based check (row/col/box duplicates) — relevant only if a generator ever produces a malformed puzzle; in normal use, fixed cells are always correct.
 
@@ -221,6 +231,8 @@ A *mistake* is a user-entered value that doesn't match the puzzle's solution.
   - The user re-enters the playing screen (from home, Continue, Games, or New Game).
   - The app returns to active **and** the pause was an auto-pause (a manual pause isn't auto-cleared).
 - Stops permanently (no further increment) when the puzzle is solved.
+
+**Implementation note.** Auto-pause on background **cancels** the underlying timer publisher / coroutine entirely, not just toggles a `isPaused` flag. Re-foregrounding restarts the timer from the persisted elapsed value. This guards against run-loop / dispatcher edge cases where queued ticks could otherwise fire on resumption and cause time to jump (or, more insidiously, accumulate while the user thought the timer was paused).
 
 The timer's value is included in saves and history records.
 
@@ -250,7 +262,7 @@ Shows, in order:
 
 ### 13.2 Playing screen
 
-- **Header**: puzzle title (`<displayLabel> · Difficulty`), green seal if solved, mistake count (only if "Highlight mistakes" on), elapsed timer, pause/play button, settings gear. `displayLabel` is "Daily · MMM d" for dailies and "Puzzle #N" for generated puzzles (see §3).
+- **Header**: puzzle title (just `displayLabel` — see below), green seal if solved, mistake count (only if "Highlight mistakes" on), elapsed timer, **wand button** (auto-pencil — see §13.11), **lightbulb button** (tutor — see §13.10, yellow filled), pause/play button, settings gear. `displayLabel` is "Daily · MMM d" for dailies and the bare difficulty label ("Easy" / "Medium" / "Hard") for generated puzzles. The internal puzzle counter (#1042) is no longer surfaced — it's an implementation detail that no player cares about.
 - **Board**: 9×9 grid with the highlighting rules from §8. Tap to select.
 - **Number pad**: 1–9 buttons (§9), Pencil-toggle button, Erase/Undo button.
 - **Bottom controls**: prominent **Home** button (with house icon), **Reset** button (with confirmation dialog before discarding progress).
@@ -281,7 +293,7 @@ A "Clear" button (with confirmation) wipes the completed history. In-progress sa
 Read-only render of a previously-solved puzzle. Reachable from the Games sheet (Completed section) and from the Home screen's "Daily Done" button.
 
 - Title: `Puzzle #N`.
-- Top: bouncy green checkmark-seal icon with "Solved!" text — animation plays once on appear, the view then settles to the static board.
+- Top: full fanfare — confetti shower behind the content, triple-icon flourish (rotated party-popper-style icon left, large green checkmark-seal centre, mirrored party-popper right; all bouncing in), and a "Solved!" title in extra-bold rounded type with a green→blue gradient. Visually identical to §13.7 but slightly smaller (icons 40/64/40, title 40pt iOS / 36sp Android). Plays once on appear; the view then settles to the static read-only board.
 - Below: completion date, elapsed time.
 - Below: the 9×9 grid showing the *solution*. Givens render in bold; user-filled cells in regular weight.
 - "Done" button to dismiss.
@@ -290,7 +302,10 @@ Read-only render of a previously-solved puzzle. Reachable from the Games sheet (
 
 Sectioned form:
 
+- **Account**: signed-in user's display name (or Sign-in button), Sign-out option.
+- **Groups** (signed-in only): list of joined groups, each row tappable to open the group's member roster. The roster shows every member's display name (with "(you)" beside the signed-in user) and a small all-time stats line: **`X dailies · last MMM d`**, where X is the total number of daily puzzles that user has solved (across any group / any date) and the date is the most recent solve. Members with no solves yet show "no dailies yet". Each group row also shows the invite code with a Share button, plus a Leave button. Below the list are two distinct rows — **"Create a group"** and **"Join with a code"** — that open the same onboarding sheet directly into the matching mode (no picker step). The earlier single "Add a group" button is gone; splitting it removes the ambiguity since a separate "join" flow already exists.
 - **Highlighting**: "Highlight mistakes" toggle, "Highlight rules" toggle.
+- **Sounds**: "Sound effects" toggle (default on).
 - **Appearance**: segmented picker — System / Light / Dark.
 
 ### 13.7 Solved sheet (fanfare)
@@ -312,6 +327,126 @@ Tapping "Reset" on the Playing screen shows a confirmation dialog ("Reset puzzle
 ### 13.9 New Game confirmation
 
 There is **no** "New Game" confirmation dialog — pressing New Game silently autosaves the current state (so it remains accessible from the Games sheet) before switching puzzles.
+
+### 13.10 Tutor
+
+A built-in step-by-step tutor that helps the user spot the next move using classic Sudoku techniques. Triggered by a yellow lightbulb button in the Playing-screen header. Disabled while paused or solved.
+
+The tutor opens a bottom sheet (~40% detent) with three regions:
+
+1. **Header**: technique name + step counter (e.g. "Naked Pair · Step 2 of 3").
+2. **Narration**: a single sentence describing the current step. Highlights on the board change in lockstep.
+3. **Controls**: Back / Next buttons; on the final step, "Apply" (placement-style hints — fills the deduced cell) or "Got it" (elimination-style hints — erases the called-out candidates from the user's pencil marks). Plus a small legend showing the three highlight colors.
+
+**Implemented techniques** (priority order — easiest first):
+
+| Technique               | Tier   | Kind        | Triggers when                                                                             |
+|-------------------------|--------|-------------|-------------------------------------------------------------------------------------------|
+| Naked Single            | Simple | Placement   | A cell has only one engine-valid candidate.                                               |
+| Hidden Single           | Simple | Placement   | Within a unit, only one cell can hold a particular digit.                                 |
+| Naked Pair              | Medium | Elimination | Two cells in a unit each have user-pencilled exactly the same two digits, equal to engine candidates. |
+| Pointing Pair           | Medium | Elimination | All cells in a box where a digit could go lie in one row/column. User has pencilled the digit in those cells. |
+| Box/Line Reduction      | Medium | Elimination | All cells in a row/column where a digit could go lie inside one 3×3 box. User has pencilled the digit in those cells. |
+| Hidden Pair             | Medium | Elimination | Two missing digits in a unit can only land in the same two cells, both pencilled.         |
+| Naked Triple            | Hard   | Elimination | Three cells in a unit whose combined user-pencilled candidates equal exactly three digits. |
+| Hidden Triple           | Hard   | Elimination | Three missing digits restricted to the same three cells in a unit; pair cells may have additional candidates. |
+| X-Wing                  | Hard   | Elimination | Across two rows (or columns), a digit's only candidate cells lie in the same two columns (or rows). |
+| XY-Wing                 | Hard   | Elimination | Three bivalue cells: pivot {a,b}, pincers {a,c} and {b,c}; cells seeing both pincers can have c eliminated. |
+| Swordfish               | Hard   | Elimination | X-Wing extended to 3×3 — a digit's candidates across three rows (or columns) lie in only three columns (or rows). |
+| Naked Quad              | Hard   | Elimination | Four cells in a unit whose combined user-pencilled candidates equal exactly four digits. |
+| Hidden Quad             | Hard   | Elimination | Four missing digits in a unit restricted to the same four cells; quad cells may have additional candidates. |
+| Jellyfish               | Hard   | Elimination | Swordfish extended to 4×4 — a digit's candidates across four rows (or columns) lie in only four columns (or rows). |
+| XYZ-Wing                | Hard   | Elimination | Trivalue pivot {a,b,c}; bivalue pincers {a,c} and {b,c} both seeing the pivot. Cells seeing the pivot AND both pincers can have c eliminated. |
+| W-Wing                  | Hard   | Elimination | Two bivalue {a,b} cells that don't see each other, connected by a strong link on `a` (a unit where `a` has only those two candidate ends, one seeing each bivalue). Cells seeing both bivalues can have `b` eliminated. |
+| Skyscraper              | Hard   | Elimination | Single-digit pattern: two rows (or cols) where d has exactly 2 candidate cells, sharing one column (or row) — the "base". The two unshared cells (the "tops") form a strong-link pair, so cells seeing both tops can have d eliminated. |
+| Empty Rectangle         | Hard   | Elimination | In a box, candidates for d lie in a single pivot row + column. Combined with a strong link on d in another column (or row), eliminate d at the pivot's intersection. |
+| 2-String Kite           | Hard   | Elimination | Single-digit pattern: d has 2 candidate cells in some row + 2 in some column, with one row-cell and one column-cell sharing a 3×3 box (the "joint"). The unjoined "tips" form a strong-link pair, so cells seeing both tips can have d eliminated. |
+| Finned X-Wing           | Hard   | Elimination | Almost an X-Wing on d, but one row has extra candidate cells (the "fin") confined to the same box as one corner. Eliminations restricted to cells in the other column that share the fin's box. |
+| Finned Swordfish        | Hard   | Elimination | Same idea at 3×3 scale — Swordfish where one row has fin cells confined to a single box. Eliminations restricted to cells in the unfinned columns that share the fin's box. |
+
+**Difficulty tiers** are exposed via `TutorTechnique.tier` for forward compatibility — the puzzle generator can use them to calibrate "Easy/Medium/Hard solvable using techniques up to tier X."
+
+**Pencil-mark contract.** Pair-style and pointing-style techniques only fire when the user has pencilled the relevant cells (they're techniques about *working with* candidates). The placement-style techniques (singles) operate on engine candidates regardless of pencil state. This avoids spoilers in cells the user hasn't engaged with.
+
+**Highlight colors on the board:**
+- **Focus** (light blue) — the unit/area being examined.
+- **Eliminator** (orange) — cells contributing to ruling things out, OR cells whose called-out candidates will be erased.
+- **Target** (green) — the cell where the deduction lands, OR the pair cells in pair techniques.
+
+When the tutor is active, the board's normal selection / matching / mistake tints are suppressed so the explanation is unambiguous.
+
+**Per-digit tinting**: a single cell can show different candidates in different colors — used by hidden pair, where the pair digits stay (green) and the others are crossed out (red) all in the same cell.
+
+**Empty state** (no implemented technique applies):
+- Header — "Stuck on this one" if user has pencil marks, otherwise "No simple move spotted".
+- If user has pencil marks: "I checked everything I know — singles, pairs/triples/quads (naked + hidden), pointing pair, box-line, X-wing (incl. finned), XY-wing, XYZ-wing, W-wing, swordfish (incl. finned), jellyfish, skyscraper, 2-string kite, empty rectangle. Nothing fits. This board likely needs chain reasoning (forcing chains, simple coloring) or some plain old guess-and-check."
+- If user has no pencil marks: "Tap the wand to auto-fill pencil marks first — the pair and pointing techniques need them to work."
+
+Opening the tutor — and being shown a hint — increments `GameSave.hintsUsed` once. The badge is charged the moment the user peeks, regardless of whether they then tap Apply / Got it or dismiss the sheet (since the suggestion is in their head either way). The empty-state response (no hint found) is free. Persisted across backgrounding via the save record. Surfaced as an assist marker on the leaderboard (see §17.4).
+
+### 13.11 Auto-pencil
+
+A **wand** button in the Playing-screen header that fills pencil marks for every empty cell with engine candidates (digits not conflicting with the cell's row, column, or box). Disabled while paused, solved, or while a fill is already pending.
+
+**Delayed execution with cancel window.** Tapping the wand does **not** fire immediately. A floating "Auto-pencilling… · Cancel" banner appears at the bottom of the screen for **3 seconds**. Cells stay unchanged during this window. Behaviour:
+
+- Tap **Cancel** within 3s → banner dismisses, cells unchanged, no assist counted.
+- Make any other board move (place, erase) within 3s → pending fill auto-cancels, cells unchanged.
+- 3s elapses → fill commits, banner dismisses, `pencilAssistsUsed` increments.
+
+This delay prevents spoiler reveal: the user never sees pencil marks they're about to undo.
+
+**Fill semantics** (intersect-with-engine, never re-add):
+- Cells with no marks → filled with engine candidates.
+- Cells with existing marks → digits no longer engine-valid are removed; **nothing is added back**. This preserves tutor-applied eliminations and any deliberate manual eliminations the user has made.
+- To get a fresh fill on a particular cell, erase it first and tap the wand again.
+
+Each successful fill increments `GameSave.pencilAssistsUsed`. Counts as a leaderboard assist marker (option A).
+
+### 13.11a Coach mode
+
+A practice surface for individual sudoku techniques. Reachable from the **Coach** button on the home screen. Opens a sheet listing technique cards (one per `TutorTechnique`); tapping a card loads a hand-built scenario where that technique is the next useful move. The user is asked to apply the technique on the board — placement-style techniques expect the deduced value at the right cell; elimination-style techniques expect the called-out candidates removed from the called-out cells.
+
+Completion is decided against the engine's expected hint (snapshotted at scenario load) — extra eliminations elsewhere are tolerated; the user is *taught* the technique by being asked to do it, not graded on perfectionism beyond that. On completion the scenario shows a trophy + "Back to Coach" affordance.
+
+Persistence: one boolean per technique stored locally (UserDefaults / DataStore key `sudoku.coach.completed.v1`). Coach progress is a personal track and is NOT synced to the backend or shown on the leaderboard.
+
+Validation: every scenario is checked at runtime — if `TutorEngine.findHint(scenario.initialCells)?.technique != scenario.technique`, the scenario is filtered out of the visible list (defensive net against engine-ordering regressions). Unit test `CoachModeTests/everyScenarioIsValid` enforces this at build time.
+
+**v1 ships 7 scenarios** (Naked Single, Hidden Single, Naked Pair, Pointing Pair, Box-Line Reduction, Hidden Pair, Naked Triple). The remaining 7 techniques (Hidden Triple, X-Wing, XY-Wing, Swordfish, Naked Quad, Hidden Quad, Jellyfish) require hand-crafted boards where the target fires as the *first* useful move under `findHint` — the test boards in `TutorTests` use direct `find*` calls and let simpler patterns slip through `findHint`. Coming in a follow-up.
+
+### 13.11b Hardware keyboard
+
+The Playing screen accepts hardware-keyboard input on both iOS and Android — useful in simulators, on iPad with a Magic Keyboard, on tablets with attached keyboards, and for accessibility setups.
+
+| Key                          | Action                                              |
+|------------------------------|-----------------------------------------------------|
+| Digits 1–9                   | Same as tapping the matching number-pad button (place in normal mode, pencil-toggle in pencil mode). |
+| 0, Backspace, Delete         | Clear the selected cell (same as the on-screen Erase button). |
+| P or Space                   | Toggle pencil ↔ normal mode.                        |
+| Arrow keys ←↑→↓              | Move the selected cell. Defaults to (0, 0) if none selected. Clamped to the 9×9 grid boundary. |
+
+Ignored when the puzzle is paused, solved, or while the tutor sheet is open (those have their own focus). The Coach scenario play view does *not* yet support keyboard input — same is hooked separately if it becomes worthwhile.
+
+### 13.12 Sound effects
+
+Subtle audio cues for in-game events. All sounds are short (under ~½s except the solve sting at ~½s).
+
+| Event                                | Cue                  | Notes                                                                          |
+|--------------------------------------|----------------------|--------------------------------------------------------------------------------|
+| Number placed                        | Soft click           | Fires on every digit entry into an empty cell (normal mode only — not pencil). |
+| Number erased / undone               | Soft reverse-click   | Only when the cell had content; pencil-mode toggles also fire this.            |
+| Mistake entered                      | Short error blip     | Only when "Highlight mistakes" is on.                                          |
+| 3×3 box completed, OR digit fully placed | Positive pip      | Fires when a placement completes its 3×3 box, or when the placed digit now has all 9 instances down. Row / column completion alone is too subtle to chime on. |
+| Puzzle solved                        | Triumphant sting     | Plays alongside the live fanfare AND when revisiting a completed-board view.   |
+
+**Settings.** Single "Sound effects" toggle in the Settings sheet (§13.6); default on. When off, all cues are suppressed (visual fanfare still plays).
+
+**Platform behaviour.**
+- **iOS** uses `AVAudioSession` category `.ambient` with `.mixWithOthers` — respects the silent (ringer) switch and mixes with other audio (Spotify, podcasts continue under the cues). Lazy-activated on first sound.
+- **Android** uses `SoundPool` with `USAGE_GAME` / `CONTENT_TYPE_SONIFICATION` — rides the media volume stream so the volume rocker controls cue loudness. No silent-switch concept; the toggle covers it.
+
+Audio assets are CC0 from the Kenney Interface Sounds pack: `click_001`, `back_001`, `error_008`, `confirmation_001`, `confirmation_004`. Bundled as `.m4a` on iOS (converted from `.ogg`) and `.ogg` on Android.
 
 ---
 
@@ -396,12 +531,37 @@ A user can be in multiple groups simultaneously. Each group has a 6-character ba
 
 Anchored on the daily puzzle. One leaderboard per `(group, puzzle_id)`.
 
-- **Score** = elapsed seconds (lower is better).
-- **Tiebreaker** = `completed_at` (earlier wins).
-- **Endpoints**: `POST /v1/scores { puzzle_id, elapsed_seconds, mistakes }` (idempotent — composite PK `(user_id, puzzle_id)` makes re-submission a no-op). `GET /v1/groups/:id/scores/:puzzle_id` returns the rows for that group + puzzle, sorted ascending by `elapsed_seconds`.
-- **Submission**: on solve, the app POSTs the score. Failure (offline, no auth) puts the entry in `sudoku.pending_scores.v1`, which is flushed on next authenticated app launch and after a successful sign-in. Composite PK dedup means retry is safe.
+- **Score (rank order)** = `elapsed_seconds × (1 + 0.10 × min(mistakes, 5))` — i.e., a +10% time penalty per mistake, capped at five mistakes (+50%). Lower is better. Stored as integer ×10 in SQL (`elapsed_seconds × (10 + MIN(mistakes, 5))`) to keep ordering float-free.
+- **Display time on leaderboard rows** = the effective (post-penalty) seconds, so position and displayed time agree (a player listed at 12:00 ranks below a player at 11:00). The raw `elapsed_seconds` is still surfaced — but only inside the per-player detail sheet (tap a row), where the breakdown reads "Raw 10:00 · Effective 12:00 (includes mistake penalty)". Raw mistake count is *only* shown for the viewer's own row.
+- **Tiebreaker** = `completed_at` (earlier wins) on equal penalised time.
+- **Endpoints**: `POST /v1/scores` (idempotent — composite PK `(user_id, puzzle_id)` makes re-submission a no-op). `GET /v1/groups/:id/scores/:puzzle_id` returns the rows for that group + puzzle, sorted ascending by penalised time.
+- **Submission**: on solve, the app POSTs the score along with four assist signals (see below). Failure (offline, no auth) puts the entry in `sudoku.pending_scores.v1`, which is flushed on next authenticated app launch and after a successful sign-in. Composite PK dedup means retry is safe.
 - **View**: leaderboard sheet shows top N for today's daily within the selected group, plus the user's rank if outside top N. With ≥2 groups, a small picker (segmented control / dropdown) at the top of the sheet selects which group to view.
 - **Anonymous solves**: not posted. The fanfare offers a "Sign in to put this on the board" affordance.
+
+**Assist markers** (D1 columns on `scores`, added by migration `0002_score_assists.sql`):
+
+| Column                     | Source                                  |
+|----------------------------|-----------------------------------------|
+| `hints_used`               | `GameSave.hintsUsed` at solve time      |
+| `pencil_assists_used`      | `GameSave.pencilAssistsUsed`            |
+| `highlight_mistakes_was_on`| `GameSave.highlightMistakesEverOn` (sticky — once true, stays true) |
+| `highlight_rules_was_on`   | `GameSave.highlightConstraintsEverOn` (sticky) |
+
+**Badge inversion in the UI.** The leaderboard does NOT mark *used* assists as asterisks; instead it shows **badges for the absence** of each assist, framing clean solves as achievements rather than assisted solves as penalties. Per-assist badges:
+
+| Badge          | Earned when                                    | Icon                  | Colour |
+|----------------|------------------------------------------------|-----------------------|--------|
+| Solo           | `hints_used == 0`                              | lightbulb-slash       | green  |
+| Manual         | `pencil_assists_used == 0`                     | wand-and-stars-inverse| purple |
+| No safety net  | `!highlight_mistakes_was_on`                   | shield-slash          | red    |
+| Unaided        | `!highlight_rules_was_on`                      | eye-slash             | blue   |
+
+**Purist mega-badge** (gold star) — earned when ALL FOUR are absent (no assists used at all). Replaces the four individual badges so the row stays uncluttered.
+
+**Flawless badge** (mint check-seal) — earned when `mistakes == 0`. Independent of the assist badges and *stacks* with them, including the Purist mega-badge (Purist says nothing about mistakes). Server-derived: backend exposes only a `flawless: boolean` on each leaderboard row, never the raw mistake count.
+
+A small ⓘ button in the leaderboard sheet's header opens a "Badge Legend" sub-sheet explaining each badge.
 
 ### 17.5 API contract (v1)
 
@@ -416,16 +576,42 @@ Base URL: `https://sudoku.appfoundry.cc/v1`. All bodies are JSON.
 | GET    | `/me/groups`                      | bearer   | —                                      | `[{ group, member_count, invite_code }]`      |
 | POST   | `/groups`                         | bearer   | `{ name }`                             | `{ group, invite_code }`                      |
 | POST   | `/groups/join`                    | bearer   | `{ invite_code }`                      | `{ group }`                                   |
-| GET    | `/groups/:id/members`             | bearer   | —                                      | `[{ user }]`                                  |
+| GET    | `/groups/:id/members`             | bearer   | —                                      | `[{ user, dailies_completed, last_completed_at }]` (`dailies_completed` is all-time across every daily; `last_completed_at` is unix-millis or null) |
 | DELETE | `/groups/:id/members/me`          | bearer   | —                                      | `204`                                         |
 | GET    | `/daily/today`                    | none     | —                                      | `{ today: Puzzle, tomorrow: Puzzle }`         |
 | GET    | `/daily/:puzzle_id`               | none     | —                                      | `{ puzzle: Puzzle }`                          |
-| POST   | `/scores`                         | bearer   | `{ puzzle_id, elapsed_seconds, mistakes }` | `{ rank }`                                |
-| GET    | `/groups/:id/scores/:puzzle_id`   | bearer   | —                                      | `[{ display_name, elapsed_seconds, completed_at, rank }]` |
+| POST   | `/scores`                         | bearer   | `{ puzzle_id, elapsed_seconds, mistakes, hints_used, pencil_assists_used, highlight_mistakes_was_on, highlight_rules_was_on }` | `{ rank }` |
+| GET    | `/groups/:id/scores/:puzzle_id`   | bearer   | —                                      | `[{ display_name, elapsed_seconds, completed_at, rank, hints_used, pencil_assists_used, highlight_mistakes_was_on, highlight_rules_was_on, flawless }]` (rows ordered by penalised time; raw mistake count never exposed) |
+| POST   | `/multiplayer/games`              | bearer   | `{ difficulty, turn_duration_seconds, competitive_mode, invited_user_ids?, group_id? }` | `{ game, invite_code }` |
+| GET    | `/multiplayer/games/:id`          | bearer   | —                                      | `{ game, players, moves, board }`             |
+| POST   | `/multiplayer/games/:id/join`     | bearer   | `{ invite_code? }` (omit if pre-invited) | `{ game }`                                  |
+| POST   | `/multiplayer/join-by-code`       | bearer   | `{ invite_code }`                      | `{ game }` (Universal-Link / App-Link entry: code-only join, no game id) |
+| POST   | `/multiplayer/games/:id/decline`  | bearer   | —                                      | `204`                                         |
+| POST   | `/multiplayer/games/:id/leave`    | bearer   | —                                      | `204`                                         |
+| POST   | `/multiplayer/games/:id/start`    | bearer   | —                                      | `{ game }` (host only; needs ≥ 2 joined)     |
+| POST   | `/multiplayer/games/:id/moves`    | bearer   | `{ row, col, value, idempotency_key }` | `{ move, game, board }`                       |
+| GET    | `/me/multiplayer/games`           | bearer   | —                                      | `{ in_progress: [game], completed: [game] }` |
+| POST   | `/me/push_token`                  | bearer   | `{ platform: "ios"\|"android", token }` | `204`                                        |
+| DELETE | `/me/push_token`                  | bearer   | `{ token }`                            | `204`                                         |
+| GET    | `/privacy`                        | none     | —                                      | HTML — privacy policy page              |
+| GET    | `/delete-account`                 | none     | —                                      | HTML — account deletion landing page    |
 
 `Puzzle` payload: `{ puzzle_id: int, date: "YYYY-MM-DD", difficulty: "medium", givens: int[9][9], solution: int[9][9] }`. `User`: `{ id, display_name }`. `Group`: `{ id, name }`.
 
-### 17.6 Deferred (post-v1)
+### 17.6 Multiplayer (v3)
+
+Turn-based async sudoku for 2+ players. Full design + locked product decisions in `/multiplayer-design.md`. High-level summary:
+
+- **Game model**: 4 D1 tables — `multiplayer_games`, `multiplayer_players`, `multiplayer_moves`, `multiplayer_forfeits` (per migration `0003_multiplayer.sql`). Plus `push_tokens` for APNs/FCM dispatch.
+- **Turn rules**: each player places one digit per turn. Wrong placements end the turn (logged in `multiplayer_moves` with `was_correct = 0`) but the cell stays empty so the puzzle remains solvable. Active player rotation follows `join_order`. Per-turn deadline = now + `turn_duration_seconds`; minute-granularity cron forfeits expired turns and rotates.
+- **Server is the source of truth**: live board is reconstructed on every state read from `puzzle_givens` + correct moves. Wrong placements never taint the board.
+- **Win condition**: per design §9.1, "stats salad" — Most Productive / Most Accurate / Quickest / Solver badges all earned. `competitive_mode` flag enables a single-winner ranking (`correct − 2 × mistakes`, tie-break by Solver).
+- **Hints / auto-pencil / tutor are disabled** in multiplayer (per design §9.6 — the strategy IS the assist).
+- **Push notifications** (APNs + FCM via Worker JWT signing in `Backend/src/push.ts`) fire on: `your_turn`, `turn_forfeited`, `mp_invite`, `mp_game_end`. Push tokens registered via `POST /me/push_token`. Worker secrets: `APNS_KEY_ID / APNS_TEAM_ID / APNS_BUNDLE_ID / APNS_PRIVATE_KEY / APNS_USE_SANDBOX`, `FCM_PROJECT_ID / FCM_CLIENT_EMAIL / FCM_PRIVATE_KEY`.
+- **Public invite codes & deep-linking**: shareable URL is `https://sudoku.appfoundry.cc/m/<code>`. The Worker serves three things off that base path: (1) the HTML invite landing page (with App Store + Play Store buttons) for users without the app, (2) `/.well-known/apple-app-site-association` for iOS Universal Links, and (3) `/.well-known/assetlinks.json` for Android App Links. iOS Associated Domains entitlement and Android `<intent-filter android:autoVerify="true">` make `/m/*` open the app directly, where the client calls `POST /v1/multiplayer/join-by-code` to atomically join. Anyone (any phone, any platform) can be invited — the link routes them through the right path. Manual `POST /multiplayer/games/:id/join` with `{ invite_code }` is still supported for the in-app "Join with a code" picker.
+- **Concurrent games**: capped at 10 active per user; `POST /multiplayer/games` returns 409 if exceeded.
+
+### 17.7 Deferred (post-v1)
 
 - **Per-group timezone.** A `groups.timezone TEXT` column + per-group resolution of "today's" date. Users in two groups in different timezones would see two different "today" puzzles in the same UTC instant. Deferred until anyone plays the app outside `Australia/Sydney`.
 - **Live realtime co-op / competitive.** Cloudflare Durable Objects + WebSockets, room key = `match_id` (UUID), independent of `group_id`. Friends-group picker pulls invitable people from the user's groups but a match itself isn't bound to one.

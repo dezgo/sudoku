@@ -4,6 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.derekgillett.sudoku.AppContainer
+import com.derekgillett.sudoku.audio.SoundManager
 import com.derekgillett.sudoku.data.GameSaveRepository
 import com.derekgillett.sudoku.data.PreferencesRepository
 import com.derekgillett.sudoku.data.PuzzleHistoryRepository
@@ -36,7 +37,8 @@ class SudokuGameViewModel(
     private val provider: PuzzleProvider,
     private val historyRepo: PuzzleHistoryRepository,
     private val saveRepo: GameSaveRepository,
-    private val prefsRepo: PreferencesRepository
+    private val prefsRepo: PreferencesRepository,
+    private val soundManager: SoundManager
 ) : ViewModel() {
 
     private val _state = MutableStateFlow<GameState?>(null)
@@ -79,8 +81,13 @@ class SudokuGameViewModel(
                 cells = save.cells,
                 elapsedSeconds = save.elapsedSeconds,
                 mistakeCount = save.mistakeCount,
+                hintsUsed = save.hintsUsed,
+                pencilAssistsUsed = save.pencilAssistsUsed,
                 highlightMistakes = prefs.highlightMistakes,
-                highlightConstraints = prefs.highlightConstraints
+                highlightConstraints = prefs.highlightConstraints,
+                soundEffects = prefs.soundEffects,
+                highlightMistakesEverOn = save.highlightMistakesEverOn,
+                highlightConstraintsEverOn = save.highlightConstraintsEverOn
             )
         } else {
             val puzzle = withContext(Dispatchers.Default) {
@@ -91,19 +98,30 @@ class SudokuGameViewModel(
                 puzzle = puzzle,
                 cells = buildCells(puzzle.givens),
                 highlightMistakes = prefs.highlightMistakes,
-                highlightConstraints = prefs.highlightConstraints
+                highlightConstraints = prefs.highlightConstraints,
+                soundEffects = prefs.soundEffects,
+                highlightMistakesEverOn = prefs.highlightMistakes,
+                highlightConstraintsEverOn = prefs.highlightConstraints
             )
         }
+        soundManager.setEnabled(prefs.soundEffects)
         _state.value = initial
         startTimer(initial.elapsedSeconds)
 
-        // Keep highlight prefs in sync if the user changes them in Settings.
+        // Keep prefs in sync if the user changes them in Settings. Note: the
+        // sticky `everOn` flags only ratchet UP — toggling on flips them
+        // true, toggling off does NOT flip them false.
         viewModelScope.launch {
             prefsRepo.preferences.collect { p ->
+                soundManager.setEnabled(p.soundEffects)
                 _state.update { s ->
-                    s?.copy(
+                    if (s == null) return@update null
+                    s.copy(
                         highlightMistakes = p.highlightMistakes,
-                        highlightConstraints = p.highlightConstraints
+                        highlightConstraints = p.highlightConstraints,
+                        soundEffects = p.soundEffects,
+                        highlightMistakesEverOn = s.highlightMistakesEverOn || p.highlightMistakes,
+                        highlightConstraintsEverOn = s.highlightConstraintsEverOn || p.highlightConstraints
                     )
                 }
             }
@@ -184,6 +202,11 @@ class SudokuGameViewModel(
     fun select(row: Int, col: Int) {
         _state.update { s ->
             if (s == null) return@update null
+            // Tap-the-already-selected cell = deselect, giving the user an
+            // easy "show me the board with no highlights" gesture.
+            if (s.selected?.row == row && s.selected.col == col) {
+                return@update s.copy(selected = null, lastPlacementInfo = null)
+            }
             // Clear lastPlacementInfo when navigating to a different cell.
             val cleared = s.lastPlacementInfo?.let {
                 if (it.row != row || it.col != col) s.copy(lastPlacementInfo = null) else s
@@ -266,11 +289,19 @@ class SudokuGameViewModel(
 
         var nextState = s.copy(cells = frozenCells, lastPlacementInfo = newLastPlacement)
 
-        if (didPlaceValue && s.highlightMistakes &&
-            Highlights.hasConflict(nextState, sel.row, sel.col)
-        ) {
+        // Mistake counter is solution-based and fires regardless of the
+        // "Highlight mistakes" toggle — leaderboard fairness shouldn't depend
+        // on whether the player wanted real-time feedback.
+        val solution = s.puzzle.solution
+        val placedWrong = didPlaceValue && solution != null &&
+            solution[sel.row][sel.col] != number
+        if (placedWrong) {
             nextState = nextState.copy(mistakeCount = nextState.mistakeCount + 1)
         }
+        // Visual + sound feedback still gated on the toggle, and uses the
+        // softer "creates a conflict" rule (matches what's drawn in red).
+        val isMistake = didPlaceValue && s.highlightMistakes &&
+            Highlights.hasConflict(nextState, sel.row, sel.col)
 
         if (didPlaceValue && nextState.isSolved) {
             timerJob?.cancel()
@@ -278,10 +309,47 @@ class SudokuGameViewModel(
 
         _state.value = nextState
 
+        // Sound cues — order matters: solve wins over unit, mistake wins over
+        // place. Solve also fires standalone so the fanfare has audio support.
+        if (didPlaceValue) {
+            when {
+                nextState.isSolved -> soundManager.play(SoundManager.Effect.SOLVED)
+                isMistake -> soundManager.play(SoundManager.Effect.MISTAKE)
+                else -> {
+                    val solution = s.puzzle.solution
+                    val placedCorrectly = solution != null && solution[sel.row][sel.col] == number
+                    // Row/column completion is too subtle to chime on. Box
+                    // completion is more visible (3×3 area going complete),
+                    // and "all 9 of this digit are now down" is a satisfying
+                    // milestone the player can feel.
+                    val unitJustCompleted = placedCorrectly && (
+                        isBoxCorrect(nextState, sel.row, sel.col) ||
+                            Highlights.isComplete(nextState, number)
+                        )
+                    soundManager.play(
+                        if (unitJustCompleted) SoundManager.Effect.UNIT_COMPLETE
+                        else SoundManager.Effect.PLACE
+                    )
+                }
+            }
+        }
+
         if (didPlaceValue && nextState.isSolved) {
             handleSolve(nextState)
         }
         saveProgress()
+    }
+
+    private fun isBoxCorrect(state: GameState, boxRow: Int, boxCol: Int): Boolean {
+        val solution = state.puzzle.solution ?: return false
+        val r0 = (boxRow / 3) * 3
+        val c0 = (boxCol / 3) * 3
+        for (r in r0 until r0 + 3) {
+            for (c in c0 until c0 + 3) {
+                if (state.cells[r][c].value != solution[r][c]) return false
+            }
+        }
+        return true
     }
 
     fun clearSelected() {
@@ -289,6 +357,9 @@ class SudokuGameViewModel(
         if (s.isPaused) return
         val sel = s.selected ?: return
         if (Highlights.isLocked(s, sel.row, sel.col)) return
+
+        val cellBefore = s.cells[sel.row][sel.col]
+        val hadContent = cellBefore.value != null || cellBefore.notes.isNotEmpty()
 
         val newCells = s.cells.map { it.toMutableList() }.toMutableList()
 
@@ -314,6 +385,8 @@ class SudokuGameViewModel(
             lastPlacementInfo = if (isUndoTarget) null else s.lastPlacementInfo
         )
         saveProgress()
+
+        if (hadContent) soundManager.play(SoundManager.Effect.ERASE)
     }
 
     fun toggleMode() {
@@ -336,12 +409,124 @@ class SudokuGameViewModel(
             mode = InputMode.NORMAL,
             elapsedSeconds = 0,
             mistakeCount = 0,
+            hintsUsed = 0,
+            pencilAssistsUsed = 0,
+            // Re-snapshot sticky flags from current toggle state — fresh
+            // attempt = fresh measurement of "did you ever use these assists?"
+            highlightMistakesEverOn = s.highlightMistakes,
+            highlightConstraintsEverOn = s.highlightConstraints,
             isPaused = false,
             lastPlacementInfo = null
         )
         startTimer(0)
         saveProgress() // hasProgress=false → removes save
     }
+
+    // region Tutor
+
+    /**
+     * Returns the easiest applicable hint for the current state, or null if
+     * none of the implemented techniques apply.
+     */
+    fun nextTutorHint(): TutorHint? {
+        val s = _state.value ?: return null
+        return TutorEngine.findHint(s.cells)
+    }
+
+    /**
+     * Mark that the user opened the tutor and saw a hint. The "hint used"
+     * badge is charged as soon as the user peeks at a suggestion, even if
+     * they dismiss the sheet without tapping Apply / Got it — once they've
+     * seen it, the information is already in their head.
+     */
+    fun noteHintViewed() {
+        val s = _state.value ?: return
+        if (s.isPaused) return
+        _state.value = s.copy(hintsUsed = s.hintsUsed + 1)
+        saveProgress()
+    }
+
+    /**
+     * Apply a tutor hint. Placement-style hints fill the deduced cell;
+     * elimination-style hints erase the called-out candidates from the
+     * user's pencil marks. The `hintsUsed` counter is bumped earlier in
+     * `noteHintViewed()` (the moment the sheet shows a hint) so even
+     * peek-and-dismiss counts.
+     */
+    fun applyTutorHint(hint: TutorHint) {
+        val s = _state.value ?: return
+        if (s.isPaused) return
+        if (hint.placement != null) {
+            val p = hint.placement
+            // Switch to normal mode and select the target so enter() places.
+            _state.update { it?.copy(selected = CellPos(p.row, p.col), mode = InputMode.NORMAL) }
+            enter(p.value)
+        } else if (hint.eliminations.isNotEmpty()) {
+            val current = _state.value ?: return
+            val newCells = current.cells.map { it.toMutableList() }.toMutableList()
+            for (elim in hint.eliminations) {
+                val cell = newCells[elim.row][elim.col]
+                newCells[elim.row][elim.col] = cell.copy(notes = cell.notes - elim.candidates)
+            }
+            _state.value = current.copy(cells = newCells.map { it.toList() })
+            saveProgress()
+        }
+    }
+
+    // endregion
+
+    // region Auto-pencil
+
+    /**
+     * Reconcile every empty cell's pencil marks with the engine's view:
+     * empty cells get filled with engine candidates; cells with existing
+     * marks have provably-wrong digits removed (intersection with engine
+     * candidates). We never *add back* digits to a cell that already has
+     * marks — that would undo eliminations the user (or tutor) has made.
+     * Counts as an assist for leaderboard marking.
+     */
+    fun autoPencil() {
+        val s = _state.value ?: return
+        if (s.isPaused) return
+        val newCells = s.cells.map { it.toMutableList() }.toMutableList()
+        var changed = false
+        for (r in 0 until 9) {
+            for (c in 0 until 9) {
+                val cell = newCells[r][c]
+                if (cell.value != null) continue
+                val cands = engineCandidates(r, c, newCells)
+                val current = cell.notes
+                val next = if (current.isEmpty()) cands else current.intersect(cands)
+                if (next != current) {
+                    newCells[r][c] = cell.copy(notes = next)
+                    changed = true
+                }
+            }
+        }
+        if (!changed) return
+        _state.value = s.copy(
+            cells = newCells.map { it.toList() },
+            pencilAssistsUsed = s.pencilAssistsUsed + 1
+        )
+        saveProgress()
+    }
+
+    private fun engineCandidates(row: Int, col: Int, cells: List<List<Cell>>): Set<Int> {
+        val cands = (1..9).toMutableSet()
+        for (c in 0 until 9) if (c != col) cells[row][c].value?.let { cands.remove(it) }
+        for (r in 0 until 9) if (r != row) cells[r][col].value?.let { cands.remove(it) }
+        val boxR = (row / 3) * 3
+        val boxC = (col / 3) * 3
+        for (r in boxR until boxR + 3) {
+            for (c in boxC until boxC + 3) {
+                if (r == row && c == col) continue
+                cells[r][c].value?.let { cands.remove(it) }
+            }
+        }
+        return cands
+    }
+
+    // endregion
 
     // endregion
 
@@ -352,6 +537,10 @@ class SudokuGameViewModel(
         if (s.isPaused) return
         _state.value = s.copy(isPaused = true)
         wasAutoPaused = true
+        // Cancel the timer coroutine entirely so off-screen time can't
+        // accumulate even if the isPaused gate fails.
+        timerJob?.cancel()
+        timerJob = null
         saveProgress()
     }
 
@@ -359,6 +548,9 @@ class SudokuGameViewModel(
         if (!wasAutoPaused) return
         _state.update { it?.copy(isPaused = false) }
         wasAutoPaused = false
+        // Restart the timer from the current elapsed value.
+        val current = _state.value?.elapsedSeconds ?: 0
+        startTimer(current)
     }
 
     // endregion
@@ -409,13 +601,19 @@ class SudokuGameViewModel(
                 loadPuzzleFromSave(saved)
             } else {
                 _state.update { s ->
-                    s?.copy(
+                    if (s == null) return@update null
+                    s.copy(
                         puzzle = puzzle,
                         cells = buildCells(puzzle.givens),
                         selected = null,
                         mode = InputMode.NORMAL,
                         elapsedSeconds = 0,
                         mistakeCount = 0,
+                        hintsUsed = 0,
+                        pencilAssistsUsed = 0,
+                        // Snapshot sticky flags from current toggle state.
+                        highlightMistakesEverOn = s.highlightMistakes,
+                        highlightConstraintsEverOn = s.highlightConstraints,
                         isPaused = false,
                         lastPlacementInfo = null
                     )
@@ -434,6 +632,10 @@ class SudokuGameViewModel(
                 mode = InputMode.NORMAL,
                 elapsedSeconds = save.elapsedSeconds,
                 mistakeCount = save.mistakeCount,
+                hintsUsed = save.hintsUsed,
+                pencilAssistsUsed = save.pencilAssistsUsed,
+                highlightMistakesEverOn = save.highlightMistakesEverOn,
+                highlightConstraintsEverOn = save.highlightConstraintsEverOn,
                 isPaused = false,
                 lastPlacementInfo = null
             )
@@ -465,7 +667,11 @@ class SudokuGameViewModel(
                         cells = s.cells,
                         elapsedSeconds = s.elapsedSeconds,
                         mistakeCount = s.mistakeCount,
-                        lastPlayedAt = System.currentTimeMillis()
+                        lastPlayedAt = System.currentTimeMillis(),
+                        hintsUsed = s.hintsUsed,
+                        pencilAssistsUsed = s.pencilAssistsUsed,
+                        highlightMistakesEverOn = s.highlightMistakesEverOn,
+                        highlightConstraintsEverOn = s.highlightConstraintsEverOn
                     )
                 )
             } else {
@@ -512,7 +718,8 @@ class SudokuGameViewModel(
                 provider = container.provider,
                 historyRepo = container.historyRepo,
                 saveRepo = container.saveRepo,
-                prefsRepo = container.prefsRepo
+                prefsRepo = container.prefsRepo,
+                soundManager = container.soundManager
             ) as T
         }
     }

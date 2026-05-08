@@ -20,6 +20,12 @@ final class ScoresStore: ObservableObject {
         let elapsedSeconds: Int
         let mistakes: Int
         let completedAt: Date
+        // Assist markers — optional for backwards compat with queued items
+        // from earlier app versions that didn't track them.
+        var hintsUsed: Int? = nil
+        var pencilAssistsUsed: Int? = nil
+        var highlightMistakesWasOn: Bool? = nil
+        var highlightRulesWasOn: Bool? = nil
     }
 
     /// Last successful submission's rank, used by the fanfare to show
@@ -41,9 +47,27 @@ final class ScoresStore: ObservableObject {
     /// queued for later (offline, or not signed in). Caller must have already
     /// verified the puzzle is a real daily and not an offline-fallback.
     @discardableResult
-    func submit(puzzleID: Int, elapsedSeconds: Int, mistakes: Int) async -> Int? {
+    func submit(
+        puzzleID: Int,
+        elapsedSeconds: Int,
+        mistakes: Int,
+        hintsUsed: Int,
+        pencilAssistsUsed: Int,
+        highlightMistakesWasOn: Bool,
+        highlightRulesWasOn: Bool
+    ) async -> Int? {
+        let pending = Pending(
+            puzzleID: puzzleID,
+            elapsedSeconds: elapsedSeconds,
+            mistakes: mistakes,
+            completedAt: Date(),
+            hintsUsed: hintsUsed,
+            pencilAssistsUsed: pencilAssistsUsed,
+            highlightMistakesWasOn: highlightMistakesWasOn,
+            highlightRulesWasOn: highlightRulesWasOn
+        )
         guard let token = auth.token else {
-            enqueue(Pending(puzzleID: puzzleID, elapsedSeconds: elapsedSeconds, mistakes: mistakes, completedAt: Date()))
+            enqueue(pending)
             return nil
         }
         do {
@@ -51,12 +75,16 @@ final class ScoresStore: ObservableObject {
                 token: token,
                 puzzleID: puzzleID,
                 elapsedSeconds: elapsedSeconds,
-                mistakes: mistakes
+                mistakes: mistakes,
+                hintsUsed: hintsUsed,
+                pencilAssistsUsed: pencilAssistsUsed,
+                highlightMistakesWasOn: highlightMistakesWasOn,
+                highlightRulesWasOn: highlightRulesWasOn
             )
             lastRank = rank
             return rank
         } catch {
-            enqueue(Pending(puzzleID: puzzleID, elapsedSeconds: elapsedSeconds, mistakes: mistakes, completedAt: Date()))
+            enqueue(pending)
             return nil
         }
     }
@@ -75,7 +103,11 @@ final class ScoresStore: ObservableObject {
                     token: token,
                     puzzleID: item.puzzleID,
                     elapsedSeconds: item.elapsedSeconds,
-                    mistakes: item.mistakes
+                    mistakes: item.mistakes,
+                    hintsUsed: item.hintsUsed ?? 0,
+                    pencilAssistsUsed: item.pencilAssistsUsed ?? 0,
+                    highlightMistakesWasOn: item.highlightMistakesWasOn ?? false,
+                    highlightRulesWasOn: item.highlightRulesWasOn ?? false
                 )
                 // Posted (or 4xx — drop it; can't recover).
             } catch APIError.offline {
