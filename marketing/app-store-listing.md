@@ -25,7 +25,7 @@ PRIVATE FRIEND GROUPS
 Create a group, share the invite code, and you're set. No public leaderboards, no strangers, no follower counts. Just your people.
 
 PLAY WITH FRIENDS, TURN BY TURN
-Multiplayer mode is turn-based async sudoku: place one digit per turn, wrong guesses end your turn. Notifications poke you when it's your go, so you can play across hours or days without staring at the screen. Send an invite link to anyone — works on iPhone and Android.
+Multiplayer mode is turn-based async sudoku: place one digit per turn, wrong guesses end your turn. Notifications poke you when it's your go, so you can play across hours or days without staring at the screen. Send an invite link to anyone.
 
 YOUR OWN PACE TOO
 Plenty of generated puzzles across Easy, Medium, and Hard if you want to play outside the daily. Mistakes counter, pause, in-progress saves — all the standard quality-of-life stuff is in.

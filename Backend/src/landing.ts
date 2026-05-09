@@ -151,12 +151,12 @@ const LANDING_HTML = `<!DOCTYPE html>
           <span class="big">Google Play</span>
         </span>
       </a>
-      <a class="store-btn" href="#" aria-disabled="true" onclick="return false">
+      <a class="store-btn" href="https://apps.apple.com/au/app/sudoku-crew/id6764829511">
         <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
           <path d="M17.05 20.28c-.98.95-2.05.8-3.08.35-1.09-.46-2.09-.48-3.24 0-1.44.62-2.2.44-3.06-.35C2.79 15.25 3.51 7.59 9.05 7.31c1.35.07 2.29.74 3.08.8 1.18-.24 2.31-.93 3.57-.84 1.51.12 2.65.72 3.4 1.8-3.12 1.87-2.38 5.98.48 7.13-.57 1.5-1.31 2.99-2.54 4.09zM12 7.25c-.15-2.23 1.66-4.07 3.74-4.25.29 2.58-2.34 4.5-3.74 4.25z"/>
         </svg>
         <span>
-          <span class="small">COMING SOON</span><br>
+          <span class="small">DOWNLOAD ON THE</span><br>
           <span class="big">App Store</span>
         </span>
       </a>
@@ -165,6 +165,19 @@ const LANDING_HTML = `<!DOCTYPE html>
       Friend groups by invite — ask whoever pointed you here for an
       invite code.
     </p>
+
+    <h2>Want early access on Android?</h2>
+    <p>Two steps and you're in:</p>
+    <ol style="padding-left: 1.25rem; margin: 0 0 1.25rem;">
+      <li style="margin-bottom: 0.75rem;">
+        <a href="https://groups.google.com/g/apptesters26"><strong>Join the testers group</strong></a>
+        — sign in with your Google account and hit Join.
+      </li>
+      <li style="margin-bottom: 0.75rem;">
+        <a href="https://play.google.com/apps/testing/com.derekgillett.sudoku"><strong>Open the beta on Google Play</strong></a>
+        — tap Become a tester, then install.
+      </li>
+    </ol>
 
     <div class="footer">
       <p>
