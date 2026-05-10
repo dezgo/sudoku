@@ -17,7 +17,7 @@ export function getVersion(env: Env): Response {
     ios: {
       current: env.IOS_CURRENT_VERSION ?? FALLBACK_CURRENT,
       min_required: env.IOS_MIN_REQUIRED_VERSION ?? FALLBACK_MIN,
-      store_url: 'https://apps.apple.com/app/sudoku-crew/id6757345095',
+      store_url: 'https://apps.apple.com/au/app/sudoku-crew/id6764829511',
     },
     android: {
       current: env.ANDROID_CURRENT_VERSION ?? FALLBACK_CURRENT,
