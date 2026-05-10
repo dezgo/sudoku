@@ -43,6 +43,7 @@ struct ContentView: View {
     /// either auto-join (if signed in) or stash for after sign-in.
     @State private var pendingInviteCode: String?
     @State private var openingGameAfterInvite: MultiplayerGame?
+    @State private var pendingPushGameID: String?
     @State private var inviteJoinError: String?
     @State private var versionStatus: VersionStatus = .upToDate
     @State private var versionStoreURL: URL?
@@ -277,8 +278,15 @@ struct ContentView: View {
         }
         .sheet(isPresented: $showingMultiplayer, onDismiss: {
             openingGameAfterInvite = nil
+            pendingPushGameID = nil
         }) {
-            MultiplayerLobbyView(initialGame: openingGameAfterInvite)
+            MultiplayerLobbyView(initialGameID: openingGameAfterInvite?.id ?? pendingPushGameID)
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .openMultiplayerGame)) { note in
+            if let gameID = note.userInfo?["game_id"] as? String {
+                pendingPushGameID = gameID
+                showingMultiplayer = true
+            }
         }
         .preferredColorScheme(appearance.colorScheme)
         .onChange(of: scenePhase) { _, newPhase in

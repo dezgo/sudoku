@@ -15,10 +15,9 @@ struct MultiplayerLobbyView: View {
     @EnvironmentObject private var auth: AuthStore
     @Environment(\.dismiss) private var dismiss
 
-    /// If set when the lobby appears, push directly into that game — used by
-    /// the universal-link flow so a tapped invite opens the game, not the
-    /// lobby's list.
-    var initialGame: MultiplayerGame? = nil
+    /// If set when the lobby appears, navigate directly into that game after
+    /// refresh — used by both the universal-link and push-notification flows.
+    var initialGameID: String? = nil
 
     @State private var showingCreate = false
     @State private var openingGame: MultiplayerGame?
@@ -42,7 +41,9 @@ struct MultiplayerLobbyView: View {
                 }
                 .task {
                     await store.refresh()
-                    if let g = initialGame, openingGame == nil { openingGame = g }
+                    if let id = initialGameID, openingGame == nil {
+                        openingGame = (store.inProgress + store.completed).first { $0.id == id }
+                    }
                 }
                 .refreshable { await store.refresh() }
                 .sheet(isPresented: $showingCreate) {

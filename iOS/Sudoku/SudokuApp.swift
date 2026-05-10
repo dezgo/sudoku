@@ -5,6 +5,11 @@
 
 import SwiftUI
 import UIKit
+import UserNotifications
+
+extension Notification.Name {
+    static let openMultiplayerGame = Notification.Name("openMultiplayerGame")
+}
 
 @main
 struct SudokuApp: App {
@@ -51,7 +56,7 @@ struct SudokuApp: App {
 /// token via `application(_:didRegisterForRemoteNotificationsWithDeviceToken:)`;
 /// we hex-encode it and POST to `/me/push_token`. Kept tiny — no other UIKit
 /// surface needed.
-final class SudokuAppDelegate: NSObject, UIApplicationDelegate {
+final class SudokuAppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDelegate {
     private weak var auth: AuthStore?
     private let client = APIClient()
 
@@ -63,10 +68,32 @@ final class SudokuAppDelegate: NSObject, UIApplicationDelegate {
         _ application: UIApplication,
         didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil
     ) -> Bool {
-        // Request notification permission lazily — the user signs in first,
-        // then we ask for permission once we know they have an account that
-        // can receive pushes. See AuthStore for that hook.
+        UNUserNotificationCenter.current().delegate = self
         return true
+    }
+
+    func userNotificationCenter(
+        _ center: UNUserNotificationCenter,
+        willPresent notification: UNNotification,
+        withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void
+    ) {
+        completionHandler([.banner, .sound])
+    }
+
+    func userNotificationCenter(
+        _ center: UNUserNotificationCenter,
+        didReceive response: UNNotificationResponse,
+        withCompletionHandler completionHandler: @escaping () -> Void
+    ) {
+        let info = response.notification.request.content.userInfo
+        if let gameID = info["game_id"] as? String {
+            NotificationCenter.default.post(
+                name: .openMultiplayerGame,
+                object: nil,
+                userInfo: ["game_id": gameID]
+            )
+        }
+        completionHandler()
     }
 
     func application(
