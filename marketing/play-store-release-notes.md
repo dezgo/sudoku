@@ -6,6 +6,17 @@ Latest at top.
 
 ---
 
+## v1.1.3 — smarter tutor
+
+```
+• The tutor learned a new advanced technique (Unique Rectangle) and can now crack harder boards.
+• Fixed a bug where the tutor would say "no more moves" after a few hints, even when more were still available.
+```
+
+(213 chars.)
+
+---
+
 ## v1.1.2 — cleaner highlights
 
 ```

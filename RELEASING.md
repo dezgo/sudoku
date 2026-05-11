@@ -61,6 +61,7 @@ Ask: *"build the Android release"* — Claude runs `./gradlew bundleRelease` and
 
 | Version | Build (iOS) | versionCode (Android) | Notes |
 |---|---|---|---|
+| 1.1.3 | 15 | 11 | Tutor: Unique Rectangle + relaxed strict-match guard |
 | 1.1.2 | 14 | 10 | Highlight rules off = fully clean board |
 | 1.1.1 | 13 | 9 | Invite deep links |
 | 1.1.0 | 12 | — | Multiplayer |
