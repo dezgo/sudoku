@@ -27,7 +27,8 @@ enum class TutorTechnique(val label: String, val tier: Tier) {
     EMPTY_RECTANGLE("Empty Rectangle", Tier.HARD),
     TWO_STRING_KITE("2-String Kite", Tier.HARD),
     FINNED_X_WING("Finned X-Wing", Tier.HARD),
-    FINNED_SWORDFISH("Finned Swordfish", Tier.HARD);
+    FINNED_SWORDFISH("Finned Swordfish", Tier.HARD),
+    UNIQUE_RECTANGLE("Unique Rectangle", Tier.HARD);
 
     /** Difficulty bands. Used by the empty-state copy and available for
      * future puzzle-generator calibration. */
@@ -98,6 +99,7 @@ object TutorEngine {
         findEmptyRectangle(cells)?.let { return it }
         findFinnedXWing(cells)?.let { return it }
         findFinnedSwordfish(cells)?.let { return it }
+        findUniqueRectangle(cells)?.let { return it }
         return null
     }
 
@@ -318,13 +320,14 @@ object TutorEngine {
         val units = allUnits()
         for ((kind, unit) in units) {
             val empties = unit.filter { cells[it.row][it.col].value == null }
-            // Pair cells: user's pencil marks must equal the engine's
-            // candidates for the cell AND have size 2. Engine validation
-            // prevents wrong tips from under-pencilling; user-mark gating
-            // prevents spoilers in cells the user hasn't engaged with.
+            // Pair cells: size-2 user pencil marks that are a valid subset
+            // of engine candidates (no invented digits). Trust user
+            // restrictions — prior tutor or manual eliminations may have
+            // narrowed notes below the engine baseline, and rejecting them
+            // would block subsequent techniques that depend on them.
             val pairCandidates = empties.filter {
                 val notes = cells[it.row][it.col].notes
-                notes.size == 2 && notes == candidates(it.row, it.col, cells)
+                notes.size == 2 && candidates(it.row, it.col, cells).containsAll(notes)
             }
             for (i in pairCandidates.indices) {
                 val a = pairCandidates[i]
@@ -673,12 +676,11 @@ object TutorEngine {
     private fun findNakedTriple(cells: List<List<Cell>>): TutorHint? {
         for ((kind, unit) in allUnits()) {
             val empties = unit.filter { cells[it.row][it.col].value == null }
-            // Eligible cells: user pencil marks of size 2 or 3 matching engine
-            // candidates exactly. Engine-validation prevents wrong tips from
-            // under-pencilling; user-mark gating prevents spoilers.
+            // Eligible cells: user pencil marks of size 2 or 3 that are a
+            // valid subset of engine candidates. Trust prior eliminations.
             val eligible = empties.filter { pos ->
                 val notes = cells[pos.row][pos.col].notes
-                (notes.size == 2 || notes.size == 3) && notes == candidates(pos.row, pos.col, cells)
+                (notes.size == 2 || notes.size == 3) && candidates(pos.row, pos.col, cells).containsAll(notes)
             }
             for (i in eligible.indices) {
                 for (j in (i + 1) until eligible.size) {
@@ -957,15 +959,18 @@ object TutorEngine {
     // region XY-Wing
 
     private fun findXYWing(cells: List<List<Cell>>): TutorHint? {
-        // Bivalue cells where user marks match engine candidates exactly.
+        // Bivalue cells: size-2 user marks that are a valid subset of engine
+        // candidates. Trust user restrictions — prior tutor eliminations
+        // narrow notes below the engine baseline, so requiring strict
+        // equality would block this technique on any board where simpler
+        // techniques have already run.
         data class Bivalue(val pos: CellPos, val notes: Set<Int>)
         val bivalue = mutableListOf<Bivalue>()
         for (r in 0 until 9) {
             for (c in 0 until 9) {
                 val cell = cells[r][c]
                 if (cell.value != null || cell.notes.size != 2) continue
-                val engine = candidates(r, c, cells)
-                if (cell.notes != engine) continue
+                if (!candidates(r, c, cells).containsAll(cell.notes)) continue
                 bivalue.add(Bivalue(CellPos(r, c), cell.notes))
             }
         }
@@ -1062,6 +1067,8 @@ object TutorEngine {
     // see the pivot AND both pincers (narrower than XY-Wing — pivot also
     // contains c). Mirrors Tutor.swift findXYZWing.
     private fun findXYZWing(cells: List<List<Cell>>): TutorHint? {
+        // Trust user notes that are a valid subset of engine candidates —
+        // prior eliminations narrow notes below the engine view.
         data class Cand(val pos: CellPos, val notes: Set<Int>)
         val trivalue = mutableListOf<Cand>()
         val bivalue = mutableListOf<Cand>()
@@ -1069,8 +1076,7 @@ object TutorEngine {
             for (c in 0 until 9) {
                 val cell = cells[r][c]
                 if (cell.value != null) continue
-                val engine = candidates(r, c, cells)
-                if (cell.notes != engine) continue
+                if (!candidates(r, c, cells).containsAll(cell.notes)) continue
                 if (cell.notes.size == 3) trivalue += Cand(CellPos(r, c), cell.notes)
                 if (cell.notes.size == 2) bivalue += Cand(CellPos(r, c), cell.notes)
             }
@@ -1140,14 +1146,15 @@ object TutorEngine {
     // exactly two candidate cells, one seeing each bivalue. Eliminate
     // `b` from cells that see both bivalues.
     private fun findWWing(cells: List<List<Cell>>): TutorHint? {
+        // Trust user notes that are a valid subset of engine candidates —
+        // prior eliminations narrow notes below the engine view.
         data class Bi(val pos: CellPos, val notes: Set<Int>)
         val bivalue = mutableListOf<Bi>()
         for (r in 0 until 9) {
             for (c in 0 until 9) {
                 val cell = cells[r][c]
                 if (cell.value != null || cell.notes.size != 2) continue
-                val engine = candidates(r, c, cells)
-                if (cell.notes != engine) continue
+                if (!candidates(r, c, cells).containsAll(cell.notes)) continue
                 bivalue += Bi(CellPos(r, c), cell.notes)
             }
         }
@@ -1831,7 +1838,7 @@ object TutorEngine {
             val empties = unit.filter { cells[it.row][it.col].value == null }
             val eligible = empties.filter { pos ->
                 val notes = cells[pos.row][pos.col].notes
-                notes.size in 2..4 && notes == candidates(pos.row, pos.col, cells)
+                notes.size in 2..4 && candidates(pos.row, pos.col, cells).containsAll(notes)
             }
             if (eligible.size < 4) continue
 
@@ -2182,6 +2189,233 @@ object TutorEngine {
             cells[peer.row][peer.col].value?.let { out.add(it) }
         }
         return out
+    }
+
+    // endregion
+
+    // region Unique Rectangle
+    //
+    // Exploits the puzzle's guarantee of a unique solution. A 2×2 rectangle
+    // of empty cells spanning at least two 3×3 boxes, where all four corners
+    // hold the same two candidates X and Y, would allow two valid solutions
+    // (swap X↔Y throughout the rectangle). Since the puzzle is unique, that
+    // "deadly pattern" cannot exist.
+    //
+    // Type 1 — three bivalue {X,Y} corners, one roof with extra candidates:
+    //   The roof must use an extra candidate to break the deadly pattern, so
+    //   X and Y are both eliminated from it.
+    //
+    // Type 2 — two bivalue {X,Y} corners, two roofs each with exactly one
+    //   extra candidate Z (the same Z): one roof must take Z. Any cell that
+    //   sees both roofs can't be Z.
+    //
+    // Type 4 — two bivalue {X,Y} corners sharing a row or column (floors),
+    //   two roofs sharing the other row or column; within the roof line one of
+    //   X/Y is locked — only the roof cells hold it. The other digit is
+    //   eliminated from both roofs to avoid recreating the deadly pattern.
+
+    fun findUniqueRectangle(cells: List<List<Cell>>): TutorHint? {
+        for (r1 in 0 until 8) {
+            for (r2 in (r1 + 1) until 9) {
+                for (c1 in 0 until 8) {
+                    for (c2 in (c1 + 1) until 9) {
+                        // Rectangle must span at least two boxes.
+                        if (r1 / 3 == r2 / 3 && c1 / 3 == c2 / 3) continue
+                        val corners = listOf(CellPos(r1, c1), CellPos(r1, c2), CellPos(r2, c1), CellPos(r2, c2))
+                        if (corners.any { cells[it.row][it.col].value != null }) continue
+
+                        val engineCands = corners.map { candidates(it.row, it.col, cells) }
+                        val common = engineCands.drop(1).fold(engineCands[0]) { acc, s -> acc intersect s }
+                        if (common.size < 2) continue
+
+                        val commonArr = common.sorted()
+                        for (xi in commonArr.indices) {
+                            for (yi in (xi + 1) until commonArr.size) {
+                                val x = commonArr[xi]
+                                val y = commonArr[yi]
+                                val xy = setOf(x, y)
+
+                                val bivCorners = mutableListOf<CellPos>()
+                                val roofCorners = mutableListOf<CellPos>()
+                                var allVisible = true
+                                for (pos in corners) {
+                                    val notes = cells[pos.row][pos.col].notes
+                                    if (!notes.containsAll(xy)) { allVisible = false; break }
+                                    if (notes == xy) bivCorners.add(pos) else roofCorners.add(pos)
+                                }
+                                if (!allVisible) continue
+
+                                // Type 1: three bivalue corners, one roof.
+                                if (bivCorners.size == 3 && roofCorners.size == 1) {
+                                    val roof = roofCorners[0]
+                                    val removed = cells[roof.row][roof.col].notes intersect xy
+                                    if (removed.isEmpty()) continue
+                                    return buildURType1(x, y, bivCorners, roof, cells[roof.row][roof.col].notes, removed)
+                                }
+
+                                if (bivCorners.size != 2 || roofCorners.size != 2) continue
+
+                                // Type 2: both roofs have exactly one extra, the same digit Z.
+                                val extras0 = cells[roofCorners[0].row][roofCorners[0].col].notes - xy
+                                val extras1 = cells[roofCorners[1].row][roofCorners[1].col].notes - xy
+                                if (extras0.size == 1 && extras1.size == 1 && extras0 == extras1) {
+                                    val z = extras0.first()
+                                    val eliminators = mutableListOf<CellPos>()
+                                    for (r in 0 until 9) {
+                                        for (c in 0 until 9) {
+                                            val pos = CellPos(r, c)
+                                            if (cells[r][c].value != null) continue
+                                            if (pos == roofCorners[0] || pos == roofCorners[1]) continue
+                                            if (sees(pos, roofCorners[0]) && sees(pos, roofCorners[1])) {
+                                                if (cells[r][c].notes.contains(z)) eliminators.add(pos)
+                                            }
+                                        }
+                                    }
+                                    if (eliminators.isNotEmpty()) {
+                                        return buildURType2(x, y, z, bivCorners, roofCorners, eliminators)
+                                    }
+                                }
+
+                                // Type 4: roofs share a line; one of X/Y locked to roof cells there.
+                                findURType4(x, y, xy, bivCorners, roofCorners, cells)?.let { return it }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        return null
+    }
+
+    private fun findURType4(
+        x: Int, y: Int, xy: Set<Int>,
+        bivalue: List<CellPos>,
+        roofs: List<CellPos>,
+        cells: List<List<Cell>>
+    ): TutorHint? {
+        val roof0 = roofs[0]
+        val roof1 = roofs[1]
+        val sharedRow = when {
+            roof0.row == roof1.row -> true
+            roof0.col == roof1.col -> false
+            else -> return null
+        }
+
+        for ((locked, eliminated) in listOf(x to y, y to x)) {
+            val lockedPositions = (0 until 9).filter { idx ->
+                val r = if (sharedRow) roof0.row else idx
+                val c = if (sharedRow) idx else roof0.col
+                cells[r][c].value == null && candidates(r, c, cells).contains(locked)
+            }.toSet()
+            val roofIndices = setOf(if (sharedRow) roof0.col else roof0.row, if (sharedRow) roof1.col else roof1.row)
+            if (lockedPositions != roofIndices) continue
+
+            val eliminations = roofs.filter { cells[it.row][it.col].notes.contains(eliminated) }
+            if (eliminations.isEmpty()) continue
+
+            return buildURType4(
+                x, y, locked, eliminated, bivalue, roofs,
+                if (sharedRow) "row" else "column",
+                eliminations
+            )
+        }
+        return null
+    }
+
+    private fun buildURType1(
+        x: Int, y: Int,
+        bivalue: List<CellPos>,
+        roof: CellPos,
+        roofNotes: Set<Int>,
+        removed: Set<Int>
+    ): TutorHint {
+        val xyStr = listOf(x, y).sorted().joinToString(" and ")
+        val bivHLs = bivalue.map { TutorHighlight(it.row, it.col, TutorHighlight.Kind.FOCUS, setOf(x, y)) }
+        val roofHL = TutorHighlight(roof.row, roof.col, TutorHighlight.Kind.TARGET, roofNotes)
+        val elimHL = TutorHighlight(roof.row, roof.col, TutorHighlight.Kind.ELIMINATOR, removed)
+        return TutorHint(
+            technique = TutorTechnique.UNIQUE_RECTANGLE,
+            placement = null,
+            eliminations = listOf(TutorHint.Elimination(roof.row, roof.col, removed)),
+            steps = listOf(
+                TutorStep(
+                    narration = "These four cells form a rectangle spanning two boxes. Three corners hold only $xyStr.",
+                    highlights = bivHLs + listOf(roofHL)
+                ),
+                TutorStep(
+                    narration = "If the fourth also held only $xyStr, the rectangle could swap them — creating two solutions. Since this puzzle has a unique solution, $xyStr must be ruled out from the fourth cell.",
+                    highlights = bivHLs + listOf(roofHL, elimHL)
+                ),
+                TutorStep(
+                    narration = "Tap Got it to remove $xyStr from that cell.",
+                    highlights = listOf(elimHL)
+                )
+            )
+        )
+    }
+
+    private fun buildURType2(
+        x: Int, y: Int, z: Int,
+        bivalue: List<CellPos>,
+        roofs: List<CellPos>,
+        eliminators: List<CellPos>
+    ): TutorHint {
+        val xyStr = listOf(x, y).sorted().joinToString(" and ")
+        val bivHLs = bivalue.map { TutorHighlight(it.row, it.col, TutorHighlight.Kind.FOCUS, setOf(x, y)) }
+        val roofHLs = roofs.map { TutorHighlight(it.row, it.col, TutorHighlight.Kind.TARGET, setOf(x, y, z)) }
+        val elimHLs = eliminators.map { TutorHighlight(it.row, it.col, TutorHighlight.Kind.ELIMINATOR, setOf(z)) }
+        return TutorHint(
+            technique = TutorTechnique.UNIQUE_RECTANGLE,
+            placement = null,
+            eliminations = eliminators.map { TutorHint.Elimination(it.row, it.col, setOf(z)) },
+            steps = listOf(
+                TutorStep(
+                    narration = "Two corners of this rectangle hold only $xyStr. The other two each carry one extra candidate: $z.",
+                    highlights = bivHLs + roofHLs
+                ),
+                TutorStep(
+                    narration = "One of those two cells must take $z to break the deadly rectangle. Any cell that sees both of them can't be $z.",
+                    highlights = bivHLs + roofHLs + elimHLs
+                ),
+                TutorStep(
+                    narration = "Tap Got it to cross $z off those cells.",
+                    highlights = elimHLs
+                )
+            )
+        )
+    }
+
+    private fun buildURType4(
+        x: Int, y: Int,
+        lockedDigit: Int, eliminatedDigit: Int,
+        bivalue: List<CellPos>,
+        roofs: List<CellPos>,
+        roofLineKind: String,
+        elimRoofs: List<CellPos>
+    ): TutorHint {
+        val xyStr = listOf(x, y).sorted().joinToString(" and ")
+        val bivHLs = bivalue.map { TutorHighlight(it.row, it.col, TutorHighlight.Kind.FOCUS, setOf(x, y)) }
+        val roofHLs = roofs.map { TutorHighlight(it.row, it.col, TutorHighlight.Kind.TARGET, setOf(lockedDigit, eliminatedDigit)) }
+        val elimHLs = elimRoofs.map { TutorHighlight(it.row, it.col, TutorHighlight.Kind.ELIMINATOR, setOf(eliminatedDigit)) }
+        return TutorHint(
+            technique = TutorTechnique.UNIQUE_RECTANGLE,
+            placement = null,
+            eliminations = elimRoofs.map { TutorHint.Elimination(it.row, it.col, setOf(eliminatedDigit)) },
+            steps = listOf(
+                TutorStep(
+                    narration = "Two corners of this rectangle hold only $xyStr. In the $roofLineKind containing the other two, $lockedDigit can only go in those two cells.",
+                    highlights = bivHLs + roofHLs
+                ),
+                TutorStep(
+                    narration = "Since $lockedDigit is locked into those cells, placing $eliminatedDigit in either of them would recreate the deadly swappable pattern. So $eliminatedDigit is ruled out from both.",
+                    highlights = bivHLs + roofHLs + elimHLs
+                ),
+                TutorStep(
+                    narration = "Tap Got it to cross $eliminatedDigit off those cells.",
+                    highlights = elimHLs
+                )
+            )
+        )
     }
 
     // endregion

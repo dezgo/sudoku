@@ -29,6 +29,7 @@ enum TutorTechnique: String, CaseIterable {
     case twoStringKite
     case finnedXWing
     case finnedSwordfish
+    case uniqueRectangle
 
     /// Difficulty bands roughly match how a human solver progresses. Used by
     /// the empty-state copy ("we tried up through <hardest tier>") and is
@@ -46,7 +47,7 @@ enum TutorTechnique: String, CaseIterable {
             return .medium
         case .nakedTriple, .hiddenTriple, .xWing, .xyWing, .swordfish, .nakedQuad, .hiddenQuad, .jellyfish,
              .xyzWing, .wWing, .skyscraper, .emptyRectangle,
-             .twoStringKite, .finnedXWing, .finnedSwordfish:
+             .twoStringKite, .finnedXWing, .finnedSwordfish, .uniqueRectangle:
             return .hard
         }
     }
@@ -74,6 +75,7 @@ enum TutorTechnique: String, CaseIterable {
         case .twoStringKite: return "2-String Kite"
         case .finnedXWing: return "Finned X-Wing"
         case .finnedSwordfish: return "Finned Swordfish"
+        case .uniqueRectangle: return "Unique Rectangle"
         }
     }
 }
@@ -157,6 +159,7 @@ enum TutorEngine {
         if let h = findEmptyRectangle(cells: cells) { return h }
         if let h = findFinnedXWing(cells: cells) { return h }
         if let h = findFinnedSwordfish(cells: cells) { return h }
+        if let h = findUniqueRectangle(cells: cells) { return h }
         return nil
     }
 
@@ -365,15 +368,17 @@ enum TutorEngine {
 
         for (kind, unit) in units {
             let empties = unit.filter { cells[$0.row][$0.col].value == nil }
-            // Naked pair is a pencil-mark technique: it only fires when the
-            // user has pencilled exactly two candidates in the cell, AND
-            // those marks match the engine's view (so under-pencilling
-            // doesn't cause a wrong tip). Together: respects the user's
-            // discovery while staying correct.
+            // Naked pair is a pencil-mark technique: it fires when the user
+            // has pencilled exactly two candidates in the cell, and those
+            // marks are a valid subset of the engine's view (no invented
+            // digits). We trust the user's restrictions — earlier tutor or
+            // manual eliminations may have narrowed notes below the engine
+            // baseline, and rejecting those would block subsequent
+            // techniques that depend on them.
             let pairCandidates = empties.filter { pos in
                 let userMarks = cells[pos.row][pos.col].notes
                 guard userMarks.count == 2 else { return false }
-                return userMarks == candidates(row: pos.row, col: pos.col, cells: cells)
+                return userMarks.isSubset(of: candidates(row: pos.row, col: pos.col, cells: cells))
             }
             for i in 0..<pairCandidates.count {
                 let a = pairCandidates[i]
@@ -807,14 +812,14 @@ enum TutorEngine {
 
         for (kind, unit) in units {
             let empties = unit.filter { cells[$0.row][$0.col].value == nil }
-            // Eligible cells: user pencil marks of size 2 or 3 that match
-            // engine candidates exactly. Engine validation prevents wrong
-            // tips from under-pencilling; the "user marks present" gate
-            // prevents spoilers in cells the user hasn't engaged with.
+            // Eligible cells: user pencil marks of size 2 or 3 that are a
+            // valid subset of the engine candidates (no invented digits).
+            // We trust user restrictions — prior eliminations may have
+            // narrowed notes below the engine baseline.
             let eligible = empties.filter { pos in
                 let notes = cells[pos.row][pos.col].notes
                 guard notes.count == 2 || notes.count == 3 else { return false }
-                return notes == candidates(row: pos.row, col: pos.col, cells: cells)
+                return notes.isSubset(of: candidates(row: pos.row, col: pos.col, cells: cells))
             }
             for i in 0..<eligible.count {
                 for j in (i + 1)..<eligible.count {
@@ -1161,14 +1166,18 @@ enum TutorEngine {
     // cells must have c in user marks.
 
     static func findXYWing(cells: [[Cell]]) -> TutorHint? {
-        // Collect bivalue cells (size-2 user marks that match engine candidates).
+        // Collect bivalue cells: size-2 user marks that are a valid subset
+        // of engine candidates (no invented digits). We trust the user's
+        // restrictions — prior tutor eliminations narrow notes below the
+        // engine baseline, so requiring strict equality would block this
+        // technique on any board where simpler techniques have already run.
         var bivalue: [(pos: (row: Int, col: Int), notes: Set<Int>)] = []
         for r in 0..<9 {
             for c in 0..<9 {
                 let cell = cells[r][c]
                 guard cell.value == nil, cell.notes.count == 2 else { continue }
                 let engine = candidates(row: r, col: c, cells: cells)
-                guard cell.notes == engine else { continue }
+                guard cell.notes.isSubset(of: engine) else { continue }
                 bivalue.append(((r, c), cell.notes))
             }
         }
@@ -1462,7 +1471,9 @@ enum TutorEngine {
     // elimination set is narrower). Requires user pencil marks matching
     // engine candidates.
     static func findXYZWing(cells: [[Cell]]) -> TutorHint? {
-        // Pivots: trivalue cells whose user marks match engine candidates.
+        // Pivots: trivalue cells whose user marks are a valid subset of
+        // engine candidates (no invented digits). Prior tutor eliminations
+        // may have narrowed notes; trust the user's restrictions.
         var trivalue: [(pos: (row: Int, col: Int), notes: Set<Int>)] = []
         var bivalue: [(pos: (row: Int, col: Int), notes: Set<Int>)] = []
         for r in 0..<9 {
@@ -1470,7 +1481,7 @@ enum TutorEngine {
                 let cell = cells[r][c]
                 guard cell.value == nil else { continue }
                 let engine = candidates(row: r, col: c, cells: cells)
-                guard cell.notes == engine else { continue }
+                guard cell.notes.isSubset(of: engine) else { continue }
                 if cell.notes.count == 3 { trivalue.append(((r, c), cell.notes)) }
                 if cell.notes.count == 2 { bivalue.append(((r, c), cell.notes)) }
             }
@@ -1555,7 +1566,9 @@ enum TutorEngine {
                 let cell = cells[r][c]
                 guard cell.value == nil, cell.notes.count == 2 else { continue }
                 let engine = candidates(row: r, col: c, cells: cells)
-                guard cell.notes == engine else { continue }
+                // Trust user notes that are a valid subset of engine cands —
+                // prior eliminations narrow notes below the engine view.
+                guard cell.notes.isSubset(of: engine) else { continue }
                 bivalue.append(((r, c), cell.notes))
             }
         }
@@ -2284,11 +2297,12 @@ enum TutorEngine {
         for (kind, unit) in units {
             let empties = unit.filter { cells[$0.row][$0.col].value == nil }
             // Eligible cells: 2-, 3-, or 4-mark cells where user's pencilled
-            // candidates equal engine candidates exactly.
+            // candidates are a valid subset of engine candidates. Trust
+            // user-applied eliminations from prior techniques.
             let eligible = empties.filter { pos in
                 let notes = cells[pos.row][pos.col].notes
                 guard (2...4).contains(notes.count) else { return false }
-                return notes == candidates(row: pos.row, col: pos.col, cells: cells)
+                return notes.isSubset(of: candidates(row: pos.row, col: pos.col, cells: cells))
             }
             guard eligible.count >= 4 else { continue }
 
@@ -2652,6 +2666,246 @@ enum TutorEngine {
                 TutorStep(
                     narration: "Tap Got it to cross \(digit) off these cells.",
                     highlights: eliminatorHLs
+                )
+            ]
+        )
+    }
+
+    // MARK: - Unique Rectangle
+    //
+    // Exploits the puzzle's guarantee of a unique solution. A 2×2 rectangle
+    // of empty cells spanning at least two 3×3 boxes, where all four corners
+    // hold the same two candidates X and Y, would allow two valid solutions
+    // (swap X↔Y throughout the rectangle). Since the puzzle is unique, that
+    // "deadly pattern" cannot exist.
+    //
+    // Type 1 — three bivalue {X,Y} corners, one roof with extra candidates:
+    //   The roof must use an extra candidate to break the deadly pattern, so
+    //   X and Y are both eliminated from it.
+    //
+    // Type 2 — two bivalue {X,Y} corners, two roofs each with exactly one
+    //   extra candidate Z (the same Z): one roof must take Z. Any cell that
+    //   sees both roofs can't be Z.
+    //
+    // Type 4 — two bivalue {X,Y} corners sharing a row or column (floors),
+    //   two roofs sharing the other row or column; within the roof line one of
+    //   X/Y is locked — only the roof cells hold it. The other digit is
+    //   eliminated from both roofs to avoid recreating the deadly pattern.
+
+    static func findUniqueRectangle(cells: [[Cell]]) -> TutorHint? {
+        for r1 in 0..<8 {
+            for r2 in (r1 + 1)..<9 {
+                for c1 in 0..<8 {
+                    for c2 in (c1 + 1)..<9 {
+                        // Rectangle must span at least two boxes.
+                        if r1 / 3 == r2 / 3 && c1 / 3 == c2 / 3 { continue }
+                        let corners: [(row: Int, col: Int)] = [(r1, c1), (r1, c2), (r2, c1), (r2, c2)]
+                        if corners.contains(where: { cells[$0.row][$0.col].value != nil }) { continue }
+
+                        let engineCands = corners.map { candidates(row: $0.row, col: $0.col, cells: cells) }
+                        let common = engineCands.dropFirst().reduce(engineCands[0]) { $0.intersection($1) }
+                        if common.count < 2 { continue }
+
+                        let commonArr = common.sorted()
+                        for xi in commonArr.indices {
+                            for yi in (xi + 1)..<commonArr.count {
+                                let x = commonArr[xi]
+                                let y = commonArr[yi]
+                                let xy: Set<Int> = [x, y]
+
+                                var bivCorners: [(row: Int, col: Int)] = []
+                                var roofCorners: [(row: Int, col: Int)] = []
+                                var allVisible = true
+                                for pos in corners {
+                                    let notes = cells[pos.row][pos.col].notes
+                                    if !notes.isSuperset(of: xy) { allVisible = false; break }
+                                    if notes == xy { bivCorners.append(pos) } else { roofCorners.append(pos) }
+                                }
+                                if !allVisible { continue }
+
+                                // Type 1: three bivalue corners, one roof.
+                                if bivCorners.count == 3 && roofCorners.count == 1 {
+                                    let roof = roofCorners[0]
+                                    let removed = cells[roof.row][roof.col].notes.intersection(xy)
+                                    if removed.isEmpty { continue }
+                                    return buildURType1(x: x, y: y, bivalue: bivCorners, roof: roof,
+                                                        roofNotes: cells[roof.row][roof.col].notes, removed: removed)
+                                }
+
+                                if bivCorners.count != 2 || roofCorners.count != 2 { continue }
+
+                                // Type 2: both roofs have exactly one extra, the same digit Z.
+                                let extras0 = cells[roofCorners[0].row][roofCorners[0].col].notes.subtracting(xy)
+                                let extras1 = cells[roofCorners[1].row][roofCorners[1].col].notes.subtracting(xy)
+                                if extras0.count == 1 && extras1.count == 1 && extras0 == extras1 {
+                                    let z = extras0.first!
+                                    var eliminators: [(row: Int, col: Int)] = []
+                                    for r in 0..<9 {
+                                        for c in 0..<9 {
+                                            let pos = (r, c)
+                                            if cells[r][c].value != nil { continue }
+                                            if pos == roofCorners[0] || pos == roofCorners[1] { continue }
+                                            if sees(pos, roofCorners[0]) && sees(pos, roofCorners[1]) {
+                                                if cells[r][c].notes.contains(z) { eliminators.append(pos) }
+                                            }
+                                        }
+                                    }
+                                    if !eliminators.isEmpty {
+                                        return buildURType2(x: x, y: y, z: z,
+                                                            bivalue: bivCorners, roofs: roofCorners,
+                                                            eliminators: eliminators)
+                                    }
+                                }
+
+                                // Type 4: roofs share a line; one of X/Y locked to roof cells there.
+                                if let hint = findURType4(x: x, y: y, xy: xy,
+                                                          bivalue: bivCorners, roofs: roofCorners,
+                                                          cells: cells) {
+                                    return hint
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        return nil
+    }
+
+    private static func findURType4(
+        x: Int, y: Int, xy: Set<Int>,
+        bivalue: [(row: Int, col: Int)],
+        roofs: [(row: Int, col: Int)],
+        cells: [[Cell]]
+    ) -> TutorHint? {
+        let roof0 = roofs[0]
+        let roof1 = roofs[1]
+        let sharedRow: Bool
+        if roof0.row == roof1.row {
+            sharedRow = true
+        } else if roof0.col == roof1.col {
+            sharedRow = false
+        } else {
+            return nil
+        }
+
+        for (locked, eliminated) in [(x, y), (y, x)] {
+            var lockedPositions = Set<Int>()
+            for idx in 0..<9 {
+                let r = sharedRow ? roof0.row : idx
+                let c = sharedRow ? idx : roof0.col
+                if cells[r][c].value == nil && candidates(row: r, col: c, cells: cells).contains(locked) {
+                    lockedPositions.insert(idx)
+                }
+            }
+            let roofIndices: Set<Int> = [
+                sharedRow ? roof0.col : roof0.row,
+                sharedRow ? roof1.col : roof1.row
+            ]
+            if lockedPositions != roofIndices { continue }
+
+            let eliminations = roofs.filter { cells[$0.row][$0.col].notes.contains(eliminated) }
+            if eliminations.isEmpty { continue }
+
+            return buildURType4(x: x, y: y, lockedDigit: locked, eliminatedDigit: eliminated,
+                                bivalue: bivalue, roofs: roofs,
+                                roofLineKind: sharedRow ? "row" : "column",
+                                elimRoofs: eliminations)
+        }
+        return nil
+    }
+
+    private static func buildURType1(
+        x: Int, y: Int,
+        bivalue: [(row: Int, col: Int)],
+        roof: (row: Int, col: Int),
+        roofNotes: Set<Int>,
+        removed: Set<Int>
+    ) -> TutorHint {
+        let xyStr = [x, y].sorted().map(String.init).joined(separator: " and ")
+        let bivHLs = bivalue.map { TutorHighlight(row: $0.row, col: $0.col, kind: .focus, candidates: [x, y]) }
+        let roofHL = TutorHighlight(row: roof.row, col: roof.col, kind: .target, candidates: roofNotes)
+        let elimHL = TutorHighlight(row: roof.row, col: roof.col, kind: .eliminator, candidates: removed)
+        return TutorHint(
+            technique: .uniqueRectangle,
+            placement: nil,
+            eliminations: [TutorHint.Elimination(row: roof.row, col: roof.col, candidates: removed)],
+            steps: [
+                TutorStep(
+                    narration: "These four cells form a rectangle spanning two boxes. Three corners hold only \(xyStr).",
+                    highlights: bivHLs + [roofHL]
+                ),
+                TutorStep(
+                    narration: "If the fourth also held only \(xyStr), the rectangle could swap them — creating two solutions. Since this puzzle has a unique solution, \(xyStr) must be ruled out from the fourth cell.",
+                    highlights: bivHLs + [roofHL, elimHL]
+                ),
+                TutorStep(
+                    narration: "Tap Got it to remove \(xyStr) from that cell.",
+                    highlights: [elimHL]
+                )
+            ]
+        )
+    }
+
+    private static func buildURType2(
+        x: Int, y: Int, z: Int,
+        bivalue: [(row: Int, col: Int)],
+        roofs: [(row: Int, col: Int)],
+        eliminators: [(row: Int, col: Int)]
+    ) -> TutorHint {
+        let xyStr = [x, y].sorted().map(String.init).joined(separator: " and ")
+        let bivHLs = bivalue.map { TutorHighlight(row: $0.row, col: $0.col, kind: .focus, candidates: [x, y]) }
+        let roofHLs = roofs.map { TutorHighlight(row: $0.row, col: $0.col, kind: .target, candidates: [x, y, z]) }
+        let elimHLs = eliminators.map { TutorHighlight(row: $0.row, col: $0.col, kind: .eliminator, candidates: [z]) }
+        return TutorHint(
+            technique: .uniqueRectangle,
+            placement: nil,
+            eliminations: eliminators.map { TutorHint.Elimination(row: $0.row, col: $0.col, candidates: [z]) },
+            steps: [
+                TutorStep(
+                    narration: "Two corners of this rectangle hold only \(xyStr). The other two each carry one extra candidate: \(z).",
+                    highlights: bivHLs + roofHLs
+                ),
+                TutorStep(
+                    narration: "One of those two cells must take \(z) to break the deadly rectangle. Any cell that sees both of them can't be \(z).",
+                    highlights: bivHLs + roofHLs + elimHLs
+                ),
+                TutorStep(
+                    narration: "Tap Got it to cross \(z) off those cells.",
+                    highlights: elimHLs
+                )
+            ]
+        )
+    }
+
+    private static func buildURType4(
+        x: Int, y: Int,
+        lockedDigit: Int, eliminatedDigit: Int,
+        bivalue: [(row: Int, col: Int)],
+        roofs: [(row: Int, col: Int)],
+        roofLineKind: String,
+        elimRoofs: [(row: Int, col: Int)]
+    ) -> TutorHint {
+        let xyStr = [x, y].sorted().map(String.init).joined(separator: " and ")
+        let bivHLs = bivalue.map { TutorHighlight(row: $0.row, col: $0.col, kind: .focus, candidates: [x, y]) }
+        let roofHLs = roofs.map { TutorHighlight(row: $0.row, col: $0.col, kind: .target, candidates: [lockedDigit, eliminatedDigit]) }
+        let elimHLs = elimRoofs.map { TutorHighlight(row: $0.row, col: $0.col, kind: .eliminator, candidates: [eliminatedDigit]) }
+        return TutorHint(
+            technique: .uniqueRectangle,
+            placement: nil,
+            eliminations: elimRoofs.map { TutorHint.Elimination(row: $0.row, col: $0.col, candidates: [eliminatedDigit]) },
+            steps: [
+                TutorStep(
+                    narration: "Two corners of this rectangle hold only \(xyStr). In the \(roofLineKind) containing the other two, \(lockedDigit) can only go in those two cells.",
+                    highlights: bivHLs + roofHLs
+                ),
+                TutorStep(
+                    narration: "Since \(lockedDigit) is locked into those cells, placing \(eliminatedDigit) in either of them would recreate the deadly swappable pattern. So \(eliminatedDigit) is ruled out from both.",
+                    highlights: bivHLs + roofHLs + elimHLs
+                ),
+                TutorStep(
+                    narration: "Tap Got it to cross \(eliminatedDigit) off those cells.",
+                    highlights: elimHLs
                 )
             ]
         )

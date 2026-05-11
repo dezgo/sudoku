@@ -186,7 +186,7 @@ private fun EmptyState(hasAnyPencilMarks: Boolean) {
         )
         Text(
             text = if (hasAnyPencilMarks) {
-                "I checked everything I know — singles, pairs/triples/quads (naked + hidden), pointing pair, box-line, X-wing, XY-wing, swordfish, jellyfish. Nothing fits. This board likely needs chain reasoning (XYZ-wing, W-wing, simple coloring, forcing chains) or some plain old guess-and-check."
+                "I checked everything I know — singles, pairs/triples/quads (naked + hidden), pointing pair, box-line, X-wing (incl. finned), XY-wing, XYZ-wing, W-wing, swordfish (incl. finned), jellyfish, skyscraper, 2-string kite, empty rectangle, unique rectangle. Nothing fits. This board likely needs chain reasoning (simple coloring, forcing chains) or some plain old guess-and-check."
             } else {
                 "Tap the wand to auto-fill pencil marks first — the pair and pointing techniques need them to work."
             },
