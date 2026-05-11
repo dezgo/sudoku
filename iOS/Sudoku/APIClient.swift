@@ -13,6 +13,14 @@
 
 import Foundation
 
+/// Posted when an authenticated request returns 401. AuthStore observes
+/// this and clears the stale token so the UI bounces back to the
+/// signed-out state — the user re-signs in instead of seeing a generic
+/// "couldn't load" error they can't act on.
+extension Notification.Name {
+    static let apiUnauthorized = Notification.Name("SudokuAPIUnauthorized")
+}
+
 enum APIError: Error, Equatable {
     case offline                 // URLError indicating no connectivity
     case http(Int, String?)      // server returned non-2xx; optional `error` body
@@ -581,6 +589,12 @@ actor APIClient {
         guard (200..<300).contains(http.statusCode) else {
             // Best-effort: try to surface the server's `error` field for diagnostics.
             let detail = (try? JSONSerialization.jsonObject(with: data) as? [String: Any])?["error"] as? String
+            // 401 on an authed request = the bearer token's no good. Tell
+            // AuthStore so it can clear local auth; the UI reactively
+            // shows the signed-out state without surfacing an error.
+            if http.statusCode == 401 && token != nil {
+                NotificationCenter.default.post(name: .apiUnauthorized, object: nil)
+            }
             throw APIError.http(http.statusCode, detail)
         }
         return data

@@ -36,6 +36,15 @@ final class AuthStore: ObservableObject {
         let storedUser = Self.loadUser()
         self.token = storedToken
         self.user = storedUser
+
+        // Watch for auth-expired signals from APIClient. Any authed call
+        // that returns 401 means our token is stale — clear local auth so
+        // the UI shows the signed-out state and the user re-signs in.
+        NotificationCenter.default.addObserver(
+            forName: .apiUnauthorized, object: nil, queue: .main
+        ) { [weak self] _ in
+            self?.signOut()
+        }
     }
 
     // MARK: - Sign-in flow

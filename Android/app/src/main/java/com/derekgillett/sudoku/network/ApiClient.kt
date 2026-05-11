@@ -30,6 +30,11 @@ class ApiClient(
         object Unknown : ApiException("unknown") { private fun readResolve(): Any = Unknown }
     }
 
+    /** Invoked when an authenticated request returns 401. AuthRepository
+     *  wires this to signOut so the UI bounces back to the signed-out state
+     *  instead of surfacing a generic "couldn't load" error. */
+    var onUnauthorized: (() -> Unit)? = null
+
     private val json = Json {
         ignoreUnknownKeys = true
         encodeDefaults = true
@@ -296,6 +301,12 @@ class ApiClient(
             } else {
                 val errorBody = conn.errorStream?.bufferedReader()?.use { it.readText() } ?: ""
                 val detail = parseErrorDetail(errorBody)
+                // 401 on an authed request = the bearer token's no good.
+                // Tell AuthRepository so it can clear local auth; the UI
+                // reactively shows the signed-out state.
+                if (status == 401 && token != null) {
+                    onUnauthorized?.invoke()
+                }
                 throw ApiException.Http(status, detail)
             }
             text

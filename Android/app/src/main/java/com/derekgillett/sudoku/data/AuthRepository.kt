@@ -53,6 +53,13 @@ class AuthRepository(
     val isSignedIn: Boolean get() = _token.value != null
     val displayName: String? get() = _user.value?.displayName
 
+    init {
+        // Watch for auth-expired signals from ApiClient. Any authed call
+        // that returns 401 means our token is stale — clear local auth so
+        // the UI shows the signed-out state and the user re-signs in.
+        client.onUnauthorized = { signOut() }
+    }
+
     suspend fun startSignIn(email: String) {
         val trimmed = email.trim().lowercase()
         try {
