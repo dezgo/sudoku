@@ -29,9 +29,9 @@ custom_domain = true
 [vars]
 EMAIL_FROM = "Sudoku <noreply@appfoundry.cc>"
 DAILY_TIMEZONE = "Australia/Sydney"
-IOS_CURRENT_VERSION = "1.1.2"
+IOS_CURRENT_VERSION = "1.1.3"
 IOS_MIN_REQUIRED_VERSION = "1.0.6"
-ANDROID_CURRENT_VERSION = "1.0.6"
+ANDROID_CURRENT_VERSION = "1.1.3"
 ANDROID_MIN_REQUIRED_VERSION = "1.0.6"
 
 # Secrets (do NOT put them here — they're set via `wrangler secret put`):
