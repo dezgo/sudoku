@@ -43,7 +43,12 @@ final class AuthStore: ObservableObject {
         NotificationCenter.default.addObserver(
             forName: .apiUnauthorized, object: nil, queue: .main
         ) { [weak self] _ in
-            self?.signOut()
+            // Observer block runs on the main queue (we passed .main), so
+            // it's safe to call MainActor-isolated signOut() from here —
+            // assumeIsolated tells Swift's concurrency checker that.
+            MainActor.assumeIsolated {
+                self?.signOut()
+            }
         }
     }
 
