@@ -42,16 +42,25 @@ fun NumberPadView(
         verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
         Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            // Mirror the board's matching-cell highlight on the pad: when
+            // the selected cell holds value `n`, light its pad button up
+            // so the player sees "this is the digit in focus" both on the
+            // grid and on the controls.
+            val selectedValue = state.selected?.let { state.cells[it.row][it.col].value }
             for (n in 1..9) {
                 val complete = Highlights.isComplete(state, n)
+                val isSelectedNumber = selectedValue == n
                 Box(
                     modifier = Modifier
                         .weight(1f)
                         .height(44.dp)
                         .clip(RoundedCornerShape(8.dp))
                         .background(
-                            if (complete) MaterialTheme.colorScheme.surface
-                            else MaterialTheme.colorScheme.surfaceVariant
+                            when {
+                                complete -> MaterialTheme.colorScheme.surface
+                                isSelectedNumber -> MaterialTheme.colorScheme.primary
+                                else -> MaterialTheme.colorScheme.surfaceVariant
+                            }
                         )
                         .clickable(enabled = !complete) { viewModel.enter(n) },
                     contentAlignment = Alignment.Center
@@ -61,7 +70,8 @@ fun NumberPadView(
                             text = "$n",
                             fontSize = 22.sp,
                             fontWeight = FontWeight.SemiBold,
-                            color = MaterialTheme.colorScheme.onSurface
+                            color = if (isSelectedNumber) MaterialTheme.colorScheme.onPrimary
+                            else MaterialTheme.colorScheme.onSurface
                         )
                     }
                 }

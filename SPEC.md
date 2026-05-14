@@ -183,6 +183,8 @@ A green seal-style icon is shown next to the puzzle title when the grid is fully
 
 A pad button is **disabled and visually hidden (slot preserved for layout)** once the digit has 9 valid placements on the board (i.e., the number is "complete"). When "Highlight mistakes" is on, conflicting placements don't count toward 9.
 
+When the selected cell holds a value, the pad button for that value is rendered with the **accent background** (same treatment as the Pencil-On toggle) — mirrors the board's matching-cell highlight so the player sees the "digit in focus" both on the grid and on the controls.
+
 **Mode toggle.** A button toggles between Normal and Pencil mode. Pencil mode adds/removes pencil marks instead of writing real values.
 
 **Erase / Undo button.** A single button that adapts:

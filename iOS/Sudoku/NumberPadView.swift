@@ -12,6 +12,14 @@ struct NumberPadView: View {
         VStack(spacing: 8) {
             HStack(spacing: 6) {
                 ForEach(1...9, id: \.self) { n in
+                    // Mirror the board's matching-cell highlight on the pad:
+                    // when the selected cell holds value `n`, light its pad
+                    // button up so the player sees "this is the digit in
+                    // focus" both on the grid and on the controls.
+                    let isSelectedNumber: Bool = {
+                        guard let sel = game.selected else { return false }
+                        return game.cells[sel.row][sel.col].value == n
+                    }()
                     Button {
                         game.enter(n)
                     } label: {
@@ -19,8 +27,8 @@ struct NumberPadView: View {
                             .font(.system(size: 22, weight: .semibold, design: .rounded))
                             .frame(maxWidth: .infinity)
                             .frame(height: 44)
-                            .background(Color(.secondarySystemBackground))
-                            .foregroundStyle(Color.primary)
+                            .background(isSelectedNumber ? Color.accentColor : Color(.secondarySystemBackground))
+                            .foregroundStyle(isSelectedNumber ? Color.white : Color.primary)
                             .clipShape(RoundedRectangle(cornerRadius: 8))
                     }
                     .buttonStyle(.plain)
