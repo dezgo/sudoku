@@ -32,30 +32,30 @@ import {
 } from './multiplayer';
 
 export default {
-  async fetch(req: Request, env: Env): Promise<Response> {
+  async fetch(req: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
     try {
-      return await route(req, env);
+      return await route(req, env, ctx);
     } catch (err) {
       console.error('unhandled error', err);
       return jsonError(500, 'internal_error');
     }
   },
 
-  async scheduled(_event: ScheduledController, env: Env): Promise<void> {
+  async scheduled(_event: ScheduledController, env: Env, ctx: ExecutionContext): Promise<void> {
     try {
       await ensureUpcomingDailies(env);
     } catch (err) {
       console.error('scheduled task: dailies failed', err);
     }
     try {
-      await processForfeits(env);
+      await processForfeits(env, ctx);
     } catch (err) {
       console.error('scheduled task: forfeits failed', err);
     }
   },
 };
 
-async function route(req: Request, env: Env): Promise<Response> {
+async function route(req: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
   const url = new URL(req.url);
   const { pathname: path } = url;
   const method = req.method;
@@ -128,7 +128,7 @@ async function route(req: Request, env: Env): Promise<Response> {
 
   // ---- Multiplayer (v3) ---------------------------------------------------
   if (path === '/v1/multiplayer/games' && method === 'POST') {
-    return createMultiplayerGame(req, env);
+    return createMultiplayerGame(req, env, ctx);
   }
   if (path === '/v1/multiplayer/join-by-code' && method === 'POST') {
     return joinMultiplayerByCode(req, env);
@@ -141,11 +141,11 @@ async function route(req: Request, env: Env): Promise<Response> {
   const mpDeclineMatch = path.match(/^\/v1\/multiplayer\/games\/([^/]+)\/decline$/);
   if (mpDeclineMatch && method === 'POST') return declineMultiplayerGame(req, env, mpDeclineMatch[1]!);
   const mpLeaveMatch = path.match(/^\/v1\/multiplayer\/games\/([^/]+)\/leave$/);
-  if (mpLeaveMatch && method === 'POST') return leaveMultiplayerGame(req, env, mpLeaveMatch[1]!);
+  if (mpLeaveMatch && method === 'POST') return leaveMultiplayerGame(req, env, ctx, mpLeaveMatch[1]!);
   const mpStartMatch = path.match(/^\/v1\/multiplayer\/games\/([^/]+)\/start$/);
-  if (mpStartMatch && method === 'POST') return startMultiplayerGame(req, env, mpStartMatch[1]!);
+  if (mpStartMatch && method === 'POST') return startMultiplayerGame(req, env, ctx, mpStartMatch[1]!);
   const mpMovesMatch = path.match(/^\/v1\/multiplayer\/games\/([^/]+)\/moves$/);
-  if (mpMovesMatch && method === 'POST') return postMultiplayerMove(req, env, mpMovesMatch[1]!);
+  if (mpMovesMatch && method === 'POST') return postMultiplayerMove(req, env, ctx, mpMovesMatch[1]!);
   const mpGameMatch = path.match(/^\/v1\/multiplayer\/games\/([^/]+)$/);
   if (mpGameMatch && method === 'GET') return getMultiplayerGame(req, env, mpGameMatch[1]!);
 

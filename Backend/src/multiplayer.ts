@@ -29,7 +29,7 @@ function newMultiplayerPuzzleId(): number {
 // POST /v1/multiplayer/games
 // ---------------------------------------------------------------------------
 
-export async function createMultiplayerGame(req: Request, env: Env): Promise<Response> {
+export async function createMultiplayerGame(req: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
   const auth = await requireAuth(req, env);
   if (auth instanceof Response) return auth;
 
@@ -143,16 +143,19 @@ export async function createMultiplayerGame(req: Request, env: Env): Promise<Res
   await env.DB.batch(stmts);
 
   // Push: invitees see "X invited you to a sudoku game".
-  // Fire-and-forget — don't fail the request if push fails.
+  // Hand to ctx.waitUntil so the response returns fast and the push
+  // still survives worker teardown.
   if (inviteeIds.length > 0) {
     const hostName = await displayNameOf(env, auth.user_id);
-    await Promise.all(
-      inviteeIds.map((uid) =>
-        sendPush(env, uid, {
-          title: 'New sudoku game',
-          body: `${hostName ?? 'A friend'} invited you to play.`,
-          data: { kind: 'mp_invite', game_id: gameId },
-        }).catch((e) => console.error('push failed', e)),
+    ctx.waitUntil(
+      Promise.all(
+        inviteeIds.map((uid) =>
+          sendPush(env, uid, {
+            title: 'New sudoku game',
+            body: `${hostName ?? 'A friend'} invited you to play.`,
+            data: { kind: 'mp_invite', game_id: gameId },
+          }).catch((e) => console.error('push failed', e)),
+        ),
       ),
     );
   }
@@ -366,6 +369,7 @@ export async function declineMultiplayerGame(
 export async function leaveMultiplayerGame(
   req: Request,
   env: Env,
+  ctx: ExecutionContext,
   gameId: string,
 ): Promise<Response> {
   const auth = await requireAuth(req, env);
@@ -389,7 +393,7 @@ export async function leaveMultiplayerGame(
 
   // If the leaver was the active player, immediately rotate.
   if (game.active_player_id === auth.user_id) {
-    await rotateActivePlayer(env, gameId);
+    await rotateActivePlayer(env, ctx, gameId);
   }
 
   // If only 1 joined player remains, abandon the game.
@@ -406,7 +410,7 @@ export async function leaveMultiplayerGame(
     )
       .bind(Date.now(), gameId)
       .run();
-    await broadcastGameEnd(env, gameId);
+    await broadcastGameEnd(env, ctx, gameId);
   }
 
   return new Response(null, { status: 204 });
@@ -419,6 +423,7 @@ export async function leaveMultiplayerGame(
 export async function startMultiplayerGame(
   req: Request,
   env: Env,
+  ctx: ExecutionContext,
   gameId: string,
 ): Promise<Response> {
   const auth = await requireAuth(req, env);
@@ -453,12 +458,15 @@ export async function startMultiplayerGame(
     .bind(firstPlayer, deadline, gameId)
     .run();
 
-  // Push the first player.
-  await sendPush(env, firstPlayer, {
-    title: "It's your turn",
-    body: "Place a digit to keep the game moving.",
-    data: { kind: 'mp_your_turn', game_id: gameId },
-  }).catch((e) => console.error('push failed', e));
+  // Push the first player. waitUntil so the response isn't gated on the
+  // push round-trip but the push still survives worker teardown.
+  ctx.waitUntil(
+    sendPush(env, firstPlayer, {
+      title: "It's your turn",
+      body: "Place a digit to keep the game moving.",
+      data: { kind: 'mp_your_turn', game_id: gameId },
+    }).catch((e) => console.error('push failed', e)),
+  );
 
   const refreshed = await loadGameRow(env, gameId);
   return jsonOk({ game: serializeGame(refreshed!, auth.user_id) });
@@ -471,6 +479,7 @@ export async function startMultiplayerGame(
 export async function postMultiplayerMove(
   req: Request,
   env: Env,
+  ctx: ExecutionContext,
   gameId: string,
 ): Promise<Response> {
   const auth = await requireAuth(req, env);
@@ -561,9 +570,9 @@ export async function postMultiplayerMove(
     )
       .bind(auth.user_id, now, gameId)
       .run();
-    await broadcastGameEnd(env, gameId);
+    await broadcastGameEnd(env, ctx, gameId);
   } else {
-    await rotateActivePlayer(env, gameId);
+    await rotateActivePlayer(env, ctx, gameId);
   }
 
   const refreshed = await loadGameRow(env, gameId);
@@ -671,7 +680,7 @@ export async function deletePushToken(req: Request, env: Env): Promise<Response>
 // Forfeit cron — invoked by index.ts scheduled handler each minute.
 // ---------------------------------------------------------------------------
 
-export async function processForfeits(env: Env): Promise<void> {
+export async function processForfeits(env: Env, ctx: ExecutionContext): Promise<void> {
   const now = Date.now();
   // Find active games whose deadline has passed (and isn't NULL — unlimited).
   const expired = await env.DB.prepare(
@@ -687,13 +696,16 @@ export async function processForfeits(env: Env): Promise<void> {
     )
       .bind(g.id, g.active_player_id, now)
       .run();
-    // Notify the forfeiter.
-    sendPush(env, g.active_player_id, {
-      title: 'Turn forfeited',
-      body: 'You ran out of time on a sudoku game.',
-      data: { kind: 'mp_forfeit', game_id: g.id },
-    }).catch((e) => console.error('push failed', e));
-    await rotateActivePlayer(env, g.id);
+    // Notify the forfeiter. waitUntil so the push survives even if this
+    // is the last game in the batch and the scheduled handler exits.
+    ctx.waitUntil(
+      sendPush(env, g.active_player_id, {
+        title: 'Turn forfeited',
+        body: 'You ran out of time on a sudoku game.',
+        data: { kind: 'mp_forfeit', game_id: g.id },
+      }).catch((e) => console.error('push failed', e)),
+    );
+    await rotateActivePlayer(env, ctx, g.id);
   }
 }
 
@@ -797,7 +809,7 @@ function boardIsFull(board: Grid): boolean {
   return true;
 }
 
-async function rotateActivePlayer(env: Env, gameId: string): Promise<void> {
+async function rotateActivePlayer(env: Env, ctx: ExecutionContext, gameId: string): Promise<void> {
   const game = await loadGameRow(env, gameId);
   if (!game) return;
   const players = await env.DB.prepare(
@@ -834,15 +846,19 @@ async function rotateActivePlayer(env: Env, gameId: string): Promise<void> {
   )
     .bind(next.user_id, deadline, gameId)
     .run();
-  // Push: it's the next player's turn.
-  sendPush(env, next.user_id, {
-    title: "It's your turn",
-    body: 'Place a digit to keep the sudoku going.',
-    data: { kind: 'mp_your_turn', game_id: gameId },
-  }).catch((e) => console.error('push failed', e));
+  // Push: it's the next player's turn. waitUntil keeps the push alive
+  // past the calling handler's return — otherwise the worker tears down
+  // mid-fetch and the next player never hears about their turn.
+  ctx.waitUntil(
+    sendPush(env, next.user_id, {
+      title: "It's your turn",
+      body: 'Place a digit to keep the sudoku going.',
+      data: { kind: 'mp_your_turn', game_id: gameId },
+    }).catch((e) => console.error('push failed', e)),
+  );
 }
 
-async function broadcastGameEnd(env: Env, gameId: string): Promise<void> {
+async function broadcastGameEnd(env: Env, ctx: ExecutionContext, gameId: string): Promise<void> {
   const players = await env.DB.prepare(
     `SELECT user_id FROM multiplayer_players WHERE game_id = ? AND status = 'joined'`,
   )
@@ -858,9 +874,11 @@ async function broadcastGameEnd(env: Env, gameId: string): Promise<void> {
       : 'The game was abandoned.',
     data: { kind: 'mp_game_end', game_id: gameId },
   };
-  await Promise.all(
-    (players.results ?? []).map((p) =>
-      sendPush(env, p.user_id, msg).catch((e) => console.error('push failed', e)),
+  ctx.waitUntil(
+    Promise.all(
+      (players.results ?? []).map((p) =>
+        sendPush(env, p.user_id, msg).catch((e) => console.error('push failed', e)),
+      ),
     ),
   );
 }
