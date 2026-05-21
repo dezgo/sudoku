@@ -200,6 +200,21 @@ class SudokuGameViewModel(
     // region User input
 
     fun select(row: Int, col: Int) {
+        // Speed mode shortcut: if there's a highlighted number (= the
+        // value of the currently selected cell) and the tapped cell is
+        // empty + editable, drop the digit in straight away. Otherwise
+        // fall through to normal selection.
+        run {
+            val s = _state.value ?: return@run
+            if (!s.speedMode || s.isPaused) return@run
+            val sel = s.selected ?: return@run
+            val highlighted = s.cells[sel.row][sel.col].value ?: return@run
+            val target = s.cells[row][col]
+            if (target.value != null || Highlights.isLocked(s, row, col)) return@run
+            _state.value = s.copy(selected = CellPos(row, col))
+            enterDirect(highlighted)
+            return
+        }
         _state.update { s ->
             if (s == null) return@update null
             // Tap-the-already-selected cell = deselect, giving the user an
@@ -227,6 +242,17 @@ class SudokuGameViewModel(
             return
         }
 
+        enterDirect(number)
+    }
+
+    /** Place / toggle `number` into the currently selected cell, with no
+     *  navigation or highlight detour. Shared between `enter()` (after the
+     *  navigate guard) and the speed-mode cell-tap shortcut in `select`,
+     *  which has already chosen the target. */
+    private fun enterDirect(number: Int) {
+        val s = _state.value ?: return
+        if (s.isPaused) return
+        val sel = s.selected ?: return
         if (Highlights.isLocked(s, sel.row, sel.col)) return
 
         val oldCell = s.cells[sel.row][sel.col]
@@ -395,6 +421,10 @@ class SudokuGameViewModel(
         }
     }
 
+    fun toggleSpeedMode() {
+        _state.update { s -> s?.copy(speedMode = !s.speedMode) }
+    }
+
     fun togglePause() {
         _state.update { it?.copy(isPaused = it.isPaused.not()) }
         wasAutoPaused = false
@@ -407,6 +437,7 @@ class SudokuGameViewModel(
             cells = buildCells(s.puzzle.givens),
             selected = null,
             mode = InputMode.NORMAL,
+            speedMode = false,
             elapsedSeconds = 0,
             mistakeCount = 0,
             hintsUsed = 0,

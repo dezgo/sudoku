@@ -187,6 +187,12 @@ When the selected cell holds a value, the pad button for that value is rendered 
 
 **Mode toggle.** A button toggles between Normal and Pencil mode. Pencil mode adds/removes pencil marks instead of writing real values.
 
+**Speed mode toggle.** A button next to the Pencil toggle. Speed mode adds **one rule** on top of normal behaviour:
+
+- When a cell holding a value is selected (so a number is "in focus" — its pad button is highlighted, same-value cells light up on the board), tapping an **empty editable cell** drops that number into it.
+
+Everything else is unchanged — the pad still works the same, highlighting still works the same, normal-mode cell selection still works the same. To start placing a digit that isn't yet on the board, the user falls back to the standard flow (tap empty cell, then tap a number on the pad); after that the digit is "in focus" and subsequent empty taps with Speed mode on rapid-fill it. Speed mode resets to off on new puzzle / reset / load.
+
 **Erase / Undo button.** A single button that adapts:
 
 - **Disabled** when there's nothing to clear in the selected cell, or the cell is locked (see §10).

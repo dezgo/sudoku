@@ -56,6 +56,23 @@ struct NumberPadView: View {
                 .buttonStyle(.plain)
 
                 Button {
+                    game.toggleSpeedMode()
+                } label: {
+                    let on = game.speedMode
+                    Label(
+                        on ? "Speed On" : "Speed Off",
+                        systemImage: on ? "bolt.circle.fill" : "bolt"
+                    )
+                    .font(.subheadline.weight(.semibold))
+                    .frame(maxWidth: .infinity)
+                    .frame(height: 40)
+                    .foregroundStyle(on ? Color.white : Color.primary)
+                    .background(on ? Color.accentColor : Color(.secondarySystemBackground))
+                    .clipShape(RoundedRectangle(cornerRadius: 8))
+                }
+                .buttonStyle(.plain)
+
+                Button {
                     game.clearSelected()
                 } label: {
                     Label(

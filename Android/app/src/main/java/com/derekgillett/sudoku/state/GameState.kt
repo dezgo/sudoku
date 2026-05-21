@@ -14,6 +14,11 @@ data class GameState(
     val cells: List<List<Cell>>,
     val selected: CellPos? = null,
     val mode: InputMode = InputMode.NORMAL,
+    /** Speed mode adds one rule: when a cell with a value is selected,
+     *  tapping an empty editable cell drops that value straight in (no
+     *  separate pad tap). Everything else — highlighting, pad behaviour,
+     *  normal mode — is unchanged. Per-session, resets like `mode`. */
+    val speedMode: Boolean = false,
     val elapsedSeconds: Int = 0,
     val mistakeCount: Int = 0,
     val hintsUsed: Int = 0,

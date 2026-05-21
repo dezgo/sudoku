@@ -21,6 +21,11 @@ final class SudokuGame: ObservableObject {
     @Published private(set) var cells: [[Cell]]
     @Published var selected: (row: Int, col: Int)?
     @Published var mode: InputMode = .normal
+    /// Speed mode adds one rule: when a cell with a value is selected,
+    /// tapping an empty editable cell drops that value straight in (no
+    /// separate pad tap). Everything else — highlighting, pad behaviour,
+    /// normal mode — is unchanged. Per-session, resets like `mode`.
+    @Published var speedMode: Bool = false
     @Published var highlightMistakes: Bool = true {
         didSet { if highlightMistakes { highlightMistakesEverOn = true } }
     }
@@ -217,6 +222,7 @@ final class SudokuGame: ObservableObject {
         }
         selected = nil
         mode = .normal
+        speedMode = false
         isPaused = false
         lastPlacementInfo = nil
     }
@@ -266,6 +272,21 @@ final class SudokuGame: ObservableObject {
     // MARK: - Selection
 
     func select(row: Int, col: Int) {
+        // Speed mode shortcut: if there's a highlighted number (= the
+        // value of the currently selected cell) and the tapped cell is
+        // empty + editable, drop the digit in straight away. Filled or
+        // locked cells, and the "no highlighted number" case, fall
+        // through to the normal selection behaviour below.
+        if speedMode, !isPaused,
+           let sel = selected,
+           let highlighted = cells[sel.row][sel.col].value {
+            let cell = cells[row][col]
+            if cell.value == nil && !isLocked(row: row, col: col) {
+                selected = (row, col)
+                enterDirect(highlighted)
+                return
+            }
+        }
         // Tap-the-already-selected cell = deselect — gives the user an easy
         // "show me the board with no highlights" gesture.
         if let sel = selected, sel.row == row && sel.col == col {
@@ -334,6 +355,14 @@ final class SudokuGame: ObservableObject {
             return
         }
 
+        enterDirect(number)
+    }
+
+    /// Place / toggle `number` into the currently selected cell, with no
+    /// navigation or highlight detour. Shared between the standard `enter()`
+    /// path (after the navigate guard) and the speed-mode cell-tap shortcut
+    /// in `select`, which has already chosen the target.
+    private func enterDirect(_ number: Int) {
         guard let sel = selected else { return }
         guard !isLocked(row: sel.row, col: sel.col) else { return }
         var cell = cells[sel.row][sel.col]
@@ -516,6 +545,10 @@ final class SudokuGame: ObservableObject {
         mode = (mode == .normal) ? .pencil : .normal
     }
 
+    func toggleSpeedMode() {
+        speedMode.toggle()
+    }
+
     // MARK: - Tutor
 
     /// Returns the easiest applicable hint for the current state, or nil if
@@ -633,6 +666,7 @@ final class SudokuGame: ObservableObject {
         cells = SudokuGame.buildCells(from: puzzle.givens)
         selected = nil
         mode = .normal
+        speedMode = false
         mistakeCount = 0
         hintsUsed = 0
         pencilAssistsUsed = 0
