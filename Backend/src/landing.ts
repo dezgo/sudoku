@@ -1,5 +1,6 @@
 /**
- * Public landing page served at https://sudoku.appfoundry.cc/.
+ * Public landing page served at https://sudokucrew.com/ and
+ * https://sudoku.appfoundry.cc/ — same Worker, both hostnames.
  *
  * Replaces the bare "sudoku-api ok" healthcheck so the URL listed on the
  * app's store pages doesn't look like an unfinished server. The
@@ -183,7 +184,7 @@ const LANDING_HTML = `<!DOCTYPE html>
       <p>
         <a href="/privacy">Privacy</a> ·
         <a href="/delete-account">Delete account</a> ·
-        <a href="mailto:sudoku@appfoundry.cc">sudoku@appfoundry.cc</a>
+        <a href="mailto:hello@sudokucrew.com">hello@sudokucrew.com</a>
       </p>
     </div>
   </div>

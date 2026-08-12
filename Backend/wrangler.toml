@@ -11,6 +11,20 @@ compatibility_date = "2026-04-29"
 pattern = "sudoku.appfoundry.cc"
 custom_domain = true
 
+# Same Worker, second hostname. sudokucrew.com is the app's own domain (it
+# already sends the OTP mail), so the landing page lives there too. The page
+# uses relative links throughout, so it needs no per-host handling.
+#
+# Binding this does NOT disturb email: a Custom Domain adds a proxied
+# A/AAAA record on the root, while Cloudflare Email Routing's catchall and
+# Resend's records are MX/TXT — different record types, they coexist.
+#
+# Note this exposes /v1/* on both hostnames. Harmless (same Worker, same
+# D1, same auth), and the clients still call sudoku.appfoundry.cc.
+[[routes]]
+pattern = "sudokucrew.com"
+custom_domain = true
+
 # Plain (non-secret) vars. Email-from address and the timezone used to derive
 # "today's" puzzle date. Plus per-platform version pins for the in-app
 # update prompt — clients fetch /v1/version on launch and surface a banner

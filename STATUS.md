@@ -92,6 +92,10 @@ For a fresh Claude session, read in this order:
 3. **`iOS/STATUS.md`** or **`Android/README.md`** — implementation maps for whichever side you're touching.
 4. **`Backend/README.md`** — deploy + first-time setup.
 5. **Auto-memory** at `C:\Users\Derek\.claude\projects\C--Users-Derek-Documents-Coding-Python-Scripts-sudoku\memory\` — persistent decisions, dual-platform workflow rule, user preferences. Indexed by `MEMORY.md` in the same folder, loaded automatically.
+6. **`docs/TODO.md`** — outstanding work and recurring maintenance. The single place to look for "what's next".
+7. **`docs/logs/YYYY-MM-DD.md`** — per-session logs (changes, testing, decisions, discoveries). Start with the most recent.
+
+See [`MEMORY.md`](MEMORY.md) at the repo root for how these three stores fit together.
 
 Two rules that always apply:
 - **Dual-platform mirror.** Any behavioural change to one app must be reflected in the other *and* in `SPEC.md`, in the same response. See `dual-platform-mirror.md` in memory.

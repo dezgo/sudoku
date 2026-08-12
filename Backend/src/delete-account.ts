@@ -67,7 +67,7 @@ const PAGE_HTML = `<!DOCTYPE html>
   <h2>How to request deletion</h2>
   <p>
     Email
-    <a href="mailto:sudoku@appfoundry.cc?subject=Delete%20my%20account">sudoku@appfoundry.cc</a>
+    <a href="mailto:hello@sudokucrew.com?subject=Delete%20my%20account">hello@sudokucrew.com</a>
     from the address you signed up with, and include the subject line:
   </p>
   <p><code>Delete my account</code></p>
@@ -82,7 +82,7 @@ const PAGE_HTML = `<!DOCTYPE html>
   <h2>Questions</h2>
   <p>
     Anything else, send a note to
-    <a href="mailto:sudoku@appfoundry.cc">sudoku@appfoundry.cc</a>.
+    <a href="mailto:hello@sudokucrew.com">hello@sudokucrew.com</a>.
     See also the
     <a href="/privacy">privacy policy</a> for what data we collect and how
     we use it.

@@ -145,7 +145,7 @@ const POLICY_HTML = `<!DOCTYPE html>
   <h2>Contact</h2>
   <p>
     Questions, deletion requests, or anything privacy-related:
-    <a href="mailto:sudoku@appfoundry.cc">sudoku@appfoundry.cc</a>.
+    <a href="mailto:hello@sudokucrew.com">hello@sudokucrew.com</a>.
   </p>
 </body>
 </html>
