@@ -18,7 +18,7 @@ Two platforms (iOS + Android) targeting the same behavioural contract in [`SPEC.
 ### What works
 - **iOS** networking + sign-in / group-onboarding sheets shipped. Daily fetched from server with offline-fallback to local generator (marked unranked). Token in Keychain. Groups + daily + pending-scores caches in UserDefaults. Foreground refresh keeps groups in sync. Score POSTed on canonical-daily solves; offline solves queued and flushed on launch / sign-in. Leaderboard sheet (top 10 + own row pinned, group picker for 2+ groups) reachable from Home and from the Solved fanfare.
 - **Android** networking + sign-in / group-onboarding sheets shipped. Same offline-fallback model. Token in EncryptedSharedPreferences. Groups + daily + pending-scores caches in DataStore. Lifecycle observer refreshes daily + groups on `ON_RESUME` / `ON_START`. Same Phase 2 wiring as iOS (post on solve, queue + flush, leaderboard sheet).
-- **Backend** deployed at `sudoku.appfoundry.cc`. All Phase 1 + Phase 2 endpoints live (auth start/verify, me get/put + groups, groups create/join/members/leave, daily today + by-id, **scores POST**, **groups/:id/scores/:puzzle_id**). Hourly cron pre-generates today + tomorrow's puzzle so user-facing requests just read from D1. Resend domain verified. `/v1/me/groups` returns `invite_code` per group. Score POST is idempotent via composite PK `(user_id, puzzle_id)` so the offline-queue retry is safe.
+- **Backend** deployed at `sudoku.appfoundry.cc`. All Phase 1 + Phase 2 endpoints live (auth start/verify, me get/put + groups, groups create/join/members/leave, daily today + by-id, **scores POST**, **groups/:id/scores/:puzzle_id**). Hourly cron pre-generates today + tomorrow's puzzle so user-facing requests just read from D1. Resend sending domain (`sudokucrew.com`) verified. `/v1/me/groups` returns `invite_code` per group. Score POST is idempotent via composite PK `(user_id, puzzle_id)` so the offline-queue retry is safe.
 
 ### What's NOT yet implemented (so a future Claude doesn't go looking)
 - Username field on users; invite-by-username; invite-by-email; pending-invites UI (Phase 2.5).
@@ -67,13 +67,14 @@ Phase 2 backend is deployed; the apps are not yet running the new code:
 - **Pending-score migration**: anonymous solves get posted on first authenticated request after sign-in.
 - **Token storage**: Keychain (iOS) / EncryptedSharedPreferences (Android). `androidx.security:security-crypto:1.1.0-alpha06` (alpha; current best option).
 - **Realtime stack** (when added): Cloudflare Durable Objects + WebSockets. Same account, no new infra.
-- **Distribution channels**: TestFlight (iOS), Play internal-test (Android). Not public app store.
+- **Distribution channels**: public on both stores — App Store (`id6764829511`) and Play Store (`com.derekgillett.sudoku`). Store URLs are served by `/v1/version` for the in-app update prompt; see `RELEASING.md`.
 
 ## Operational notes
 
 - **Backend URL**: `https://sudoku.appfoundry.cc/v1`. Worker name `sudoku-api`. Custom-domain bound via `wrangler.toml` `routes` with `custom_domain = true`.
 - **D1 database**: name `sudoku`. Schema in `Backend/migrations/0001_init.sql` (7 tables: `users`, `auth_codes`, `auth_tokens`, `daily_puzzles`, `groups`, `group_members`, `scores`).
-- **Resend domain**: `appfoundry.cc`, sender `noreply@appfoundry.cc`. SPF/DKIM/DMARC records added in Cloudflare DNS for the zone.
+- **Resend domain**: `sudokucrew.com`, sender `noreply@sudokucrew.com`, on a Resend account dedicated to this app. DKIM/SPF/MX (from Resend) plus a `_dmarc` TXT record added in the `sudokucrew.com` Cloudflare zone.
+- **Do not send mail from `appfoundry.cc`.** Gmail hard-blocked it on 2026-08-12 (`550-5.7.1 ... very low reputation of the sending domain`), bouncing every Google-hosted recipient while non-Google providers still delivered. That silently broke account creation for all new users on Gmail; existing users were unaffected because their token is cached in the Keychain and they never re-authenticate. Most likely burned by sharing the domain with Markd's public-signup verification mail. `EMAIL_FROM` and `RESEND_API_KEY` belong to the same dedicated account and must always change together. The API stays on `appfoundry.cc` — the reputation problem is outbound mail only.
 - **Cron**: hourly `0 * * * *`, idempotent — ensures today + tomorrow's daily puzzles exist in D1.
 - **Recover an invite code from D1** (until the in-app display ships):
   ```bash
@@ -90,8 +91,8 @@ For a fresh Claude session, read in this order:
 2. **`STATUS.md`** (this file) — what exists, what's pending, what's been decided.
 3. **`iOS/STATUS.md`** or **`Android/README.md`** — implementation maps for whichever side you're touching.
 4. **`Backend/README.md`** — deploy + first-time setup.
-5. **Auto-memory** at `~/.claude/projects/-Users-derek-Projects-Sudoku/memory/` — persistent decisions, dual-platform workflow rule, user preferences. Loaded automatically.
+5. **Auto-memory** at `C:\Users\Derek\.claude\projects\C--Users-Derek-Documents-Coding-Python-Scripts-sudoku\memory\` — persistent decisions, dual-platform workflow rule, user preferences. Indexed by `MEMORY.md` in the same folder, loaded automatically.
 
 Two rules that always apply:
-- **Dual-platform mirror.** Any behavioural change to one app must be reflected in the other *and* in `SPEC.md`, in the same response. See `feedback_dual_platform_workflow.md` in memory.
-- **Personal email default for personal projects.** Don't auto-fill the user's work email (`derek@watsonblinds.com.au`) into test commands or sign-up flows; ask or use a placeholder. See `feedback_personal_email.md` in memory.
+- **Dual-platform mirror.** Any behavioural change to one app must be reflected in the other *and* in `SPEC.md`, in the same response. See `dual-platform-mirror.md` in memory.
+- **Personal email default for personal projects.** Never put the work email (`derek@watsonblinds.com.au`) into test commands, sign-up flows, config, or DNS records — several of those are publishing actions. Prefer an address on the project's own domain (`*@sudokucrew.com` has a catchall), then `derekgg@gmail.com`, then ask. See `personal-email-for-personal-projects.md` in memory.

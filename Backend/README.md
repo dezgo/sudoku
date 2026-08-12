@@ -8,8 +8,8 @@ Behavioural contract: [`../SPEC.md` §17](../SPEC.md). The Worker is the source 
 
 - **Cloudflare Workers** (TypeScript) — HTTP entry + hourly cron.
 - **Cloudflare D1** (SQLite) — `users`, `auth_codes`, `auth_tokens`, `daily_puzzles`, `groups`, `group_members`, `scores`.
-- **Resend** — OTP email delivery from `noreply@appfoundry.cc`.
-- **Custom domain**: `sudoku.appfoundry.cc`.
+- **Resend** — OTP email delivery from `noreply@sudokucrew.com`, on a Resend account dedicated to this app.
+- **Custom domain**: `sudoku.appfoundry.cc` (API only — the mail domain is deliberately separate, see "Sending domain" below).
 
 ## Layout
 
@@ -35,7 +35,7 @@ Backend/
 
 ## First-time setup
 
-These steps assume you have a Cloudflare account, the `appfoundry.cc` zone in that account, and Node 18+ locally.
+These steps assume you have a Cloudflare account with both the `appfoundry.cc` zone (hosts the API) and the `sudokucrew.com` zone (sends the mail) in it, plus Node 18+ locally.
 
 1. **Install dependencies.**
    ```
@@ -61,7 +61,29 @@ These steps assume you have a Cloudflare account, the `appfoundry.cc` zone in th
    ```
    Paste the key when prompted.
 
-5. **Verify the `noreply@appfoundry.cc` sender domain in Resend.** Add the SPF / DKIM / DMARC records Resend gives you to the `appfoundry.cc` zone in Cloudflare. Without these, the OTP email will be rejected by most inboxes.
+5. **Verify the `sudokucrew.com` sender domain in Resend.** Add the DKIM / SPF / MX records Resend gives you to the `sudokucrew.com` zone in Cloudflare, plus a DMARC record of your own at `_dmarc`:
+
+   ```
+   v=DMARC1; p=none; rua=mailto:dmarc@sudokucrew.com
+   ```
+
+   The `rua=` address must be **on the same domain** — DMARC's external-destination rule (RFC 7489 §7.1) requires the receiving domain to publish an authorisation record otherwise, which you can't do for e.g. a gmail.com address, so reports would silently never arrive. A catchall on `*@sudokucrew.com` forwards it wherever you want.
+
+   Resend's MX record goes on the `send.` subdomain, so it coexists fine with Cloudflare Email Routing's MX on the root.
+
+   ### Sending domain
+
+   **Do not move mail back to `appfoundry.cc`.** On 2026-08-12 Gmail began hard-blocking that domain outright:
+
+   ```
+   550-5.7.1 ... very low reputation of the sending domain
+   ```
+
+   Every Google-hosted recipient bounced while non-Google providers (iiNet, SBCGlobal) still delivered, which silently broke account creation for all new users on Gmail. Existing users were unaffected — their bearer token is cached in the Keychain and they never re-authenticate — so it went unnoticed for months and presented as "some people can't sign up".
+
+   The cause was almost certainly domain sharing: the same Resend account sent verification mail for a public-signup app (Markd) from the same root domain, and those bounces burned it for every app on it. Hence: **one sending domain per app, one Resend account per app.** Reputation recovers over weeks of clean sending, if at all.
+
+   Note that `EMAIL_FROM` and `RESEND_API_KEY` now belong to the same dedicated account and **must be changed together** — a mismatch means the account has no matching verified domain, Resend rejects the send, and the Worker returns 500.
 
 6. **Deploy.**
    ```

@@ -262,7 +262,7 @@ These are settled. Building from these defaults:
 6. **Hints / auto-pencil / tutor**: all disabled in multiplayer. The pad shows only digits 1-9 + erase. The strategy IS the assist. (As Derek noted: "surely someone will work out a cell" — which is the point.)
 7. **Push provider**: native APNs + FCM via JWT from Workers. Service-account JSON + APNs `.p8` stored as Worker secrets.
 8. **Rematch**: completed game's results sheet offers "Rematch" button → creates a new game with the same players + same difficulty + same turn duration. Players each accept individually.
-9. **Public-link invites**: supported. `POST /multiplayer/games` returns an `invite_code`; `play.appfoundry.cc/m/<code>` deep-links into the app's join flow. Coexists with direct user invites.
+9. **Public-link invites**: supported. `POST /multiplayer/games` returns an `invite_code`; `sudoku.appfoundry.cc/m/<code>` deep-links into the app's join flow. Coexists with direct user invites.
 10. **Game-end push**: when status flips to `completed` or `abandoned`, push fires to every joined player with the result summary.
 
 ---

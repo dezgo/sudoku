@@ -498,8 +498,9 @@ The social layer of the app. Implemented as a Cloudflare Workers backend (D1 + R
 
 - **Runtime**: Cloudflare Workers (TypeScript).
 - **Database**: Cloudflare D1 (SQLite).
-- **Email delivery**: Resend, sending from `noreply@appfoundry.cc`.
-- **Domain**: `sudoku.appfoundry.cc`, configured in the user's existing `appfoundry.cc` Cloudflare zone.
+- **Email delivery**: Resend, sending from `noreply@sudokucrew.com`, on a Resend account dedicated to this app.
+- **API domain**: `sudoku.appfoundry.cc`, in the existing `appfoundry.cc` Cloudflare zone. Hardcoded in both shipped clients, so it must not move.
+- **Mail domain**: `sudokucrew.com`, a separate zone. Kept apart from the API domain deliberately — `appfoundry.cc` was blocked by Gmail on sender reputation in Aug 2026 (see `Backend/README.md` → "Sending domain"). One sending domain per app.
 - **Tier**: free across the board; usage at this scale (a small group of friends) is well inside every free quota.
 
 ### 17.2 Identity
