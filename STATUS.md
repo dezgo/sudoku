@@ -98,5 +98,5 @@ For a fresh Claude session, read in this order:
 See [`MEMORY.md`](MEMORY.md) at the repo root for how these three stores fit together.
 
 Two rules that always apply:
-- **Dual-platform mirror.** Any behavioural change to one app must be reflected in the other *and* in `SPEC.md`, in the same response. See `dual-platform-mirror.md` in memory.
-- **Personal email default for personal projects.** Never put the work email (`derek@watsonblinds.com.au`) into test commands, sign-up flows, config, or DNS records — several of those are publishing actions. Prefer an address on the project's own domain (`*@sudokucrew.com` has a catchall), then `derekgg@gmail.com`, then ask. See `personal-email-for-personal-projects.md` in memory.
+- **Dual-platform mirror.** Any behavioural change to one app must be reflected in the other *and* in `SPEC.md`, in the same response. See `feedback_dual_platform_workflow.md` in memory.
+- **Personal email default for personal projects.** Never put the work email (`derek@watsonblinds.com.au`) into test commands, sign-up flows, config, or DNS records — several of those are publishing actions. Prefer an address on the project's own domain (`*@sudokucrew.com` has a catchall), then `derekgg@gmail.com`, then ask. See `feedback_personal_email.md` in memory.
