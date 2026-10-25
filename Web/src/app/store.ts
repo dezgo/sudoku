@@ -87,6 +87,8 @@ class Store {
   autoPencilPending = false;
   tutor: { hint: TutorHint | null; step: number } | null = null;
   toast: string | null = null;
+  /** A newer build is live (see updates.ts). */
+  updateReady = false;
 
   private listeners = new Set<Listener>();
   private timer: number | null = null;

@@ -1,6 +1,7 @@
 import { useEffect } from 'preact/hooks';
 import { store, useStore, type Sheet } from './store';
 import { warmBuffers } from './puzzles';
+import { applyUpdate, startUpdateChecks } from './updates';
 import { api } from '../lib/api';
 import { Home } from '../ui/Home';
 import { Play } from '../ui/Play';
@@ -66,6 +67,7 @@ export function App() {
   useEffect(() => {
     void s.launch();
     warmBuffers();
+    startUpdateChecks();
     handleJoinLink();
   }, []);
 
@@ -78,6 +80,14 @@ export function App() {
 
   return (
     <>
+      {s.updateReady && (
+        <div class="update-bar" role="status">
+          <span>A new version of Sudoku Crew is ready.</span>
+          <button class="btn compact primary" onClick={applyUpdate}>
+            Update
+          </button>
+        </div>
+      )}
       {s.phase === 'playing' && s.game ? <Play /> : <Home />}
       {s.sheets.map(renderSheet)}
       {s.loadingPuzzle && (
