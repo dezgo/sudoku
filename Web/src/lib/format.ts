@@ -20,6 +20,13 @@ export function dateFromDailyId(id: number): Date {
   return new Date(Math.floor(id / 10000), (Math.floor(id / 100) % 100) - 1, id % 100);
 }
 
+/** The daily id `n` days after (or before, if negative) `id`. */
+export function addDays(id: number, n: number): number {
+  const d = dateFromDailyId(id);
+  d.setDate(d.getDate() + n);
+  return dailyIdFor(d);
+}
+
 export function shortDate(d: Date): string {
   return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
 }

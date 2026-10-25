@@ -2,10 +2,10 @@
 
 import { useEffect, useRef, useState } from 'preact/hooks';
 import { useStore } from '../app/store';
-import { ApiError, api, type GroupListItem, type GroupMember, type LeaderboardEntry } from '../lib/api';
-import { dateFromDailyId, displayLabel, formatTime, shortDate } from '../lib/format';
+import { ApiError, api, type GroupListItem, type GroupMember, type LeaderboardEntry, type StandingsEntry } from '../lib/api';
+import { addDays, dateFromDailyId, formatTime, shortDate, weekdayDate } from '../lib/format';
 import type { Appearance } from '../lib/storage';
-import { isCatchUp } from '../lib/streaks';
+import { FIRST_DAILY_ID, isCatchUp } from '../lib/streaks';
 import { Icon } from './icons';
 import { Segmented, Sheet, shareText, Toggle } from './Sheet';
 
@@ -584,30 +584,54 @@ function Badges({ e }: { e: LeaderboardEntry }) {
   );
 }
 
+type Period = 'day' | 'week' | 'month' | 'all';
+
+const PERIODS: { value: Period; label: string }[] = [
+  { value: 'day', label: 'Day' },
+  { value: 'week', label: 'Week' },
+  { value: 'month', label: 'Month' },
+  { value: 'all', label: 'All time' },
+];
+
+/** First daily of the period that contains `today` (weeks start Monday). */
+function periodStart(period: Exclude<Period, 'day'>, today: number): number {
+  if (period === 'all') return FIRST_DAILY_ID;
+  if (period === 'month') return Math.max(FIRST_DAILY_ID, Math.floor(today / 100) * 100 + 1);
+  const weekday = (dateFromDailyId(today).getDay() + 6) % 7; // Mon = 0
+  return Math.max(FIRST_DAILY_ID, addDays(today, -weekday));
+}
+
 export function LeaderboardSheet({ puzzleId }: { puzzleId: number }) {
   const s = useStore();
   const [groupId, setGroupId] = useState<string | null>(s.groups[0]?.group.id ?? null);
+  const [period, setPeriod] = useState<Period>('day');
+  const [day, setDay] = useState(puzzleId);
   const [rows, setRows] = useState<LeaderboardEntry[] | null>(null);
+  const [standings, setStandings] = useState<StandingsEntry[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [legend, setLegend] = useState(false);
   const [open, setOpen] = useState<number | null>(null);
-  const label = displayLabel({ id: puzzleId, difficulty: 'medium' });
+  const today = s.todayId;
+  const from = period === 'day' ? day : periodStart(period, today);
 
   const load = () => {
     if (!s.token || !groupId) return;
     setRows(null);
+    setStandings(null);
     setError(null);
-    api
-      .groupScores(s.token, groupId, puzzleId)
-      .then(setRows)
-      .catch((e) => setError(errorCopy(e, "Couldn't load leaderboard.")));
+    setOpen(null);
+    const req =
+      period === 'day'
+        ? api.groupScores(s.token, groupId, day).then(setRows)
+        : api.groupStandings(s.token, groupId, from, today).then(setStandings);
+    req.catch((e) => setError(errorCopy(e, "Couldn't load leaderboard.")));
   };
-  useEffect(load, [groupId, puzzleId, s.token]);
+  useEffect(load, [groupId, period, day, s.token]);
 
   const myName = s.identity?.user.display_name;
   const isMe = (e: LeaderboardEntry) => !!myName && e.display_name === myName;
   const mine = rows?.find(isMe);
-  const myMistakes = s.resultFor(puzzleId)?.mistakes;
+  const myMistakes = s.resultFor(day)?.mistakes;
 
   const body = () => {
     if (!s.identity)
@@ -643,6 +667,7 @@ export function LeaderboardSheet({ puzzleId }: { puzzleId: number }) {
           </button>
         </div>
       );
+    if (period !== 'day') return standingsBody();
     if (!rows) return <div class="spinner" />;
     if (!rows.length)
       return (
@@ -650,7 +675,7 @@ export function LeaderboardSheet({ puzzleId }: { puzzleId: number }) {
           <p>
             <b>No one's solved this daily yet.</b>
           </p>
-          <p>Be the first.</p>
+          {day === today && <p>Be the first.</p>}
         </div>
       );
     const top = rows.slice(0, TOP_N);
@@ -665,7 +690,7 @@ export function LeaderboardSheet({ puzzleId }: { puzzleId: number }) {
             <span style={{ minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
               {e.display_name ?? 'Unnamed'}
               <Badges e={e} />
-              {isCatchUp(puzzleId, e.completed_at) && (
+              {isCatchUp(day, e.completed_at) && (
                 <span class="badge-offline" style={{ marginLeft: 6 }} title="Solved after the day ended">
                   caught up
                 </span>
@@ -699,9 +724,71 @@ export function LeaderboardSheet({ puzzleId }: { puzzleId: number }) {
     );
   };
 
+  const standingsBody = () => {
+    if (!standings) return <div class="spinner" />;
+    if (!standings.length)
+      return (
+        <div class="empty">
+          <p>
+            <b>No dailies solved in this stretch yet.</b>
+          </p>
+        </div>
+      );
+    return (
+      <div class="group">
+        {standings.map((e) => {
+          const expanded = open === e.rank;
+          const me = !!myName && e.display_name === myName;
+          return (
+            <div key={e.rank}>
+              <button class={`row lb-row${me ? ' me' : ''}`} onClick={() => setOpen(expanded ? null : e.rank)}>
+                <span class="lb-rank">{e.rank}</span>
+                <span style={{ minWidth: 0 }}>
+                  <div style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    {e.display_name ?? 'Unnamed'}
+                  </div>
+                  <div class="muted small">
+                    {e.played} played
+                  </div>
+                </span>
+                <span class="lb-time">
+                  {e.wins} {e.wins === 1 ? 'win' : 'wins'}
+                </span>
+              </button>
+              {expanded && (
+                <div class="row" style={{ display: 'block', fontSize: '0.88rem' }}>
+                  <div class="muted">
+                    Average {formatTime(e.average_seconds)} · Best {formatTime(e.best_seconds)}
+                  </div>
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    );
+  };
+
+  const dayStepper = (
+    <div class="lb-stepper">
+      <button
+        class="icon-btn"
+        aria-label="Previous day"
+        disabled={day <= FIRST_DAILY_ID}
+        onClick={() => setDay(addDays(day, -1))}
+      >
+        <Icon name="chevronLeft" size={22} />
+      </button>
+      <span>{day === today ? 'Today' : weekdayDate(dateFromDailyId(day))}</span>
+      <button class="icon-btn" aria-label="Next day" disabled={day >= today} onClick={() => setDay(addDays(day, 1))}>
+        <Icon name="chevronRight" size={22} />
+      </button>
+    </div>
+  );
+
   return (
     <Sheet
-      title={`Leaderboard · ${label.replace('Daily · ', '')}`}
+      title="Leaderboard"
       left={
         <button class="icon-btn" aria-label="Badge legend" onClick={() => setLegend(!legend)}>
           <Icon name="info" size={20} />
@@ -746,8 +833,16 @@ export function LeaderboardSheet({ puzzleId }: { puzzleId: number }) {
           />
         </div>
       )}
+      <div style={{ marginBottom: 12 }}>
+        <Segmented options={PERIODS} value={period} onChange={setPeriod} />
+      </div>
+      {period === 'day' && dayStepper}
       {body()}
-      <p class="footnote center">{shortDate(dateFromDailyId(puzzleId))} daily</p>
+      <p class="footnote center">
+        {period === 'day'
+          ? `${shortDate(dateFromDailyId(day))} daily`
+          : `${shortDate(dateFromDailyId(from))} – today · a win is the fastest time in the group that day. Tap a player for their average.`}
+      </p>
     </Sheet>
   );
 }

@@ -9,7 +9,7 @@ import {
   leaveGroup,
 } from './groups';
 import { ensureUpcomingDailies, getDailyByPuzzleId, getDailyToday } from './daily';
-import { getGroupScores, postScore } from './scores';
+import { getGroupScores, getGroupStandings, postScore } from './scores';
 import { getPrivacyPolicy } from './privacy';
 import { getDeleteAccountPage } from './delete-account';
 import { getLandingPage } from './landing';
@@ -124,6 +124,18 @@ async function route(req: Request, env: Env, ctx: ExecutionContext): Promise<Res
   const groupScoresMatch = path.match(/^\/v1\/groups\/([^/]+)\/scores\/(\d+)$/);
   if (groupScoresMatch && method === 'GET') {
     return getGroupScores(req, env, groupScoresMatch[1]!, parseInt(groupScoresMatch[2]!, 10));
+  }
+
+  const standingsMatch = path.match(/^\/v1\/groups\/([^/]+)\/standings$/);
+  if (standingsMatch && method === 'GET') {
+    const q = url.searchParams;
+    return getGroupStandings(
+      req,
+      env,
+      standingsMatch[1]!,
+      parseInt(q.get('from') ?? '', 10),
+      parseInt(q.get('to') ?? '', 10),
+    );
   }
 
   // ---- Multiplayer (v3) ---------------------------------------------------

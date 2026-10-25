@@ -168,3 +168,75 @@ export async function getGroupScores(
   }));
   return jsonOk(rows);
 }
+
+/**
+ * Standings over a range of dailies (`from`..`to`, both YYYYMMDD inclusive):
+ * per player, how many they played, how many they won (fastest in the group
+ * that day, same penalised ordering as the day leaderboard), and their
+ * average and best effective time. Late catch-up solves count like any other.
+ */
+export async function getGroupStandings(
+  req: Request,
+  env: Env,
+  groupId: string,
+  from: number,
+  to: number,
+): Promise<Response> {
+  const auth = await requireAuth(req, env);
+  if (auth instanceof Response) return auth;
+  if (!Number.isInteger(from) || !Number.isInteger(to) || from > to) return jsonError(400, 'invalid_range');
+
+  const member = await env.DB.prepare(
+    'SELECT 1 FROM group_members WHERE group_id = ? AND user_id = ?',
+  )
+    .bind(groupId, auth.user_id)
+    .first();
+  if (!member) return jsonError(403, 'not_a_member');
+
+  const result = await env.DB.prepare(
+    `SELECT s.user_id, u.display_name, s.puzzle_id,
+            s.elapsed_seconds * (10 + MIN(s.mistakes, 5)) AS penalised_x10
+       FROM scores s
+       JOIN group_members gm ON gm.user_id = s.user_id
+       JOIN users u ON u.id = s.user_id
+      WHERE gm.group_id = ? AND s.puzzle_id BETWEEN ? AND ?
+      ORDER BY s.puzzle_id, penalised_x10 ASC, s.completed_at ASC`,
+  )
+    .bind(groupId, from, to)
+    .all<{ user_id: string; display_name: string | null; puzzle_id: number; penalised_x10: number }>();
+
+  const players = new Map<
+    string,
+    { display_name: string | null; played: number; wins: number; total_x10: number; best_x10: number }
+  >();
+  let lastPuzzle = -1;
+  for (const r of result.results ?? []) {
+    const p = players.get(r.user_id) ?? {
+      display_name: r.display_name,
+      played: 0,
+      wins: 0,
+      total_x10: 0,
+      best_x10: Infinity,
+    };
+    p.played++;
+    p.total_x10 += r.penalised_x10;
+    p.best_x10 = Math.min(p.best_x10, r.penalised_x10);
+    // Rows arrive fastest-first within each puzzle, so the first row of a new
+    // puzzle is that day's winner.
+    if (r.puzzle_id !== lastPuzzle) p.wins++;
+    lastPuzzle = r.puzzle_id;
+    players.set(r.user_id, p);
+  }
+
+  const rows = [...players.values()]
+    .map((p) => ({
+      display_name: p.display_name,
+      played: p.played,
+      wins: p.wins,
+      average_seconds: Math.round(p.total_x10 / p.played / 10),
+      best_seconds: Math.round(p.best_x10 / 10),
+    }))
+    .sort((a, b) => b.wins - a.wins || b.played - a.played || a.average_seconds - b.average_seconds)
+    .map((p, i) => ({ ...p, rank: i + 1 }));
+  return jsonOk(rows);
+}

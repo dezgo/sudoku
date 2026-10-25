@@ -67,6 +67,14 @@ export interface LeaderboardEntry {
   highlight_rules_was_on: boolean;
   flawless: boolean;
 }
+export interface StandingsEntry {
+  display_name: string | null;
+  rank: number;
+  played: number;
+  wins: number;
+  average_seconds: number;
+  best_seconds: number;
+}
 export interface ScoreSubmission {
   puzzle_id: number;
   elapsed_seconds: number;
@@ -188,6 +196,8 @@ export const api = {
   postScore: (t: string, s: ScoreSubmission) => send<{ rank: number }>('scores', 'POST', t, s).then((r) => r.rank),
   groupScores: (t: string, groupId: string, puzzleId: number) =>
     send<LeaderboardEntry[]>(`groups/${groupId}/scores/${puzzleId}`, 'GET', t),
+  groupStandings: (t: string, groupId: string, from: number, to: number) =>
+    send<StandingsEntry[]>(`groups/${groupId}/standings?from=${from}&to=${to}`, 'GET', t),
 
   mpCreate: (t: string, body: MpCreateBody) =>
     send<{ game: MultiplayerGame; invite_code: string }>('multiplayer/games', 'POST', t, body),

@@ -1234,3 +1234,15 @@ button.row:active {
     font-size: 1.08rem;
   }
 }
+
+.lb-stepper {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+  font-weight: 700;
+}
+
+.lb-stepper .icon-btn:disabled {
+  opacity: 0.3;
+}
