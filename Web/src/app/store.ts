@@ -49,6 +49,7 @@ export type Sheet =
   | { kind: 'groupMembers'; group: GroupListItem }
   | { kind: 'groupOnboarding'; mode: 'choose' | 'create' | 'join' }
   | { kind: 'coach' }
+  | { kind: 'history' }
   | { kind: 'multiplayer'; gameId?: string }
   | { kind: 'confirmReset' };
 

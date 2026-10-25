@@ -5,6 +5,7 @@ import { useStore } from '../app/store';
 import { ApiError, api, type GroupListItem, type GroupMember, type LeaderboardEntry } from '../lib/api';
 import { dateFromDailyId, displayLabel, formatTime, shortDate } from '../lib/format';
 import type { Appearance } from '../lib/storage';
+import { isCatchUp } from '../lib/streaks';
 import { Icon } from './icons';
 import { Segmented, Sheet, shareText, Toggle } from './Sheet';
 
@@ -664,6 +665,11 @@ export function LeaderboardSheet({ puzzleId }: { puzzleId: number }) {
             <span style={{ minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
               {e.display_name ?? 'Unnamed'}
               <Badges e={e} />
+              {isCatchUp(puzzleId, e.completed_at) && (
+                <span class="badge-offline" style={{ marginLeft: 6 }} title="Solved after the day ended">
+                  caught up
+                </span>
+              )}
             </span>
             <span class="lb-time">{formatTime(eff)}</span>
           </button>

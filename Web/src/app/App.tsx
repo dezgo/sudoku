@@ -5,6 +5,7 @@ import { api } from '../lib/api';
 import { Home } from '../ui/Home';
 import { Play } from '../ui/Play';
 import { CoachSheet } from '../ui/Coach';
+import { HistorySheet } from '../ui/History';
 import { MultiplayerSheet } from '../ui/Multiplayer';
 import { CompletedSheet, ConfirmResetSheet, GamesSheet, NewGameSheet, SolvedSheet } from '../ui/sheets';
 import { GroupMembersSheet, GroupOnboardingSheet, LeaderboardSheet, SettingsSheet, SignInSheet } from '../ui/social';
@@ -31,6 +32,8 @@ function renderSheet(sheet: Sheet, i: number) {
       return <GroupOnboardingSheet key={i} mode={sheet.mode} />;
     case 'coach':
       return <CoachSheet key={i} />;
+    case 'history':
+      return <HistorySheet key={i} />;
     case 'multiplayer':
       return <MultiplayerSheet key={i} gameId={sheet.gameId} />;
     case 'confirmReset':

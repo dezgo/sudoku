@@ -2,6 +2,7 @@
 
 import { useStore } from '../app/store';
 import { dateFromDailyId, displayLabel, formatTime, weekdayDate } from '../lib/format';
+import { addDays, FIRST_DAILY_ID, streakStats } from '../lib/streaks';
 import { Icon } from './icons';
 import { InstallHint } from './InstallHint';
 
@@ -13,6 +14,11 @@ export function Home() {
   const recent = s.mostRecent;
   const dateLabel = weekdayDate(dateFromDailyId(todayId));
   const name = s.identity?.user.display_name;
+  const doneIds = new Set(s.history.map((r) => r.puzzleID));
+  const streak = streakStats(doneIds, todayId).current;
+  // Missed days in the last 30 — an invitation, not a guilt trip over months.
+  let missed = 0;
+  for (let d = addDays(todayId, -1), i = 0; i < 30 && d >= FIRST_DAILY_ID; d = addDays(d, -1), i++) if (!doneIds.has(d)) missed++;
 
   return (
     <div class="home">
@@ -62,6 +68,16 @@ export function Home() {
             </div>
           </>
         )}
+
+        <button class="btn" onClick={() => s.open({ kind: 'history' })}>
+          <Icon name="calendar" size={20} /> Daily History
+        </button>
+        {streak > 0 && (
+          <div class="caption">
+            {streak}-day streak{missed > 0 ? ` · ${missed} to catch up` : ''}
+          </div>
+        )}
+        {streak === 0 && missed > 0 && <div class="caption">{missed} past dailies to catch up</div>}
 
         <button class="btn" onClick={() => s.open({ kind: 'leaderboard', puzzleId: todayId })}>
           <Icon name="podium" size={20} /> Today's Leaderboard

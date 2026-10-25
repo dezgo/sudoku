@@ -240,6 +240,11 @@ export function CompletedSheet({ result, fanfare }: { result: PuzzleResult; fanf
         </div>
       </div>
       <Board mini cells={cells} look={(r, c) => ({ locked: p.givens[r][c] !== 0 })} />
+      {isDaily(p) && (
+        <button class="btn" onClick={() => s.open({ kind: 'leaderboard', puzzleId: p.id })}>
+          <Icon name="podium" size={20} /> Leaderboard for this day
+        </button>
+      )}
     </Sheet>
   );
 }
