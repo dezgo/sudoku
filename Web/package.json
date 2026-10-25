@@ -1,0 +1,22 @@
+{
+  "name": "sudoku-web",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Sudoku Crew as a PWA, served by the Worker at sudokucrew.com/play. See ../SPEC.md.",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "preact": "^10.29.8"
+  },
+  "devDependencies": {
+    "@preact/preset-vite": "^2.10.6",
+    "typescript": "^5.9.3",
+    "vite": "^6.4.5",
+    "vitest": "^3.2.7"
+  }
+}

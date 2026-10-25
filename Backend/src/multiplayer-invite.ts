@@ -77,9 +77,13 @@ export function getMultiplayerInvitePage(code: string): Response {
 <body>
   <div class="card">
     <h1>You've been invited to a Sudoku game</h1>
-    <p>Open Sudoku Crew on your phone, sign in, then tap "Multiplayer" and "Join with a code". Use this code:</p>
+    <p>Join right here in your browser — no download needed:</p>
+    <div class="stores">
+      <a href="/play/?join=${safeCode}">Play in your browser</a>
+    </div>
+    <p>Or open Sudoku Crew on your phone, sign in, then tap "Multiplayer" and "Join with a code". Use this code:</p>
     <div class="code">${safeCode}</div>
-    <p>Don't have the app?</p>
+    <p>Prefer the app?</p>
     <div class="stores">
       <a href="${APP_STORE_URL}">Get it on the App Store (iOS)</a>
       <a href="${PLAY_STORE_URL}" class="secondary">Get it on Google Play (Android)</a>

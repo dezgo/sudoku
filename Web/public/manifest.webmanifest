@@ -1,0 +1,16 @@
+{
+  "name": "Sudoku Crew",
+  "short_name": "Sudoku Crew",
+  "description": "A daily sudoku for you and your friends — same puzzle, shared leaderboards.",
+  "id": "/play/",
+  "start_url": "/play/",
+  "scope": "/play/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#f2f2f7",
+  "theme_color": "#2f6fde",
+  "icons": [
+    { "src": "/play/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "/play/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" }
+  ]
+}

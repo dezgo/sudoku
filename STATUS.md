@@ -9,6 +9,7 @@ Two platforms (iOS + Android) targeting the same behavioural contract in [`SPEC.
 | [`SPEC.md`](SPEC.md) | Platform-agnostic spec (data model, rules, screens, persistence, daily, generator, identity, groups, leaderboards, API contract). The canonical contract that both apps and the backend follow. |
 | [`iOS/`](iOS/) | SwiftUI app. See [`iOS/STATUS.md`](iOS/STATUS.md) for the implementation map. |
 | [`Android/`](Android/) | Jetpack Compose app. See [`Android/README.md`](Android/README.md) for build instructions and source layout. |
+| [`Web/`](Web/) | **PWA (Vite + Preact + TypeScript), replacing the store apps.** Built into `Backend/public/play` and served by the same Worker at `sudokucrew.com/play/` (`npm run deploy` in `Backend/` builds it first). Departs from the apps deliberately in two places: speed mode is driven by a real armed digit (see `docs/TODO.md`), and `classify` reads pencil-mark singles so Medium/Hard puzzles can actually be generated — the apps' grader could only ever return simple-or-null. |
 | [`Backend/`](Backend/) | Cloudflare Workers backend (TypeScript + D1 + Resend). Hosts identity, groups, daily distribution, scores. See [`Backend/README.md`](Backend/README.md) for deploy steps. |
 
 ## Where things stand

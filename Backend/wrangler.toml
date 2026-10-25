@@ -25,6 +25,13 @@ custom_domain = true
 pattern = "sudokucrew.com"
 custom_domain = true
 
+# The PWA (../Web) is built into public/play and served as static assets at
+# sudokucrew.com/play/ — same origin as the API, so no CORS. Requests that
+# don't match a file fall through to the Worker (API, landing page, /m/...).
+# `npm run deploy` builds the web app first so a deploy can't ship a stale one.
+[assets]
+directory = "./public"
+
 # Plain (non-secret) vars. Email-from address and the timezone used to derive
 # "today's" puzzle date. Plus per-platform version pins for the in-app
 # update prompt — clients fetch /v1/version on launch and surface a banner
