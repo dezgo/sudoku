@@ -6,7 +6,7 @@
 //  - the API (/v1/*): never cached here. The app keeps its own offline copies
 //    (daily cache, pending scores) in localStorage.
 
-const CACHE = 'sudoku-crew-v1';
+const CACHE = 'sudoku-crew-v2';
 const SHELL = ['/play/', '/play/manifest.webmanifest', '/play/icon-192.png'];
 
 self.addEventListener('install', (event) => {
@@ -28,6 +28,8 @@ self.addEventListener('fetch', (event) => {
   if (req.method !== 'GET') return;
   const url = new URL(req.url);
   if (url.origin !== location.origin || !url.pathname.startsWith('/play/')) return;
+  // The app's "is there a newer version?" check must see the live page.
+  if (url.searchParams.has('update-check')) return;
 
   if (req.mode === 'navigate') {
     event.respondWith(
