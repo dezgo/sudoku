@@ -20,6 +20,15 @@ const FILES: Record<SoundCue, string> = {
   mistake: 'mistake.m4a',
   unitComplete: 'unit_complete.m4a',
   solved: 'solved.m4a',
+  // Pencil marks reuse the placement click, played quieter (and lower for
+  // removal) so notes feel lighter than real digits and never sound wrong.
+  noteOn: 'place.m4a',
+  noteOff: 'place.m4a',
+};
+
+const TUNING: Partial<Record<SoundCue, { gain: number; rate: number }>> = {
+  noteOn: { gain: 0.35, rate: 1.15 },
+  noteOff: { gain: 0.3, rate: 0.85 },
 };
 
 let ctx: AudioContext | null = null;
@@ -74,7 +83,9 @@ export function playSound(cue: SoundCue): void {
     if (!buf) return;
     const src = ctx.createBufferSource();
     const gain = ctx.createGain();
-    gain.gain.value = 0.6;
+    const tune = TUNING[cue];
+    gain.gain.value = tune?.gain ?? 0.6;
+    src.playbackRate.value = tune?.rate ?? 1;
     src.buffer = buf;
     src.connect(gain).connect(ctx.destination);
     src.start();

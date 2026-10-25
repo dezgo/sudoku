@@ -12,7 +12,7 @@ import { candidates, cellsFromGivens, cloneCells, type Cells, type Puzzle } from
 import type { TutorHint } from './tutor';
 
 export type InputMode = 'normal' | 'pencil';
-export type SoundCue = 'place' | 'erase' | 'mistake' | 'unitComplete' | 'solved';
+export type SoundCue = 'place' | 'erase' | 'mistake' | 'unitComplete' | 'solved' | 'noteOn' | 'noteOff';
 
 export interface RC {
   row: number;
@@ -302,6 +302,7 @@ export class Game {
     const cell = this.cells[s.row][s.col];
     const previousNotes = new Set(cell.notes);
     let didPlace = false;
+    let noteAdded = false;
 
     if (this.mode === 'normal') {
       if (cell.value === n) {
@@ -313,8 +314,9 @@ export class Game {
       }
     } else {
       cell.value = null;
-      if (cell.notes.has(n)) cell.notes.delete(n);
-      else cell.notes.add(n);
+      noteAdded = !cell.notes.has(n);
+      if (noteAdded) cell.notes.add(n);
+      else cell.notes.delete(n);
     }
 
     const autoClearedPeers: RC[] = [];
@@ -334,7 +336,9 @@ export class Game {
     if (didPlace && sol && sol[s.row][s.col] !== n) this.mistakeCount++;
 
     if (this.mode === 'pencil') {
-      this.onSound('erase');
+      // Own soft ticks: the apps used the erase clip here, and taking a note
+      // off sounded like an error (Derek, 25 Oct 2026).
+      this.onSound(noteAdded ? 'noteOn' : 'noteOff');
       return;
     }
     if (!didPlace) return;
