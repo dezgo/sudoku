@@ -23,6 +23,16 @@
   --t-target: rgba(52, 199, 89, 0.45);
   --shadow: 0 10px 40px rgba(0, 0, 0, 0.18);
   --radius: 14px;
+  /* Board: opaque tints with clear steps between them. Translucent washes
+     all landed at similar strength on a dark board, so the selection didn't
+     stand out (Derek, 25 Oct 2026). */
+  --grid-thin: #b8b8c2;
+  --grid-thick: #1c1c22;
+  --cell-peer: #e8eefb;
+  --cell-match: #a9c6ff;
+  --cell-match-text: #0b1a3a;
+  --cell-sel: #ffd43b;
+  --cell-sel-text: #111114;
   --sheet-bg: #f2f2f7;
   --sheet-surface: #ffffff;
   --sheet-surface-2: #e9e9ef;
@@ -44,6 +54,13 @@
     --select: rgba(255, 204, 0, 0.42);
     --error: #ff5a5f;
     --shadow: 0 10px 40px rgba(0, 0, 0, 0.6);
+    --grid-thin: #55555c;
+    --grid-thick: #e4e4ea;
+    --cell-peer: #232d40;
+    --cell-match: #2f62c9;
+    --cell-match-text: #ffffff;
+    --cell-sel: #f0c419;
+    --cell-sel-text: #111114;
     --sheet-bg: #1c1c1e;
     --sheet-surface: #2c2c2e;
     --sheet-surface-2: #3a3a3c;
@@ -65,6 +82,13 @@
   --select: rgba(255, 204, 0, 0.42);
   --error: #ff5a5f;
   --shadow: 0 10px 40px rgba(0, 0, 0, 0.6);
+  --grid-thin: #55555c;
+  --grid-thick: #e4e4ea;
+  --cell-peer: #232d40;
+  --cell-match: #2f62c9;
+  --cell-match-text: #ffffff;
+  --cell-sel: #f0c419;
+  --cell-sel-text: #111114;
   --sheet-bg: #1c1c1e;
   --sheet-surface: #2c2c2e;
   --sheet-surface-2: #3a3a3c;
@@ -344,7 +368,7 @@ select:focus-visible {
   grid-template-columns: repeat(9, 1fr);
   grid-template-rows: repeat(9, 1fr);
   background: var(--surface);
-  border: 2px solid var(--line-strong);
+  border: 2.5px solid var(--grid-thick);
   border-radius: 4px;
   overflow: hidden;
   user-select: none;
@@ -356,8 +380,8 @@ select:focus-visible {
   display: flex;
   align-items: center;
   justify-content: center;
-  border-right: 0.5px solid var(--line);
-  border-bottom: 0.5px solid var(--line);
+  border-right: 1px solid var(--grid-thin);
+  border-bottom: 1px solid var(--grid-thin);
   font-size: min(6.4vw, 30px);
   font-variant-numeric: tabular-nums;
   padding: 0;
@@ -376,22 +400,29 @@ select:focus-visible {
 
 .cell.c3,
 .cell.c6 {
-  border-right: 2px solid var(--line-strong);
+  border-right: 2.5px solid var(--grid-thick);
 }
 
 .cell.r3,
 .cell.r6 {
-  border-bottom: 2px solid var(--line-strong);
+  border-bottom: 2.5px solid var(--grid-thick);
 }
 
 .cell.peer {
-  background: var(--accent-softer);
+  background: var(--cell-peer);
 }
 .cell.match {
-  background: var(--accent-soft);
+  background: var(--cell-match);
+  color: var(--cell-match-text);
 }
 .cell.sel {
-  background: var(--select);
+  background: var(--cell-sel);
+  color: var(--cell-sel-text);
+}
+.cell.sel .notes,
+.cell.match .notes {
+  color: inherit;
+  opacity: 0.75;
 }
 .cell.t-focus {
   background: var(--t-focus);
@@ -449,7 +480,7 @@ select:focus-visible {
   align-items: center;
   justify-content: center;
   gap: 12px;
-  border: 2px solid var(--line-strong);
+  border: 2.5px solid var(--grid-thick);
   border-radius: 4px;
   color: var(--text-2);
   font-weight: 600;
@@ -1183,4 +1214,20 @@ button.row:active {
 .update-bar .btn {
   min-height: 34px;
   padding: 0 14px;
+}
+
+@media (max-width: 420px) {
+  .play-header {
+    gap: 0;
+    padding: 0;
+  }
+  .play-header .icon-btn {
+    width: 36px;
+  }
+  .play-header .stat {
+    margin: 0 3px;
+  }
+  .play-title {
+    font-size: 1.08rem;
+  }
 }

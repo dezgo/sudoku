@@ -1,7 +1,16 @@
-// Sound cues (SPEC.md §13.12) — the same CC0 Kenney clips as the apps.
+// Sound cues (SPEC §13.12) — the same CC0 Kenney clips as the apps.
 // Web Audio rather than <audio>: lower latency for rapid placements, and
-// several cues can overlap. iOS Safari keeps the AudioContext suspended until
-// a user gesture, so it's created lazily on the first cue (always a tap).
+// several cues can overlap.
+//
+// iOS is strict about web audio, and two of its rules bit us (25 Oct 2026:
+// sound worked in one game, then went silent after the app was restarted):
+//  - An AudioContext only starts from a "real" gesture — touchend / click /
+//    keydown. The board places digits on pointerdown so entry feels instant,
+//    and pointerdown doesn't count, so a context first created there stays
+//    silent forever. We unlock on the first qualifying gesture anywhere.
+//  - Leaving the app moves the context to "interrupted" (not "suspended"),
+//    and it needs resuming from a gesture again. Any state but "running"
+//    is resumed on the next gesture.
 
 import type { SoundCue } from '../engine/game';
 
@@ -17,10 +26,8 @@ let ctx: AudioContext | null = null;
 const buffers = new Map<SoundCue, AudioBuffer>();
 let loading: Promise<void> | null = null;
 
-function load(): Promise<void> {
-  if (loading) return loading;
-  const c = ctx!;
-  loading = Promise.all(
+function load(c: AudioContext): Promise<void> {
+  loading ??= Promise.all(
     (Object.keys(FILES) as SoundCue[]).map(async (cue) => {
       try {
         const resp = await fetch(`${import.meta.env.BASE_URL}sounds/${FILES[cue]}`);
@@ -33,16 +40,38 @@ function load(): Promise<void> {
   return loading;
 }
 
+function unlock(): void {
+  try {
+    if (!ctx) {
+      // "ambient" (iOS 17+): respects the silent switch and mixes with music
+      // or podcasts instead of pausing them — same as the iOS app.
+      const nav = navigator as Navigator & { audioSession?: { type: string } };
+      if (nav.audioSession) nav.audioSession.type = 'ambient';
+      ctx = new AudioContext();
+      void load(ctx);
+    }
+    if (ctx.state !== 'running') {
+      void ctx.resume();
+      // A silent one-sample buffer, played inside the gesture, is what
+      // actually unlocks output on older iOS versions.
+      const src = ctx.createBufferSource();
+      src.buffer = ctx.createBuffer(1, 1, 22050);
+      src.connect(ctx.destination);
+      src.start();
+    }
+  } catch {
+    /* no audio support */
+  }
+}
+
+for (const ev of ['touchend', 'click', 'keydown']) window.addEventListener(ev, unlock, { capture: true, passive: true });
+
 export function playSound(cue: SoundCue): void {
   try {
-    ctx ??= new AudioContext();
-    if (ctx.state === 'suspended') void ctx.resume();
+    if (!ctx) return; // not unlocked yet — the next real tap will do it
+    if (ctx.state !== 'running') void ctx.resume();
     const buf = buffers.get(cue);
-    if (!buf) {
-      // First cue of the session: start loading; this one plays once decoded.
-      void load().then(() => playSound(cue));
-      return;
-    }
+    if (!buf) return;
     const src = ctx.createBufferSource();
     const gain = ctx.createGain();
     gain.gain.value = 0.6;

@@ -4,7 +4,8 @@
 import { useEffect } from 'preact/hooks';
 import { store, useStore } from '../app/store';
 import { techniqueLabel } from '../engine/tutor';
-import { displayLabel, formatTime } from '../lib/format';
+import { dateFromDailyId, displayLabel, formatTime, shortDate } from '../lib/format';
+import { isDaily } from '../engine/types';
 import { Board } from './Board';
 import { Icon } from './icons';
 
@@ -21,7 +22,16 @@ export function Play() {
     <div class="play">
       <div class="play-header">
         <div class="play-title">
-          <span>{displayLabel(g.puzzle)}</span>
+          {isDaily(g.puzzle) ? (
+            // "Daily · 21 Oct" didn't fit beside the timer and four buttons
+            // on a phone; the icon says "daily" in a fraction of the width.
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }} aria-label={displayLabel(g.puzzle)}>
+              <Icon name="calendar" size={18} />
+              {shortDate(dateFromDailyId(g.puzzle.id))}
+            </span>
+          ) : (
+            <span>{displayLabel(g.puzzle)}</span>
+          )}
           {s.offlineDaily && <span class="badge-offline">Unranked</span>}
           {solved && (
             <span style={{ color: 'var(--success)' }}>
