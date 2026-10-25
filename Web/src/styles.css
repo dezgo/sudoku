@@ -29,8 +29,8 @@
   --grid-thin: #b8b8c2;
   --grid-thick: #1c1c22;
   --cell-peer: #e8eefb;
-  --cell-match: #a9c6ff;
-  --cell-match-text: #0b1a3a;
+  --cell-match: #dde8ff;
+  --cell-match-text: #1d5fd6;
   --cell-sel: #ffd43b;
   --cell-sel-text: #111114;
   --sheet-bg: #f2f2f7;
@@ -57,8 +57,8 @@
     --grid-thin: #55555c;
     --grid-thick: #e4e4ea;
     --cell-peer: #232d40;
-    --cell-match: #2f62c9;
-    --cell-match-text: #ffffff;
+    --cell-match: #2a3a5a;
+    --cell-match-text: #8db5ff;
     --cell-sel: #f0c419;
     --cell-sel-text: #111114;
     --sheet-bg: #1c1c1e;
@@ -85,8 +85,8 @@
   --grid-thin: #55555c;
   --grid-thick: #e4e4ea;
   --cell-peer: #232d40;
-  --cell-match: #2f62c9;
-  --cell-match-text: #ffffff;
+  --cell-match: #2a3a5a;
+  --cell-match-text: #8db5ff;
   --cell-sel: #f0c419;
   --cell-sel-text: #111114;
   --sheet-bg: #1c1c1e;
