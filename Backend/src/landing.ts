@@ -2,9 +2,9 @@
  * Public landing page served at https://sudokucrew.com/ and
  * https://sudoku.appfoundry.cc/ — same Worker, both hostnames.
  *
- * Replaces the bare "sudoku-api ok" healthcheck so the URL listed on the
- * app's store pages doesn't look like an unfinished server. The
- * healthcheck lives at /health for monitoring.
+ * Points people at the web app (/play). The store apps are being retired
+ * in favour of it (Oct 2026), so the store buttons and the Android beta
+ * section are gone. The healthcheck lives at /health for monitoring.
  */
 
 const LANDING_HTML = `<!DOCTYPE html>
@@ -78,38 +78,36 @@ const LANDING_HTML = `<!DOCTYPE html>
       font-size: 0.85rem;
       margin-right: 0.5rem;
     }
-    .stores {
-      display: flex;
-      gap: 0.75rem;
-      flex-wrap: wrap;
-      margin: 0.5rem 0 0;
-    }
-    .store-btn {
+    .play-btn {
       display: inline-flex;
       align-items: center;
-      gap: 0.6rem;
-      padding: 0.7rem 1.1rem;
-      border-radius: 10px;
-      background: #111;
+      gap: 0.5rem;
+      padding: 0.85rem 1.6rem;
+      border-radius: 12px;
+      background: var(--accent-2);
       color: #fff;
       text-decoration: none;
-      font-weight: 500;
+      font-weight: 600;
+      font-size: 1.1rem;
       transition: opacity 0.15s ease;
     }
-    .store-btn:hover { opacity: 0.85; }
-    .store-btn .small { font-size: 0.7rem; opacity: 0.75; line-height: 1; }
-    .store-btn .big { font-size: 1.05rem; line-height: 1.1; }
-    .store-btn[aria-disabled="true"] {
-      opacity: 0.5;
-      cursor: not-allowed;
-    }
-    .store-btn svg { width: 22px; height: 22px; flex-shrink: 0; }
+    .play-btn:hover { opacity: 0.88; }
+    .play-btn svg { width: 20px; height: 20px; }
+    .sub { color: var(--muted); font-size: 0.95rem; margin-top: 0.75rem; }
   </style>
 </head>
 <body>
   <div class="wrap">
     <h1>Sudoku Crew</h1>
     <p class="tagline">A daily Sudoku puzzle and private leaderboard for your friend group.</p>
+
+    <p>
+      <a class="play-btn" href="/play/">
+        <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M7 4.5v15l12-7.5z"/></svg>
+        Play now
+      </a>
+    </p>
+    <p class="sub">Free, right in your browser — no download, works on any phone, tablet or computer.</p>
 
     <p>
       Everyone in your group plays the same puzzle each day. Solve fast,
@@ -122,10 +120,11 @@ const LANDING_HTML = `<!DOCTYPE html>
     <ul>
       <li><strong>Daily puzzle</strong> — same puzzle for everyone, refreshed once a day.</li>
       <li><strong>Private friend groups</strong> — share an invite code, that's it.</li>
-      <li><strong>A tutor that teaches</strong> — stuck on a hard one? The lightbulb walks you through naked / hidden singles, pairs, triples, pointing pairs, X-Wing, XY-Wing — step by step, on your actual board.</li>
-      <li><strong>Auto-pencil</strong> — fill in candidates with one tap so you can focus on the deductions.</li>
-      <li><strong>Plenty of generated puzzles</strong> across Easy, Medium, and Hard.</li>
-      <li><strong>Subtle sound effects</strong> and a satisfying solve fanfare.</li>
+      <li><strong>Catch up on missed days</strong> — a calendar of every daily, with streaks to keep and monthly trophies to earn.</li>
+      <li><strong>A tutor that teaches</strong> — stuck on a hard one? The lightbulb walks you through singles, pairs, triples, pointing pairs, X-Wings, XY-Wings, swordfish and more — step by step, on your actual board.</li>
+      <li><strong>Coach mode</strong> — practise one technique at a time.</li>
+      <li><strong>Turn-based multiplayer</strong> — take turns on one board with friends.</li>
+      <li><strong>Plenty of fresh puzzles</strong> across Easy, Medium, and Hard, plus speed entry and auto-pencil.</li>
     </ul>
 
     <h2>What's not</h2>
@@ -141,44 +140,20 @@ const LANDING_HTML = `<!DOCTYPE html>
       <a href="/privacy">privacy policy</a> for the full breakdown.
     </p>
 
-    <h2>Get the app</h2>
-    <div class="stores">
-      <a class="store-btn" href="https://play.google.com/store/apps/details?id=com.derekgillett.sudoku">
-        <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-          <path d="M3.6 1.4c-.4.3-.6.7-.6 1.3v18.6c0 .6.2 1 .6 1.3l10.4-10.6L3.6 1.4zM14.5 12l3-3 3.6 2.1c1.1.6 1.1 1.6 0 2.2L17.5 15l-3-3zm-1 1l-9.7 9.9c.4.1.9 0 1.4-.3l11.3-6.5-3-3.1zm-9.7-12c-.5-.3-1-.4-1.4-.3l9.7 9.9 3-3-11.3-6.6z"/>
-        </svg>
-        <span>
-          <span class="small">GET IT ON</span><br>
-          <span class="big">Google Play</span>
-        </span>
-      </a>
-      <a class="store-btn" href="https://apps.apple.com/au/app/sudoku-crew/id6764829511">
-        <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-          <path d="M17.05 20.28c-.98.95-2.05.8-3.08.35-1.09-.46-2.09-.48-3.24 0-1.44.62-2.2.44-3.06-.35C2.79 15.25 3.51 7.59 9.05 7.31c1.35.07 2.29.74 3.08.8 1.18-.24 2.31-.93 3.57-.84 1.51.12 2.65.72 3.4 1.8-3.12 1.87-2.38 5.98.48 7.13-.57 1.5-1.31 2.99-2.54 4.09zM12 7.25c-.15-2.23 1.66-4.07 3.74-4.25.29 2.58-2.34 4.5-3.74 4.25z"/>
-        </svg>
-        <span>
-          <span class="small">DOWNLOAD ON THE</span><br>
-          <span class="big">App Store</span>
-        </span>
-      </a>
-    </div>
-    <p style="margin-top: 1rem;">
-      Friend groups by invite — ask whoever pointed you here for an
-      invite code.
-    </p>
+    <h2>Put it on your home screen</h2>
+    <p>It works straight from the browser, but it's nicer as an icon on your phone — it opens full screen, like an app:</p>
+    <ul>
+      <li><strong>iPhone / iPad:</strong> open it in Safari, tap <em>Share</em>, then <em>Add to Home Screen</em>.</li>
+      <li><strong>Android:</strong> open it in Chrome and tap <em>Install</em> (or the ⋮ menu, then <em>Add to Home screen</em>).</li>
+    </ul>
+    <p>Friend groups are by invite — ask whoever pointed you here for a code.</p>
 
-    <h2>Want early access on Android?</h2>
-    <p>Two steps and you're in:</p>
-    <ol style="padding-left: 1.25rem; margin: 0 0 1.25rem;">
-      <li style="margin-bottom: 0.75rem;">
-        <a href="https://groups.google.com/g/apptesters26"><strong>Join the testers group</strong></a>
-        — sign in with your Google account and hit Join.
-      </li>
-      <li style="margin-bottom: 0.75rem;">
-        <a href="https://play.google.com/apps/testing/com.derekgillett.sudoku"><strong>Open the beta on Google Play</strong></a>
-        — tap Become a tester, then install.
-      </li>
-    </ol>
+    <p style="margin-top: 2rem;">
+      <a class="play-btn" href="/play/">
+        <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M7 4.5v15l12-7.5z"/></svg>
+        Play now
+      </a>
+    </p>
 
     <div class="footer">
       <p>
