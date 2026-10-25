@@ -3,6 +3,7 @@ import { store, useStore, type Sheet } from './store';
 import { warmBuffers } from './puzzles';
 import { applyUpdate, startUpdateChecks } from './updates';
 import { api } from '../lib/api';
+import { applyColors } from '../lib/colors';
 import { Home } from '../ui/Home';
 import { Play } from '../ui/Play';
 import { CoachSheet } from '../ui/Coach';
@@ -70,6 +71,9 @@ export function App() {
     startUpdateChecks();
     handleJoinLink();
   }, []);
+
+  // Chosen colours go on <html> inline, so they win in light and dark alike.
+  useEffect(() => applyColors(s.prefs.colors), [s.prefs.colors]);
 
   // Appearance: "system" leaves the media query in charge.
   useEffect(() => {

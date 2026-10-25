@@ -18,6 +18,8 @@
   --error: #e5383b;
   --success: #24a148;
   --gold: #d4a017;
+  --done: var(--success);
+  --done-text: #ffffff;
   --t-focus: rgba(47, 111, 222, 0.18);
   --t-elim: rgba(255, 149, 0, 0.32);
   --t-target: rgba(52, 199, 89, 0.45);
@@ -1084,8 +1086,8 @@ button.row:active {
 }
 
 .cal-day.done {
-  background: var(--success);
-  color: #fff;
+  background: var(--done);
+  color: var(--done-text);
 }
 
 .cal-day.partial {
@@ -1245,4 +1247,25 @@ button.row:active {
 
 .lb-stepper .icon-btn:disabled {
   opacity: 0.3;
+}
+
+/* ---------- Colour pickers (Settings) ---------- */
+
+.swatch {
+  width: 44px;
+  height: 30px;
+  padding: 0;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: none;
+  cursor: pointer;
+}
+
+.swatch::-webkit-color-swatch-wrapper {
+  padding: 0;
+}
+
+.swatch::-webkit-color-swatch {
+  border: 0;
+  border-radius: 7px;
 }

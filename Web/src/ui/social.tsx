@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from 'preact/hooks';
 import { useStore } from '../app/store';
 import { ApiError, api, type GroupListItem, type GroupMember, type LeaderboardEntry, type StandingsEntry } from '../lib/api';
 import { addDays, dateFromDailyId, formatTime, shortDate, weekdayDate } from '../lib/format';
+import { applyColors, COLOR_CHOICES, currentColor } from '../lib/colors';
 import type { Appearance } from '../lib/storage';
 import { FIRST_DAILY_ID, isCatchUp } from '../lib/streaks';
 import { Icon } from './icons';
@@ -454,6 +455,35 @@ export function SettingsSheet() {
         value={p.appearance}
         onChange={(v) => s.setPref('appearance', v)}
       />
+
+      <div class="section-title">Colours</div>
+      <div class="group">
+        {COLOR_CHOICES.map((c) => (
+          <label key={c.key} class="row">
+            <span class="grow">{c.label}</span>
+            <input
+              type="color"
+              class="swatch"
+              aria-label={c.label}
+              value={p.colors[c.key] ?? currentColor(c.variable)}
+              onInput={(e) => s.setPref('colors', { ...p.colors, [c.key]: e.currentTarget.value })}
+            />
+          </label>
+        ))}
+        {Object.keys(p.colors).length > 0 && (
+          <button
+            class="row"
+            onClick={() => {
+              applyColors({}); // before re-render, so the swatches read the theme's own colours
+              s.setPref('colors', {});
+            }}
+          >
+            <span class="grow" style={{ color: 'var(--accent)' }}>
+              Reset to default colours
+            </span>
+          </button>
+        )}
+      </div>
 
       {s.identity && (
         <>

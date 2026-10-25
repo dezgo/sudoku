@@ -102,12 +102,16 @@ export function persistHistory(h: PuzzleResult[]): void {
 
 export type Appearance = 'system' | 'light' | 'dark';
 
+/** Colours a player can choose in Settings; unset keys keep the theme's own. */
+export type ColorKey = 'accent' | 'done' | 'select' | 'match';
+
 export interface Prefs {
   difficulty: Difficulty;
   appearance: Appearance;
   highlightMistakes: boolean;
   highlightConstraints: boolean;
   sound: boolean;
+  colors: Partial<Record<ColorKey, string>>;
 }
 
 export const DEFAULT_PREFS: Prefs = {
@@ -116,6 +120,7 @@ export const DEFAULT_PREFS: Prefs = {
   highlightMistakes: true,
   highlightConstraints: true,
   sound: true,
+  colors: {},
 };
 
 export function loadPrefs(): Prefs {

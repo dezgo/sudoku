@@ -97,7 +97,7 @@ Storage format is JSON-encoded; the iOS reference uses `UserDefaults` keyed as:
 
 Any equivalent platform-native key/value store (Android `DataStore`, web `localStorage`) is fine.
 
-**Web app.** Uses `localStorage` under the same keys, with two differences: preferences live together in `sudoku.prefs.v1` (`{ difficulty, appearance, highlightMistakes, highlightConstraints, sound }`), and the bearer token is stored inside `sudoku.identity.v1` (`{ user, token }`) — a browser has no Keychain. Extra keys: `sudoku.coach.completed.v1`, `sudoku.puzzle_buffer.v1` (one pre-generated puzzle per tier), `sudoku.next_id.v1`, `sudoku.installed.v1`, `sudoku.install_hint_dismissed.v1`. Every read/write tolerates storage being unavailable (private browsing, blocked site data). On iPhone, a home-screen web app's storage is separate from Safari's.
+**Web app.** Uses `localStorage` under the same keys, with two differences: preferences live together in `sudoku.prefs.v1` (`{ difficulty, appearance, highlightMistakes, highlightConstraints, sound, colors }`), and the bearer token is stored inside `sudoku.identity.v1` (`{ user, token }`) — a browser has no Keychain. Extra keys: `sudoku.coach.completed.v1`, `sudoku.puzzle_buffer.v1` (one pre-generated puzzle per tier), `sudoku.next_id.v1`, `sudoku.installed.v1`, `sudoku.install_hint_dismissed.v1`. Every read/write tolerates storage being unavailable (private browsing, blocked site data). On iPhone, a home-screen web app's storage is separate from Safari's.
 
 ---
 
@@ -332,6 +332,7 @@ Sectioned form:
 - **Highlighting**: "Highlight mistakes" toggle, "Highlight rules" toggle.
 - **Sounds**: "Sound effects" toggle (default on).
 - **Appearance**: segmented picker — System / Light / Dark.
+- **Colours** (web app): a colour swatch each for *Buttons & links*, *Finished dailies* (done days in Daily History), *Selected square* and *Matching numbers*, plus *Reset to default colours* once any is changed. A chosen colour applies in both light and dark; its tints and the text drawn on it (black or white, whichever reads better) are derived from it. Stored per device in `prefs.colors`; unset keys keep the theme's own colour.
 
 ### 13.7 Solved sheet (fanfare)
 
