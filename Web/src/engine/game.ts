@@ -270,13 +270,13 @@ export class Game {
   /** A number-pad (or keyboard digit) press. */
   pressNumber(n: number): void {
     if (this.speedMode) {
-      // Speed mode: the pad arms a digit rather than placing it. If an empty
-      // cell is already selected, fill it too — saves a tap on the first one.
+      // Speed mode: the pad only ever arms; only board taps place. (It used
+      // to also fill a still-selected empty cell, which dropped digits into
+      // a square selected minutes earlier.) Arming clears the selection so
+      // nothing stale lingers on the board.
       this.activeNumber = this.activeNumber === n ? null : n;
-      const s = this.selected;
-      if (this.activeNumber !== null && s && this.cells[s.row][s.col].value === null && !this.isLocked(s.row, s.col)) {
-        this.enterDirect(n);
-      }
+      this.selected = null;
+      this.lastPlacement = null;
       return;
     }
     const s = this.selected;

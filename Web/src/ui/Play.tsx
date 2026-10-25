@@ -89,7 +89,11 @@ export function Play() {
           sel: g.isSelected(r, c) && !armed,
           ghost: g.isSelected(r, c) && armed,
           match: g.isMatching(r, c),
-          peer: g.isPeerOfSelection(r, c) || g.isUnavailableForFocus(r, c),
+          // With a digit armed, the tint must mean only "this digit can't go
+          // here" — the hint promises dark squares are where it can still go.
+          // The selection's row/col/box tint looks identical and hid a legal
+          // square, which led Derek to a wrong 7 (25 Oct 2026).
+          peer: (!armed && g.isPeerOfSelection(r, c)) || g.isUnavailableForFocus(r, c),
           err: g.highlightMistakes && g.hasConflict(r, c),
           locked: g.isLocked(r, c),
         })}

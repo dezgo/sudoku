@@ -175,3 +175,14 @@ describe('speed mode', () => {
     expect(g.mistakeCount).toBe(before);
   });
 });
+
+describe('speed mode — no stale selection', () => {
+  it('arming never places into a previously selected cell', () => {
+    const g = newGame();
+    g.select(0, 2); // empty
+    g.toggleSpeedMode();
+    g.pressNumber(4);
+    expect(g.cells[0][2].value).toBeNull();
+    expect(g.selected).toBeNull();
+  });
+});
