@@ -1,6 +1,6 @@
 // Account + groups + leaderboard sheets (SPEC §13.6, §17).
 
-import { useEffect, useState } from 'preact/hooks';
+import { useEffect, useRef, useState } from 'preact/hooks';
 import { useStore } from '../app/store';
 import { ApiError, api, type GroupListItem, type GroupMember, type LeaderboardEntry } from '../lib/api';
 import { dateFromDailyId, displayLabel, formatTime, shortDate } from '../lib/format';
@@ -37,12 +37,21 @@ export function SignInSheet({ then }: { then?: () => void }) {
     return () => clearInterval(t);
   }, [step]);
 
+  // A ref, not just the `busy` state: state only updates on the next render,
+  // so a fast double-tap (or keyboard Go + a tap) could start two sends.
+  // Each send replaces the previous code, so the first email's code then
+  // fails with "didn't match" — the likeliest cause of a failed first
+  // sign-in on 25 Oct 2026, where the emailed code wasn't the stored one.
+  const inFlight = useRef(false);
   const run = async (fn: () => Promise<void>) => {
+    if (inFlight.current) return;
+    inFlight.current = true;
     setError(null);
     setBusy(true);
     try {
       await fn();
     } finally {
+      inFlight.current = false;
       setBusy(false);
     }
   };
