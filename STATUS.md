@@ -68,7 +68,7 @@ Phase 2 backend is deployed; the apps are not yet running the new code:
 - **Pending-score migration**: anonymous solves get posted on first authenticated request after sign-in.
 - **Token storage**: Keychain (iOS) / EncryptedSharedPreferences (Android). `androidx.security:security-crypto:1.1.0-alpha06` (alpha; current best option).
 - **Realtime stack** (when added): Cloudflare Durable Objects + WebSockets. Same account, no new infra.
-- **Distribution channels**: public on both stores — App Store (`id6764829511`) and Play Store (`com.derekgillett.sudoku`). Store URLs are served by `/v1/version` for the in-app update prompt; see `RELEASING.md`.
+- **Distribution channels**: **the web app at `sudokucrew.com/play` is production** (Oct 2026). The store apps — App Store (`id6764829511`) and Play Store (`com.derekgillett.sudoku`) — are still published but being retired; see `docs/TODO.md` → "Retiring the store apps". Store URLs are served by `/v1/version` for the apps' update prompt; see `RELEASING.md`.
 
 ## Operational notes
 
@@ -90,14 +90,14 @@ Phase 2 backend is deployed; the apps are not yet running the new code:
 For a fresh Claude session, read in this order:
 1. **`SPEC.md`** — canonical behaviour contract (data model, rules, screens, identity, groups, leaderboards, API). Source of truth.
 2. **`STATUS.md`** (this file) — what exists, what's pending, what's been decided.
-3. **`iOS/STATUS.md`** or **`Android/README.md`** — implementation maps for whichever side you're touching.
+3. **`Web/`** — the live app (start at `Web/src/app/store.ts` and `Web/src/engine/`). `iOS/STATUS.md` / `Android/README.md` only if you must touch the retiring store apps.
 4. **`Backend/README.md`** — deploy + first-time setup.
-5. **Auto-memory** at `C:\Users\Derek\.claude\projects\C--Users-Derek-Documents-Coding-Python-Scripts-sudoku\memory\` — persistent decisions, dual-platform workflow rule, user preferences. Indexed by `MEMORY.md` in the same folder, loaded automatically.
+5. **Auto-memory** — Derek's personal memory store at `H:\My Drive\claude-home\memory\` (sub-index `index_sudoku.md`); start with `project_sudoku_pwa.md`.
 6. **`docs/TODO.md`** — outstanding work and recurring maintenance. The single place to look for "what's next".
 7. **`docs/logs/YYYY-MM-DD.md`** — per-session logs (changes, testing, decisions, discoveries). Start with the most recent.
 
 See [`MEMORY.md`](MEMORY.md) at the repo root for how these three stores fit together.
 
-Two rules that always apply:
-- **Dual-platform mirror.** Any behavioural change to one app must be reflected in the other *and* in `SPEC.md`, in the same response. See `feedback_dual_platform_workflow.md` in memory.
+Rules that always apply:
+- **The web app is production.** New behaviour goes into `Web/` and `SPEC.md` together, and GitHub `main` mirrors what's deployed. The old dual-platform (iOS + Android) mirroring rule applied to the store apps, which now get no new features.
 - **Personal email default for personal projects.** Never put the work email (`derek@watsonblinds.com.au`) into test commands, sign-up flows, config, or DNS records — several of those are publishing actions. Prefer an address on the project's own domain (`*@sudokucrew.com` has a catchall), then `derekgg@gmail.com`, then ask. See `feedback_personal_email.md` in memory.
