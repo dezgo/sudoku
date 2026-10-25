@@ -82,7 +82,7 @@ export function App() {
     <>
       {s.updateReady && (
         <div class="update-bar" role="status">
-          <span>A new version of Sudoku Crew is ready.</span>
+          <span>A new version of Sudoku Crew is ready — tap to get it.</span>
           <button class="btn compact primary" onClick={applyUpdate}>
             Update
           </button>
