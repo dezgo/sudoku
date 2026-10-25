@@ -236,6 +236,14 @@ export class Game {
       this.enterDirect(n);
       return;
     }
+    if (this.speedMode && n !== null) {
+      // With a digit armed, a filled (or locked) cell has nothing to take —
+      // selecting it only put a yellow box on the board competing with the
+      // armed digit (Derek, 25 Oct 2026).
+      this.selected = null;
+      this.lastPlacement = null;
+      return;
+    }
     this.select(row, col);
   }
 

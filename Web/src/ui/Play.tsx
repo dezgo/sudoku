@@ -14,6 +14,7 @@ export function Play() {
   const g = s.game!;
   const paused = s.paused;
   const solved = g.isSolved;
+  const armed = g.speedMode && g.activeNumber !== null;
   const tutorHighlights = s.tutor?.hint ? s.tutor.hint.steps[s.tutor.step].highlights : null;
 
   useKeyboard();
@@ -83,7 +84,10 @@ export function Play() {
         onResume={() => s.togglePause()}
         onTap={(r, c) => s.act((game) => game.tapCell(r, c))}
         look={(r, c) => ({
-          sel: g.isSelected(r, c),
+          // With a speed digit armed the selection is just "what Undo would
+          // clear", so it's drawn as a faint outline, not the yellow fill.
+          sel: g.isSelected(r, c) && !armed,
+          ghost: g.isSelected(r, c) && armed,
           match: g.isMatching(r, c),
           peer: g.isPeerOfSelection(r, c) || g.isUnavailableForFocus(r, c),
           err: g.highlightMistakes && g.hasConflict(r, c),
@@ -173,7 +177,9 @@ function NumberPad() {
         {g.speedMode
           ? g.activeNumber === null
             ? 'Speed: pick a number, then tap squares to fill them.'
-            : `Speed: tap empty squares to place ${g.activeNumber}${g.mode === 'pencil' ? ' as a note' : ''}.`
+            : `Tap empty squares to place ${g.activeNumber}${g.mode === 'pencil' ? ' as a note' : ''}.${
+                g.highlightConstraints ? ` Dark squares are where ${g.activeNumber} can still go.` : ''
+              }`
           : ''}
       </p>
     </div>

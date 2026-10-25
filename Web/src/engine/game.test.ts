@@ -116,12 +116,13 @@ describe('speed mode', () => {
     expect(g.activeNumber).toBe(4);
   });
 
-  it('tapping a filled cell selects it without re-arming', () => {
+  it('tapping a filled cell clears the selection without re-arming', () => {
     const g = newGame();
     g.toggleSpeedMode();
     g.pressNumber(4);
+    g.tapCell(0, 2);
     g.tapCell(0, 0); // holds 5
-    expect(g.selected).toEqual({ row: 0, col: 0 });
+    expect(g.selected).toBeNull();
     expect(g.activeNumber).toBe(4);
   });
 

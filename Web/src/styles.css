@@ -419,6 +419,9 @@ select:focus-visible {
   background: var(--cell-sel);
   color: var(--cell-sel-text);
 }
+.cell.ghost {
+  box-shadow: inset 0 0 0 2px var(--cell-sel);
+}
 .cell.sel .notes,
 .cell.match .notes {
   color: inherit;

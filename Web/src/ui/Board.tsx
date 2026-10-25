@@ -7,6 +7,8 @@ import type { TutorHighlight } from '../engine/tutor';
 
 export interface CellLook {
   sel?: boolean;
+  /** Faint outline marking the selection without the yellow fill. */
+  ghost?: boolean;
   match?: boolean;
   peer?: boolean;
   err?: boolean;
@@ -66,6 +68,7 @@ export function Board({
             else if (l.sel) cls.push('sel');
             else if (l.match) cls.push('match');
             else if (l.peer) cls.push('peer');
+            if (l.ghost && !t) cls.push('ghost');
             if (l.locked) cls.push('locked');
             if (l.err) cls.push('err');
             return (
