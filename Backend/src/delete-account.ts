@@ -3,8 +3,8 @@
  *
  * Required by the Google Play Store for any app that allows account
  * creation. Provides a publicly-accessible URL that explains what data
- * gets deleted and how a user initiates the request. Until we ship an
- * in-app delete button, requests go via email.
+ * gets deleted and how a user initiates the request: the Delete account
+ * button in Settings (web app and both mobile apps), or by email.
  */
 
 const PAGE_HTML = `<!DOCTYPE html>
@@ -44,12 +44,11 @@ const PAGE_HTML = `<!DOCTYPE html>
 </head>
 <body>
   <h1>Delete Your Account</h1>
-  <p class="meta">Sudoku · Last updated 2 May 2026</p>
+  <p class="meta">Sudoku Crew · Last updated 25 October 2026</p>
 
   <p>
-    You can delete your Sudoku account and all associated data at any
-    time. We'll process the request and send a confirmation when it's
-    complete.
+    You can delete your Sudoku Crew account and all associated data at
+    any time.
   </p>
 
   <h2>What gets deleted</h2>
@@ -57,14 +56,23 @@ const PAGE_HTML = `<!DOCTYPE html>
     <li>Your account (email address and display name).</li>
     <li>Your group memberships.</li>
     <li>Your scores on any group leaderboards.</li>
-    <li>Any sessions or verification codes still active.</li>
+    <li>Your multiplayer games and moves.</li>
+    <li>Any notification tokens, sessions or verification codes.</li>
   </ul>
   <p>
-    The app's local data on your device (saved puzzles, settings) is
-    deleted by uninstalling the app — that's never sent to our servers.
+    Saved puzzles and settings kept on your device were never sent to our
+    servers. To remove them, uninstall the app, or for the web app remove
+    it from your home screen and clear the site's data in your browser.
   </p>
 
-  <h2>How to request deletion</h2>
+  <h2>Delete it yourself</h2>
+  <p>
+    Sign in at <a href="/play/">sudokucrew.com/play</a> (or in the app),
+    open <strong>Settings</strong>, and tap <strong>Delete account</strong>.
+    It's immediate.
+  </p>
+
+  <h2>Or ask us by email</h2>
   <p>
     Email
     <a href="mailto:hello@sudokucrew.com?subject=Delete%20my%20account">hello@sudokucrew.com</a>

@@ -1,13 +1,8 @@
 // Public invite landing page served at /m/<code>. Recipients hit this URL
-// from a share, see the invite code prominently, and get pointed at the
-// App Store / Play Store. Once Universal Links / App Links land (see
-// STATUS.md), this same URL will deep-link directly into the app's
-// join-game flow when it's installed; until then it's a friendly fallback.
-
-const APP_STORE_URL =
-  'https://apps.apple.com/app/sudoku-crew/id6757345095';
-const PLAY_STORE_URL =
-  'https://play.google.com/store/apps/details?id=com.derekgillett.sudoku';
+// from a share and are sent into the web app's join flow (/play/?join=CODE).
+// Phones with the old store app installed still open it directly via
+// Universal Links / App Links (/.well-known), so they never see this page.
+// The store buttons were dropped in Oct 2026 as the apps are retired.
 
 export function getMultiplayerInvitePage(code: string): Response {
   // Hard-clamp code to the expected 6-char base32 alphabet so we don't echo
@@ -79,16 +74,11 @@ export function getMultiplayerInvitePage(code: string): Response {
     <h1>You've been invited to a Sudoku game</h1>
     <p>Join right here in your browser — no download needed:</p>
     <div class="stores">
-      <a href="/play/?join=${safeCode}">Play in your browser</a>
+      <a href="/play/?join=${safeCode}">Join the game</a>
     </div>
-    <p>Or open Sudoku Crew on your phone, sign in, then tap "Multiplayer" and "Join with a code". Use this code:</p>
+    <p>Already playing Sudoku Crew? Open it, tap "Multiplayer", and enter this code:</p>
     <div class="code">${safeCode}</div>
-    <p>Prefer the app?</p>
-    <div class="stores">
-      <a href="${APP_STORE_URL}">Get it on the App Store (iOS)</a>
-      <a href="${PLAY_STORE_URL}" class="secondary">Get it on Google Play (Android)</a>
-    </div>
-    <div class="footer">Sudoku Crew · sudoku.appfoundry.cc</div>
+    <div class="footer">Sudoku Crew · <a href="/">sudokucrew.com</a></div>
   </div>
 </body>
 </html>`;
