@@ -1,6 +1,6 @@
 # Sudoku App Specification
 
-This document is the **platform-agnostic behavioural contract** for the Sudoku app. The iOS implementation (in `/Sudoku/Sudoku/`) is the reference; this spec defines what *any* implementation must do — used to drive an Android port and any future versions.
+This document is the **platform-agnostic behavioural contract** for Sudoku Crew. Since October 2026 the reference implementation is the **web app** (PWA) in `Web/`, live at `sudokucrew.com/play`. The iOS and Android apps implement an earlier version of this contract and are being retired; where they differ, sections below say so.
 
 If a behaviour isn't here, it isn't part of the contract: feel free to choose the most natural pattern on the target platform.
 
@@ -12,7 +12,7 @@ A small, tight Sudoku app intended to be sent to friend / family groups. The cor
 
 Identity, group membership, daily distribution, and score storage are all served by a small Cloudflare Workers backend at `sudoku.appfoundry.cc` — see §17.
 
-Distribution is via TestFlight (iOS) and Google Play internal-test track (Android). Not a public app-store launch.
+Distribution is the web app at `sudokucrew.com/play`, installable to the home screen (see §18).
 
 ---
 
@@ -97,17 +97,19 @@ Storage format is JSON-encoded; the iOS reference uses `UserDefaults` keyed as:
 
 Any equivalent platform-native key/value store (Android `DataStore`, web `localStorage`) is fine.
 
+**Web app.** Uses `localStorage` under the same keys, with two differences: preferences live together in `sudoku.prefs.v1` (`{ difficulty, appearance, highlightMistakes, highlightConstraints, sound }`), and the bearer token is stored inside `sudoku.identity.v1` (`{ user, token }`) — a browser has no Keychain. Extra keys: `sudoku.coach.completed.v1`, `sudoku.puzzle_buffer.v1` (one pre-generated puzzle per tier), `sudoku.next_id.v1`, `sudoku.installed.v1`, `sudoku.install_hint_dismissed.v1`. Every read/write tolerates storage being unavailable (private browsing, blocked site data). On iPhone, a home-screen web app's storage is separate from Safari's.
+
 ---
 
 ## 5. Difficulty Tiers
 
-Three tiers, identified by hint count targets after uniqueness-preserving cell removal:
+Three tiers. Each starts from a target number of givens, but a tier is ultimately defined by the **techniques it needs** (§6), not the clue count:
 
 | Tier   | Target givens | Notes                                                         |
 |--------|---------------|---------------------------------------------------------------|
 | Easy   | 48            | Gentle introduction.                                          |
-| Medium | 32            | Default tier.                                                 |
-| Hard   | 26            | Sparser; cell removal may stop above the target if uniqueness can't be preserved further. |
+| Medium | 32            | Default tier. Carving continues below 32 until a medium technique is required (typically ~27 givens). |
+| Hard   | 26            | Carving continues until a hard technique is required (typically ~25 givens). |
 
 The user's preferred tier persists; default is Medium.
 
@@ -119,15 +121,19 @@ A puzzle is produced by:
 
 1. **Generate a random fully-solved 9×9 grid** via backtracking with shuffled digit order at each step. The first empty cell is filled, recursing.
 2. **Carve out a puzzle** by visiting cells in random order and removing each one *only if* the resulting grid still has a unique solution. Stop when the target hint count for the difficulty is reached or no more cells can be removed without ambiguity.
-3. **Validate the technique tier** by running the puzzle through `TutorEngine.classify(cells:)`, which solves the puzzle by repeatedly applying the easiest engine hint and tracks the *hardest* tier required. The candidate is accepted only if its max tier matches the requested difficulty:
+3. **Validate the technique tier** by running the puzzle through `classify(cells)`, which solves the puzzle by repeatedly applying the easiest engine hint and tracks the *hardest* tier required. If the carved puzzle is still too easy, **keep carving** (uniqueness-preserving), re-classifying after each removal, and put back any removal that overshoots (needs a harder tier, or is beyond the engine). The candidate is accepted when its max tier matches the requested difficulty:
    - **Easy** → `TutorTechnique.Tier.simple` (only naked / hidden singles).
    - **Medium** → `medium` (up through pair / pointing / box-line — needs at least one of those).
    - **Hard** → `hard` (needs at least one triple / wing / fish technique).
 
-   Reject mismatches and regenerate. Up to 25 attempts per generation, with the most recent candidate retained as a graceful fallback if all attempts miss tier (rare). This replaces the older clue-count-only heuristic, which produced "Medium" puzzles that secretly needed X-Wings and "Hard" puzzles solvable with naked singles alone.
+   Up to 25 attempts per generation, with the first candidate kept as a fallback if all miss (not observed in testing).
+
+   **`classify` must read singles from pencil marks.** The tutor's naked/hidden singles deliberately read candidates from placed digits only (no spoilers from the player's notes), so they can't see eliminations made by pairs, wings or fish. Inside `classify`, when the next engine hint is an elimination, first check for a single in the (auto-pencilled) notes and apply that; the single is charged to the elimination's tier. Without this, any puzzle needing a medium/hard technique stalls and classifies as `nil`, so Medium and Hard can never be generated. **The iOS/Android apps have this bug**: in practice their Medium/Hard puzzles fell through to the fallback and played like Easy with fewer clues. Measured on the web generator after the fix: 30/30 on-tier for each difficulty, ~0.1–0.4 s each.
+
+   **The server's daily** (`Backend/src/generator.ts`) is still chosen by clue count alone (32 givens), so it is usually singles-only despite being labelled Medium. Open decision — see `docs/TODO.md`.
 4. The full pre-removal grid becomes `solution`; the carved grid becomes `givens`.
 
-For responsiveness the generator should keep a small per-tier buffer of pre-built puzzles (background queue, lazy-fill). 3 puzzles per tier is a reasonable buffer size. A synchronous fallback is acceptable on first launch before the buffer fills. The classify-and-reject loop runs on the background queue too, so the latency is hidden from the user.
+For responsiveness the generator keeps a small per-tier buffer of pre-built puzzles, filled in the background (the web app: a Web Worker, one puzzle per tier, persisted in `localStorage` so New Game is instant even straight after launch). If the buffer is empty, generate on demand behind a "Building your puzzle…" indicator.
 
 ### Solver
 
@@ -158,9 +164,9 @@ Cells are tinted based on the current selection and the user's preferences. The 
 
 | Layer | Trigger                                                                 | Tint                       |
 |-------|-------------------------------------------------------------------------|----------------------------|
-| 1     | Selected cell.                                                          | Yellow / warm (strongest). |
-| 2     | Cells holding the **same number** as the selected cell (matching).      | Medium accent (cool).      |
-| 3a    | Cells in the same row, column, **or 3×3 box** as the selected cell.     | Light accent.              |
+| 1     | Selected cell.                                                          | Solid yellow, dark text (strongest). |
+| 2     | Cells holding the **focus number** (matching) — the selected cell's value, or the armed speed digit (§9). | Accent-coloured digit on a soft accent tint. |
+| 3a    | Cells in the same row, column, **or 3×3 box** as the selected cell. *Not drawn while a speed digit is armed* (§9). | Light accent.              |
 | 3b    | (only when "Highlight rules" is **on**) Cells in any row, col, or box that already contains the selected cell's value — i.e., where that value can't legally go. | Light accent.              |
 | 3c    | (only when "Highlight rules" is **on**) Cells that are already filled with **any** value — they're unavailable for the selected number regardless. | Light accent.              |
 | 4     | (only when "Highlight mistakes" is **on**) The cell's text is red if the cell has a value that doesn't match the puzzle's solution. (For fixed cells, falls back to row/col/box rule check.) | Red text (overrides text colour, not background). |
@@ -168,6 +174,8 @@ Cells are tinted based on the current selection and the user's preferences. The 
 The selection-based highlighting (layers 1–3a) always applies once a cell is selected. The "rules" highlighting (3b, 3c) is gated on the user's "Highlight rules" preference. Mistake highlighting is gated on the "Highlight mistakes" preference.
 
 A green seal-style icon is shown next to the puzzle title when the grid is fully solved.
+
+**Web app visual notes.** Tints are opaque colours with clear steps between layers (translucent washes all landed at similar strength on a dark board, so the selection didn't stand out). Grid lines are 1px (cells) and 2.5px (boxes and outer border) so they read on a phone.
 
 ---
 
@@ -187,11 +195,18 @@ When the selected cell holds a value, the pad button for that value is rendered 
 
 **Mode toggle.** A button toggles between Normal and Pencil mode. Pencil mode adds/removes pencil marks instead of writing real values.
 
-**Speed mode toggle.** A button next to the Pencil toggle. Speed mode adds **one rule** on top of normal behaviour:
+**Speed mode toggle.** A button next to the Pencil toggle. Speed mode is "pick a number, then tap squares": it is driven by one piece of real state, the **armed digit** (`activeNumber`).
 
-- When a cell holding a value is selected (so a number is "in focus" — its pad button is highlighted, same-value cells light up on the board), tapping an **empty editable cell** drops that number into it.
+- **Pad tap** arms that digit, or disarms it if it's already armed. It never places anything, and it clears the selection so nothing stale lingers on the board.
+- **Board tap on an empty, editable cell** with a digit armed places it — or, in pencil mode, toggles it as a note (rapid note-filling).
+- **Board tap on a filled or locked cell** with a digit armed clears the selection; it does not re-arm.
+- The armed digit's pad button is highlighted, and every copy of it on the board lights up (§8 layer 2).
+- While armed, the board shading means **only** "this digit can't go here" (§8 layers 3b/3c); the selection's row/column/box tint (3a) is suppressed, and the selected cell is drawn as a faint yellow outline (it's what Undo would clear) instead of the yellow fill. The hint under the pad reads "Tap empty squares to place N. Dark squares are where N can still go." The tints must agree with that sentence: when the selection tint was drawn too, it hid a legal square and misled a player into a wrong placement.
+- The digit disarms itself once all nine are placed. A tenth copy of a completed digit is refused on every input path.
+- Arrow keys only ever move the selection; they never place.
+- Speed mode and the armed digit reset on new puzzle / reset / load. Speed off → normal behaviour, unchanged.
 
-Everything else is unchanged — the pad still works the same, highlighting still works the same, normal-mode cell selection still works the same. To start placing a digit that isn't yet on the board, the user falls back to the standard flow (tap empty cell, then tap a number on the pad); after that the digit is "in focus" and subsequent empty taps with Speed mode on rapid-fill it. Speed mode resets to off on new puzzle / reset / load.
+**The iOS/Android apps differ:** they infer the armed digit from the selected cell's value, so a digit not yet on the board can't be armed, and arrow keys, pencil mode and the completed-digit guard all misbehave (see `docs/TODO.md`). Not being fixed there.
 
 **Erase / Undo button.** A single button that adapts:
 
@@ -263,14 +278,16 @@ Shows, in order:
    - *Not started today* — "Daily Puzzle" with subtitle = today's date.
    - *In progress today* — "Resume Daily" with subtitle = date + elapsed time.
    - *Completed today* — "Daily Done" with subtitle = "already played". Tappable — opens the read-only completed-board view (§13.5) with the bouncy "Solved!" header playing on appear, so the user can revisit their solved daily.
-2. **Continue button** — only shown if the most-recent in-progress save is *not* today's daily (otherwise Daily already covers it). Subtitle shows puzzle ID, difficulty, elapsed time.
-3. **New Game button** — opens the New Game sheet (difficulty picker).
-4. **Games button** — opens the Games sheet.
-5. **Settings** — small gear icon, top-right corner.
+2. **Continue button** — only shown if the most-recent in-progress save is *not* today's daily (otherwise Daily already covers it). Subtitle shows the puzzle's label and elapsed time.
+3. **Daily History button** — opens the daily calendar (§13.13). Caption: "N-day streak · M to catch up" (M = unplayed dailies in the last 30 days), or "M past dailies to catch up" with no current streak.
+4. **Today's Leaderboard**, **Multiplayer**, **New Game** (difficulty picker), **Coach**, **Games** buttons.
+5. **Settings** — gear icon, top-right; identity chip ("Sign in" or the display name) top-left.
+
+Web app: an install tip sits at the top of Home when the app isn't installed (§13.14), and an update banner appears above everything when a newer version is live.
 
 ### 13.2 Playing screen
 
-- **Header**: puzzle title (just `displayLabel` — see below), green seal if solved, mistake count (only if "Highlight mistakes" on), elapsed timer, **wand button** (auto-pencil — see §13.11), **lightbulb button** (tutor — see §13.10, yellow filled), pause/play button, settings gear. `displayLabel` is "Daily · MMM d" for dailies and the bare difficulty label ("Easy" / "Medium" / "Hard") for generated puzzles. The internal puzzle counter (#1042) is no longer surfaced — it's an implementation detail that no player cares about.
+- **Header**: puzzle title (just `displayLabel` — see below), green seal if solved, mistake count (only if "Highlight mistakes" on), elapsed timer, **wand button** (auto-pencil — see §13.11), **lightbulb button** (tutor — see §13.10, yellow filled), pause/play button, settings gear. `displayLabel` is "Daily · MMM d" for dailies and the bare difficulty label ("Easy" / "Medium" / "Hard") for generated puzzles. (Web app: on the Playing header a daily shows as a calendar icon plus "d MMM", because "Daily · …" didn't fit beside the timer and four buttons on a phone. Offline stand-in dailies carry an "Unranked" tag.) The internal puzzle counter (#1042) is no longer surfaced — it's an implementation detail that no player cares about.
 - **Board**: 9×9 grid with the highlighting rules from §8. Tap to select.
 - **Number pad**: 1–9 buttons (§9), Pencil-toggle button, Erase/Undo button.
 - **Bottom controls**: prominent **Home** button (with house icon), **Reset** button (with confirmation dialog before discarding progress).
@@ -444,7 +461,8 @@ Subtle audio cues for in-game events. All sounds are short (under ~½s except th
 | Event                                | Cue                  | Notes                                                                          |
 |--------------------------------------|----------------------|--------------------------------------------------------------------------------|
 | Number placed                        | Soft click           | Fires on every digit entry into an empty cell (normal mode only — not pencil). |
-| Number erased / undone               | Soft reverse-click   | Only when the cell had content; pencil-mode toggles also fire this.            |
+| Number erased / undone               | Soft reverse-click   | Only when the cell had content. Erase/Undo button only.                        |
+| Pencil mark added / removed          | Light tick / softer, lower tick | The placement click at reduced volume, pitched up (added) or down (removed). Web app only: the apps played the erase clip for pencil toggles, and removing a note sounded like an error. |
 | Mistake entered                      | Short error blip     | Only when "Highlight mistakes" is on.                                          |
 | 3×3 box completed, OR digit fully placed | Positive pip      | Fires when a placement completes its 3×3 box, or when the placed digit now has all 9 instances down. Row / column completion alone is too subtle to chime on. |
 | Puzzle solved                        | Triumphant sting     | Plays alongside the live fanfare AND when revisiting a completed-board view.   |
@@ -454,8 +472,25 @@ Subtle audio cues for in-game events. All sounds are short (under ~½s except th
 **Platform behaviour.**
 - **iOS** uses `AVAudioSession` category `.ambient` with `.mixWithOthers` — respects the silent (ringer) switch and mixes with other audio (Spotify, podcasts continue under the cues). Lazy-activated on first sound.
 - **Android** uses `SoundPool` with `USAGE_GAME` / `CONTENT_TYPE_SONIFICATION` — rides the media volume stream so the volume rocker controls cue loudness. No silent-switch concept; the toggle covers it.
+- **Web** uses Web Audio (`AudioContext`) for low latency. iOS only starts audio from a touchend/click/keydown — **not** pointerdown, which the board uses for instant entry — so the context is created and resumed on the first such gesture anywhere, and resumed again from the "interrupted" state iOS leaves it in after the app is backgrounded. `navigator.audioSession.type = 'ambient'` (iOS 17+) respects the silent switch and mixes with other audio, matching the iOS app.
 
 Audio assets are CC0 from the Kenney Interface Sounds pack: `click_001`, `back_001`, `error_008`, `confirmation_001`, `confirmation_004`. Bundled as `.m4a` on iOS (converted from `.ogg`) and `.ogg` on Android.
+
+### 13.13 Daily history, streaks & rewards (web app)
+
+A month calendar of every daily since launch (first daily: 29 Apr 2026), reached from Home.
+
+- **Day states:** solved (green, shows the time), started (outlined), not played, today (ringed), and days before launch / in the future (dimmed, not tappable). Month navigation is clamped to that range; weeks start Monday.
+- **Tapping** a solved day opens its completed board (§13.5), which has a "Leaderboard for this day" button. Tapping today plays the daily; tapping any other unplayed day fetches it (`GET /v1/daily/:id`) and plays it as a normal ranked daily.
+- **Streaks** count a day once its daily is solved, **whenever** it was solved — so catching up on a missed day repairs the streak. Current streak counts back from today, or from yesterday if today isn't done yet. Best streak and total dailies done are shown too.
+- **Rewards:** a "Perfect month" trophy for every daily in a month solved (awarded once the month has ended), and streak milestones at 7, 30, 100 and 365 days. Derived on the client from history; not stored server-side.
+- **Catch-up solves on leaderboards:** a late solve still posts to that day's leaderboard (the server accepts any past daily). The leaderboard tags it **"caught up"** when it was completed after its own Sydney date, so it isn't mistaken for an on-the-day time.
+
+### 13.14 Install & updates (web app)
+
+- **Install tip** at the top of Home: iPhone — "tap Share, then Add to Home Screen"; Android Chrome — a one-tap Install button (`beforeinstallprompt`); other Android browsers — "menu, then Add to Home screen". Never shown when running installed (`display-mode: standalone` / `navigator.standalone`); once the app has run installed (or `appinstalled` fired) a flag keeps it away from browser tabs on the same phone. Dismissing it hides it for good on that device.
+- **Update banner.** iOS resumes a suspended home-screen app without reloading, so a deploy would never appear. The app checks for a newer build on returning to the foreground and every 3 minutes, comparing the live page's script bundle with the running one, and shows "A new version of Sudoku Crew is ready — tap to get it" with an **Update** button that saves and reloads (safe mid-game). The check must bypass the service worker (`?update-check=` query, skipped in `sw.js`): the SW answers `/play/` from its cache — a copy of the running version — so a naive check never sees a change.
+- **Offline:** the service worker serves page loads network-first with the cached shell as fallback, and hashed assets cache-first. The API is never cached by the SW; the app keeps its own offline copies (daily cache, pending scores).
 
 ---
 
@@ -511,10 +546,12 @@ Email + 6-digit OTP. No passwords, no third-party sign-in.
 
 1. User enters their email → app calls `POST /v1/auth/start { email }`. Server generates a 6-digit numeric code, stores `sha256(code)` with a 15-minute TTL and a 5-attempt cap, and emails the code via Resend.
 2. User types the code → app calls `POST /v1/auth/verify { email, code }`. Server validates, deletes the code row on success, creates the user if new, issues a 32-byte random bearer token (stored as `sha256(token)` in `auth_tokens`), and returns `{ token, user, needs_display_name }`.
-3. App stores the raw token in **Keychain (iOS) / EncryptedSharedPreferences (Android)** — never in plain UserDefaults / DataStore. Sends `Authorization: Bearer <token>` on subsequent authenticated calls.
+3. App stores the raw token in **Keychain (iOS) / EncryptedSharedPreferences (Android) / `localStorage` (web — the only option a browser offers)**. Sends `Authorization: Bearer <token>` on subsequent authenticated calls.
 4. New users are immediately prompted to set a display name (`PUT /v1/me { display_name }`). Display names are global, one per user, duplicates allowed across users.
 
 Tokens never expire; revocable by deleting the `auth_tokens` row server-side.
+
+**Each `auth/start` replaces the previous code**, so a second send makes the first email's code fail with `wrong_code`. The web client therefore locks the Send/Verify buttons synchronously on the first tap (a state flag alone left a gap for a double-tap), offers **Resend code** only after a 30s cooldown, and shows distinct copy for an unreachable server ("Can't reach the server…"), rate limiting (429), and a failed send.
 
 ### 17.3 Groups
 
@@ -558,24 +595,25 @@ Anchored on the daily puzzle. One leaderboard per `(group, puzzle_id)`.
 | `highlight_mistakes_was_on`| `GameSave.highlightMistakesEverOn` (sticky — once true, stays true) |
 | `highlight_rules_was_on`   | `GameSave.highlightConstraintsEverOn` (sticky) |
 
-**Badge inversion in the UI.** The leaderboard does NOT mark *used* assists as asterisks; instead it shows **badges for the absence** of each assist, framing clean solves as achievements rather than assisted solves as penalties. Per-assist badges:
+**Badge inversion in the UI.** The leaderboard does NOT mark *used* assists as asterisks; instead it shows **badges for the absence** of each assist, framing clean solves as achievements rather than assisted solves as penalties. Three badges, earned independently:
 
-| Badge          | Earned when                                    | Icon                  | Colour |
-|----------------|------------------------------------------------|-----------------------|--------|
-| Solo           | `hints_used == 0`                              | lightbulb-slash       | green  |
-| Manual         | `pencil_assists_used == 0`                     | wand-and-stars-inverse| purple |
-| No safety net  | `!highlight_mistakes_was_on`                   | shield-slash          | red    |
-| Unaided        | `!highlight_rules_was_on`                      | eye-slash             | blue   |
+| Badge    | Earned when                  | Icon                  | Colour |
+|----------|------------------------------|-----------------------|--------|
+| Solo     | `hints_used == 0`            | lightbulb-slash       | green  |
+| Manual   | `pencil_assists_used == 0`   | pencil / wand-inverse | purple |
+| Flawless | `flawless == true` (zero mistakes; server-derived, raw count never exposed) | check-seal | mint |
 
-**Purist mega-badge** (gold star) — earned when ALL FOUR are absent (no assists used at all). Replaces the four individual badges so the row stays uncluttered.
+**Purist** (gold star) — all three on the same solve. Replaces the three individual badges so the row stays uncluttered.
 
-**Flawless badge** (mint check-seal) — earned when `mistakes == 0`. Independent of the assist badges and *stacks* with them, including the Purist mega-badge (Purist says nothing about mistakes). Server-derived: backend exposes only a `flawless: boolean` on each leaderboard row, never the raw mistake count.
+The highlight-toggle flags (`highlight_mistakes_was_on`, `highlight_rules_was_on`) are still recorded and returned, but **no longer award badges**: they're learning aids, and rewarding their absence created an incentive to switch off helpful UI just for a badge. (An earlier version of this spec listed "No safety net" and "Unaided" badges for them.)
+
+Leaderboard rows show the **effective** (penalised) time; tapping a row shows raw vs effective, and the viewer's own mistake count on their own row only. Rows completed after their day are tagged "caught up" (§13.13).
 
 A small ⓘ button in the leaderboard sheet's header opens a "Badge Legend" sub-sheet explaining each badge.
 
 ### 17.5 API contract (v1)
 
-Base URL: `https://sudoku.appfoundry.cc/v1`. All bodies are JSON.
+Base URL: `https://sudoku.appfoundry.cc/v1` for the store apps (compiled in; must never move). The web app calls the same Worker same-origin at `https://sudokucrew.com/v1`. All bodies are JSON.
 
 | Method | Path                              | Auth     | Request                                | Response                                      |
 |--------|-----------------------------------|----------|----------------------------------------|-----------------------------------------------|
@@ -583,15 +621,18 @@ Base URL: `https://sudoku.appfoundry.cc/v1`. All bodies are JSON.
 | POST   | `/auth/verify`                    | none     | `{ email, code }`                      | `{ token, user, needs_display_name }`         |
 | GET    | `/me`                             | bearer   | —                                      | `{ user }`                                    |
 | PUT    | `/me`                             | bearer   | `{ display_name }`                     | `{ user }`                                    |
+| DELETE | `/me`                             | bearer   | —                                      | `204` — deletes the account and everything tied to it (scores, memberships, multiplayer moves/players, push tokens, sessions, codes) |
 | GET    | `/me/groups`                      | bearer   | —                                      | `[{ group, member_count, invite_code }]`      |
+| GET    | `/me/scores`                      | bearer   | —                                      | `{ scores: [{ puzzle_id, elapsed_seconds, mistakes, completed_at, hints_used, pencil_assists_used, highlight_mistakes_was_on, highlight_rules_was_on, difficulty, date, givens, solution }] }` — newest first, max 365; used to restore history on a new device |
 | POST   | `/groups`                         | bearer   | `{ name }`                             | `{ group, invite_code }`                      |
 | POST   | `/groups/join`                    | bearer   | `{ invite_code }`                      | `{ group }`                                   |
 | GET    | `/groups/:id/members`             | bearer   | —                                      | `[{ user, dailies_completed, last_completed_at }]` (`dailies_completed` is all-time across every daily; `last_completed_at` is unix-millis or null) |
 | DELETE | `/groups/:id/members/me`          | bearer   | —                                      | `204`                                         |
 | GET    | `/daily/today`                    | none     | —                                      | `{ today: Puzzle, tomorrow: Puzzle }`         |
-| GET    | `/daily/:puzzle_id`               | none     | —                                      | `{ puzzle: Puzzle }`                          |
+| GET    | `/daily/:puzzle_id`               | none     | —                                      | `{ puzzle: Puzzle }` — any past date (generated on first request); future dates → `404 not_yet_available` |
+| GET    | `/version`                        | none     | —                                      | `{ ios: { current, min_required, store_url }, android: { … } }` — store apps' update prompt |
 | POST   | `/scores`                         | bearer   | `{ puzzle_id, elapsed_seconds, mistakes, hints_used, pencil_assists_used, highlight_mistakes_was_on, highlight_rules_was_on }` | `{ rank }` |
-| GET    | `/groups/:id/scores/:puzzle_id`   | bearer   | —                                      | `[{ display_name, elapsed_seconds, completed_at, rank, hints_used, pencil_assists_used, highlight_mistakes_was_on, highlight_rules_was_on, flawless }]` (rows ordered by penalised time; raw mistake count never exposed) |
+| GET    | `/groups/:id/scores/:puzzle_id`   | bearer   | —                                      | `[{ display_name, elapsed_seconds, effective_seconds, completed_at, rank, hints_used, pencil_assists_used, highlight_mistakes_was_on, highlight_rules_was_on, flawless }]` (rows ordered by penalised time; raw mistake count never exposed) |
 | POST   | `/multiplayer/games`              | bearer   | `{ difficulty, turn_duration_seconds, competitive_mode, invited_user_ids?, group_id? }` | `{ game, invite_code }` |
 | GET    | `/multiplayer/games/:id`          | bearer   | —                                      | `{ game, players, moves, board }`             |
 | POST   | `/multiplayer/games/:id/join`     | bearer   | `{ invite_code? }` (omit if pre-invited) | `{ game }`                                  |
@@ -620,6 +661,7 @@ Turn-based async sudoku for 2+ players. Full design + locked product decisions i
 - **Push notifications** (APNs + FCM via Worker JWT signing in `Backend/src/push.ts`) fire on: `your_turn`, `turn_forfeited`, `mp_invite`, `mp_game_end`. Push tokens registered via `POST /me/push_token`. Worker secrets: `APNS_KEY_ID / APNS_TEAM_ID / APNS_BUNDLE_ID / APNS_PRIVATE_KEY / APNS_USE_SANDBOX`, `FCM_PROJECT_ID / FCM_CLIENT_EMAIL / FCM_PRIVATE_KEY`.
 - **Public invite codes & deep-linking**: shareable URL is `https://sudoku.appfoundry.cc/m/<code>`. The Worker serves three things off that base path: (1) the HTML invite landing page (with App Store + Play Store buttons) for users without the app, (2) `/.well-known/apple-app-site-association` for iOS Universal Links, and (3) `/.well-known/assetlinks.json` for Android App Links. iOS Associated Domains entitlement and Android `<intent-filter android:autoVerify="true">` make `/m/*` open the app directly, where the client calls `POST /v1/multiplayer/join-by-code` to atomically join. Anyone (any phone, any platform) can be invited — the link routes them through the right path. Manual `POST /multiplayer/games/:id/join` with `{ invite_code }` is still supported for the in-app "Join with a code" picker.
 - **Concurrent games**: capped at 10 active per user; `POST /multiplayer/games` returns 409 if exceeded.
+- **Web app:** no push yet — the game view polls every 8 s while open and the lobby every 20 s. Invite links are `https://sudokucrew.com/m/<code>`; the landing page there sends people to `/play/?join=<code>`, which joins after sign-in (phones with a store app installed still open it via Universal/App Links). One digit per turn; a wrong digit ends the turn.
 
 ### 17.7 Deferred (post-v1)
 
@@ -633,23 +675,22 @@ Turn-based async sudoku for 2+ players. Full design + locked product decisions i
 
 ## 18. Distribution
 
-- **iOS**: TestFlight (internal team or external testers, friends added by Apple ID).
-- **Android**: Google Play Console internal-test track (testers added by Google account).
-- No public store listings required.
+- **Web (production, since Oct 2026):** `sudokucrew.com/play`, served as static assets by the same Cloudflare Worker as the API (`Backend/wrangler.toml` `[assets]`). Deploy with `npm run deploy` in `Backend/`, which builds `Web/` into `Backend/public/play` first. Players add it to the home screen (§13.14). GitHub `main` mirrors what's deployed.
+- **iOS / Android:** published on the App Store and Google Play; being retired in favour of the web app. `/privacy` must stay true for them while the listings exist. Plan in `docs/TODO.md` → "Retiring the store apps".
 
 ---
 
 ## 19. Platform Notes
 
-| Concern         | iOS reference                             | Android equivalent (Compose)                     |
-|-----------------|-------------------------------------------|--------------------------------------------------|
-| UI framework    | SwiftUI                                   | Jetpack Compose                                  |
-| State container | `ObservableObject` + `@Published`         | `ViewModel` + `StateFlow` / `mutableStateOf`     |
-| Navigation      | Phase enum + sheets                       | Navigation-Compose with `NavHost` + bottom sheets |
-| Persistence     | `UserDefaults` (JSON-encoded)             | `DataStore` (Preferences or Proto)               |
-| Timer           | Combine `Timer.publish` sink              | Coroutine + `Flow` ticking                       |
-| Color scheme    | `.preferredColorScheme(_:)`               | `MaterialTheme` with dark/light derivation       |
-| Lifecycle       | `@Environment(\.scenePhase)` observe      | `LifecycleObserver` / `LifecycleEventEffect`     |
-| Background work | `DispatchQueue` background queue          | Coroutine on `Dispatchers.Default`               |
+| Concern         | Web (reference)                         | iOS                                       | Android (Compose)                                |
+|-----------------|-----------------------------------------|-------------------------------------------|--------------------------------------------------|
+| UI framework    | Preact + TypeScript (Vite)              | SwiftUI                                   | Jetpack Compose                                  |
+| State container | One observable store + `useStore()` hook | `ObservableObject` + `@Published`         | `ViewModel` + `StateFlow` / `mutableStateOf`     |
+| Navigation      | Phase + a stack of sheets               | Phase enum + sheets                       | Navigation-Compose with `NavHost` + bottom sheets |
+| Persistence     | `localStorage` (JSON)                   | `UserDefaults` (JSON-encoded)             | `DataStore` (Preferences or Proto)               |
+| Timer           | `setInterval`, cancelled on `visibilitychange` | Combine `Timer.publish` sink        | Coroutine + `Flow` ticking                       |
+| Color scheme    | CSS tokens + `prefers-color-scheme` / `data-theme` | `.preferredColorScheme(_:)`    | `MaterialTheme` with dark/light derivation       |
+| Lifecycle       | `visibilitychange` / `pagehide`         | `@Environment(\.scenePhase)` observe      | `LifecycleObserver` / `LifecycleEventEffect`     |
+| Background work | Web Worker (puzzle generation)          | `DispatchQueue` background queue          | Coroutine on `Dispatchers.Default`               |
 
-The puzzle generator and solver are pure logic — port them straight to Kotlin with the same algorithms.
+The puzzle generator, solver and tutor are pure logic in `Web/src/engine/` with unit tests (`npm test` in `Web/`).
