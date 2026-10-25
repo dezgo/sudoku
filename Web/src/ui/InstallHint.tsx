@@ -8,12 +8,19 @@ import { readJSON, writeJSON } from '../lib/storage';
 import { Icon } from './icons';
 
 const DISMISS_KEY = 'sudoku.install_hint_dismissed.v1';
+// Set the first time the app runs installed (or the browser reports an
+// install). On Android the installed app and Chrome tabs share storage, so
+// this keeps the tip away from a browser tab on a phone that already has
+// the app. (iPhone keeps home-screen apps' storage separate from Safari, so
+// there a Safari tab can still show the tip — it's genuinely not the app.)
+const INSTALLED_KEY = 'sudoku.installed.v1';
 
 interface BeforeInstallPromptEvent extends Event {
   prompt: () => Promise<void>;
 }
 
 let deferred: BeforeInstallPromptEvent | null = null;
+window.addEventListener('appinstalled', () => writeJSON(INSTALLED_KEY, true));
 window.addEventListener('beforeinstallprompt', (e) => {
   e.preventDefault();
   deferred = e as BeforeInstallPromptEvent;
@@ -35,11 +42,15 @@ export function InstallHint() {
   const [, setTick] = useState(0);
   useEffect(() => {
     // beforeinstallprompt can land after first render.
-    const t = setTimeout(() => setTick((n) => n + 1), 2000);
+    const t = setTimeout(() => setTick((n) => n + 1), 1500);
     return () => clearTimeout(t);
   }, []);
 
-  if (dismissed || isStandalone()) return null;
+  if (isStandalone()) {
+    writeJSON(INSTALLED_KEY, true);
+    return null;
+  }
+  if (dismissed || readJSON<boolean>(INSTALLED_KEY, false)) return null;
   const dismiss = () => {
     writeJSON(DISMISS_KEY, true);
     setDismissed(true);
@@ -73,6 +84,22 @@ export function InstallHint() {
           }}
         >
           Install
+        </button>
+      </div>
+    );
+  }
+  if (/Android/i.test(navigator.userAgent)) {
+    // Samsung Internet, Firefox etc. never fire beforeinstallprompt, so
+    // there's no button to offer — just say where the menu option lives.
+    return (
+      <div class="install-hint">
+        <Icon name="download" size={20} />
+        <div style={{ flex: 1 }}>
+          <b>Add to your Home screen</b> so it opens like an app: open your browser's menu, then “Add to Home screen”
+          (or “Install app”).
+        </div>
+        <button class="icon-btn" aria-label="Dismiss" onClick={dismiss}>
+          <Icon name="x" size={16} />
         </button>
       </div>
     );

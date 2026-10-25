@@ -37,6 +37,8 @@ export function Home() {
         </button>
       </div>
 
+      <InstallHint />
+
       <h1 class="home-title">Sudoku Crew</h1>
 
       <div class="home-buttons">
@@ -96,7 +98,6 @@ export function Home() {
         </button>
       </div>
 
-      <InstallHint />
     </div>
   );
 }

@@ -250,7 +250,8 @@ select:focus-visible {
 }
 
 .install-hint {
-  margin-top: 24px;
+  margin-top: 8px;
+  width: 100%;
   padding: 12px 14px;
   border-radius: 12px;
   background: var(--surface);
