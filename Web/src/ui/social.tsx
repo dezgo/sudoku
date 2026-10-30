@@ -24,13 +24,15 @@ function errorCopy(e: unknown, fallback: string): string {
 
 export function SignInSheet({ then }: { then?: () => void }) {
   const s = useStore();
-  const [step, setStep] = useState<'email' | 'code' | 'name' | 'groups'>('email');
-  const [email, setEmail] = useState('');
+  // Resume a code already sent (see store.pendingSignIn) instead of sending another.
+  const [pending] = useState(() => s.pendingSignIn());
+  const [step, setStep] = useState<'email' | 'code' | 'name' | 'groups'>(pending ? 'code' : 'email');
+  const [email, setEmail] = useState(pending?.email ?? '');
   const [code, setCode] = useState('');
   const [name, setName] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-  const [resendAt, setResendAt] = useState(0);
+  const [resendAt, setResendAt] = useState(pending ? pending.sentAt + 30_000 : 0);
   const [, tick] = useState(0);
 
   useEffect(() => {
@@ -120,7 +122,17 @@ export function SignInSheet({ then }: { then?: () => void }) {
   return (
     <Sheet
       title={title}
-      left={<button class="link" onClick={() => s.close()}>Cancel</button>}
+      left={
+        <button
+          class="link"
+          onClick={() => {
+            s.clearPendingSignIn();
+            s.close();
+          }}
+        >
+          Cancel
+        </button>
+      }
       right={<span />}
       dismissable={!busy}
     >
@@ -157,7 +169,8 @@ export function SignInSheet({ then }: { then?: () => void }) {
         {step === 'code' && (
           <>
             <p class="muted" style={{ margin: 0 }}>
-              Code sent to {email}. It can take a minute — check spam if it's not there.
+              Code sent to {email}. It can take a minute — if it's not in your inbox, check spam or junk for an email
+              from <b>Sudoku Crew</b>. You can switch to your email app and come back; this screen will wait.
             </p>
             <input
               class="field code"
@@ -205,6 +218,7 @@ export function SignInSheet({ then }: { then?: () => void }) {
               type="button"
               class="link"
               onClick={() => {
+                s.clearPendingSignIn();
                 setCode('');
                 setError(null);
                 setStep('email');

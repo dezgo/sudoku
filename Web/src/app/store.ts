@@ -476,6 +476,26 @@ class Store {
 
   async startSignIn(email: string): Promise<void> {
     await api.authStart(email.trim().toLowerCase());
+    writeJSON(KEYS.pendingSignIn, { email: email.trim(), sentAt: Date.now() });
+  }
+
+  /**
+   * A code sent in the last 15 minutes (its lifetime on the server) that
+   * hasn't been used yet. Fetching the code means leaving the app for the
+   * mail app, and the phone often throws the page away meanwhile — so the
+   * sign-in sheet must be able to come back at "Enter code" rather than
+   * starting over. Starting over sends a new code, which cancels the one
+   * already in the inbox (Derek's dad got stuck in exactly that loop,
+   * 30 Oct 2026).
+   */
+  pendingSignIn(): { email: string; sentAt: number } | null {
+    const p = readJSON<{ email: string; sentAt: number } | null>(KEYS.pendingSignIn, null);
+    if (!p || this.token || Date.now() - p.sentAt > 15 * 60 * 1000) return null;
+    return p;
+  }
+
+  clearPendingSignIn(): void {
+    writeJSON(KEYS.pendingSignIn, null);
   }
 
   /** Returns true when the new account still needs a display name. */
@@ -483,6 +503,7 @@ class Store {
     const r = await api.authVerify(email.trim().toLowerCase(), code.trim());
     this.identity = { user: r.user, token: r.token };
     writeJSON(KEYS.identity, this.identity);
+    this.clearPendingSignIn();
     this.emit();
     void this.afterSignIn();
     return r.needs_display_name || !r.user.display_name;
@@ -604,6 +625,8 @@ class Store {
   // --- Launch ---
 
   async launch(): Promise<void> {
+    // Came back from the mail app to a fresh page: pick the sign-in up where it was.
+    if (this.pendingSignIn() && !this.sheets.some((s) => s.kind === 'signIn')) this.open({ kind: 'signIn' });
     await Promise.all([
       this.refreshDaily(),
       this.token ? this.refreshGroups() : null,
