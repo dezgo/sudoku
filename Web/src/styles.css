@@ -448,6 +448,45 @@ select:focus-visible {
 .cell.err .v {
   color: var(--error);
 }
+/* Co-op: who's playing, above the board. */
+.coop-strip {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 36px;
+  margin: 0 0 6px;
+  font-size: 0.92rem;
+}
+.coop-strip .grow {
+  flex: 1;
+}
+.coop-player {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-weight: 600;
+  color: #9b59b6;
+}
+.coop-player::before {
+  content: '';
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--line);
+}
+.coop-player.on::before {
+  background: var(--success);
+}
+/* Co-op: numbers a partner placed, and the square they're looking at. */
+.cell.partner .v {
+  color: #9b59b6;
+}
+.cell.err.partner .v {
+  color: var(--error);
+}
+.cell.partner-sel {
+  box-shadow: inset 0 0 0 2.5px #9b59b6;
+}
 
 .notes {
   position: absolute;

@@ -201,6 +201,15 @@ export function SolvedSheet({ rank, wasRanked }: { rank: number | null; wasRanke
           </span>
         </div>
         {rank !== null && <div style={{ fontWeight: 700, margin: '6px 0' }}>Rank #{rank}</div>}
+        {s.coop && Object.keys(s.coop.players).length > 1 && (
+          <div style={{ fontWeight: 700, margin: '6px 0' }}>
+            Solved together with{' '}
+            {Object.entries(s.coop.players)
+              .filter(([id]) => id !== s.coop!.me)
+              .map(([, n]) => n)
+              .join(', ')}
+          </div>
+        )}
       </div>
       <div class="stack">
         {wasRanked && signedIn && s.groups.length > 0 && (

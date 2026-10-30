@@ -17,6 +17,9 @@ import { getVersion } from './version';
 import { getMultiplayerInvitePage } from './multiplayer-invite';
 import { getAndroidAssetLinks, getAppleAppSiteAssociation } from './well-known';
 import { createSharedPuzzle, getSharedPuzzle, SHARE_NAME_RE } from './shared';
+import { connectCoopGame, createCoopGame, joinCoopGame, listMyCoopGames } from './coop';
+
+export { CoopRoom } from './coop-room';
 import {
   createMultiplayerGame,
   declineMultiplayerGame,
@@ -103,6 +106,12 @@ async function route(req: Request, env: Env, ctx: ExecutionContext): Promise<Res
     return Response.redirect(`${url.origin}/play/?p=${shareMatch[1]}`, 302);
   }
 
+  // Co-op invite link: /c/eagle-maple-lantern opens that live game in the web app.
+  const coopLinkMatch = path.match(/^\/c\/([a-z-]+)\/?$/);
+  if (coopLinkMatch && SHARE_NAME_RE.test(coopLinkMatch[1]!) && method === 'GET') {
+    return Response.redirect(`${url.origin}/play/?coop=${coopLinkMatch[1]}`, 302);
+  }
+
   if (path === '/v1/auth/start' && method === 'POST') return authStart(req, env);
   if (path === '/v1/auth/verify' && method === 'POST') return authVerify(req, env);
 
@@ -130,6 +139,13 @@ async function route(req: Request, env: Env, ctx: ExecutionContext): Promise<Res
   if (path === '/v1/shared' && method === 'POST') return createSharedPuzzle(req, env);
   const sharedMatch = path.match(/^\/v1\/shared\/([a-z-]+)$/);
   if (sharedMatch && method === 'GET') return getSharedPuzzle(env, sharedMatch[1]!);
+
+  if (path === '/v1/coop' && method === 'POST') return createCoopGame(req, env);
+  if (path === '/v1/me/coop' && method === 'GET') return listMyCoopGames(req, env);
+  const coopJoinMatch = path.match(/^\/v1\/coop\/([a-z-]+)\/join$/);
+  if (coopJoinMatch && method === 'POST') return joinCoopGame(req, env, coopJoinMatch[1]!);
+  const coopWsMatch = path.match(/^\/v1\/coop\/([a-z-]+)\/ws$/);
+  if (coopWsMatch && method === 'GET') return connectCoopGame(req, env, coopWsMatch[1]!, url.searchParams.get('token'));
 
   if (path === '/v1/scores' && method === 'POST') return postScore(req, env);
   const groupScoresMatch = path.match(/^\/v1\/groups\/([^/]+)\/scores\/(\d+)$/);

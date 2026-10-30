@@ -78,6 +78,17 @@ database_name = "sudoku"
 database_id = "fc1e0bcc-a5e6-4075-b786-fe248ecd118d"
 migrations_dir = "migrations"
 
+# Co-op games: one Durable Object per game holds the live board and relays
+# moves between players' WebSockets (src/coop-room.ts). SQLite-backed, which
+# the Workers Free plan supports.
+[[durable_objects.bindings]]
+name = "COOP"
+class_name = "CoopRoom"
+
+[[migrations]]
+tag = "v1-coop"
+new_sqlite_classes = ["CoopRoom"]
+
 # Crons:
 #   "0 * * * *"  — hourly: ensure today's + tomorrow's daily puzzles exist
 #                  in D1 so user-facing requests never trigger slow generation.

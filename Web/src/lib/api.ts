@@ -49,6 +49,22 @@ export interface SharedPuzzleResponse {
   shared_by: string | null;
   sharer_seconds: number | null;
 }
+export interface CoopPlayer {
+  id: string;
+  display_name: string | null;
+}
+export interface CoopGame {
+  name: string;
+  difficulty: Difficulty;
+  givens: Grid;
+  solution: Grid;
+  created_by: string;
+  completed_at: number | null;
+  elapsed_seconds: number | null;
+  mistakes: number | null;
+  players: CoopPlayer[];
+}
+export type CoopGameSummary = Omit<CoopGame, 'givens' | 'solution'>;
 export interface RemoteScore {
   puzzle_id: number;
   elapsed_seconds: number;
@@ -204,6 +220,10 @@ export const api = {
   shareCreate: (t: string, givens: Grid, difficulty: Difficulty, elapsed_seconds?: number) =>
     send<{ name: string }>('shared', 'POST', t, { givens, difficulty, elapsed_seconds }).then((r) => r.name),
   shared: (name: string) => send<SharedPuzzleResponse>(`shared/${name}`, 'GET'),
+  coopCreate: (t: string, givens: Grid, difficulty: Difficulty) =>
+    send<{ name: string }>('coop', 'POST', t, { givens, difficulty }).then((r) => r.name),
+  coopJoin: (t: string, name: string) => send<CoopGame>(`coop/${name}/join`, 'POST', t),
+  coopMine: (t: string) => send<{ games: CoopGameSummary[] }>('me/coop', 'GET', t).then((r) => r.games),
   postScore: (t: string, s: ScoreSubmission) => send<{ rank: number }>('scores', 'POST', t, s).then((r) => r.rank),
   groupScores: (t: string, groupId: string, puzzleId: number) =>
     send<LeaderboardEntry[]>(`groups/${groupId}/scores/${puzzleId}`, 'GET', t),

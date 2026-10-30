@@ -416,6 +416,22 @@ export class Game {
     return changed;
   }
 
+  /**
+   * Co-op: another player's number arrived (or was cleared). Unlike a local
+   * placement it isn't counted as our mistake and has no undo, but it does
+   * clear the digit from this player's own notes, as their own would.
+   */
+  applyRemote(row: number, col: number, value: number | null): void {
+    const cell = this.cells[row][col];
+    if (cell.isFixed || cell.value === value) return;
+    cell.value = value;
+    if (this.lastPlacement?.row === row && this.lastPlacement?.col === col) this.lastPlacement = null;
+    if (value === null) return;
+    cell.notes = new Set();
+    for (const p of peers(row, col)) this.cells[p.row][p.col].notes.delete(value);
+    if (this.activeNumber === value && this.isComplete(value)) this.activeNumber = null;
+  }
+
   applyTutorHint(hint: TutorHint): void {
     if (hint.placement) {
       const { row, col, value } = hint.placement;

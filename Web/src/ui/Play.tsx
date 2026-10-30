@@ -7,6 +7,7 @@ import { techniqueLabel } from '../engine/tutor';
 import { dateFromDailyId, displayLabel, formatTime, shortDate } from '../lib/format';
 import { isDaily } from '../engine/types';
 import { Board } from './Board';
+import { CoopStrip, inviteToCoop } from './Coop';
 import { Icon } from './icons';
 
 export function Play() {
@@ -16,6 +17,11 @@ export function Play() {
   const solved = g.isSolved;
   const armed = g.speedMode && g.activeNumber !== null;
   const tutorHighlights = s.tutor?.hint ? s.tutor.hint.steps[s.tutor.step].highlights : null;
+  const coop = s.coop;
+  // Co-op: numbers another player placed, and squares they're looking at.
+  const partnerAt = (i: number) => !!coop && coop.by[i] !== null && coop.by[i] !== coop.me;
+  const partnerSel = (i: number) =>
+    !!coop && Object.entries(coop.sels).some(([id, at]) => id !== coop.me && at === i && coop.online.includes(id));
 
   useKeyboard();
 
@@ -69,13 +75,18 @@ export function Play() {
         >
           <Icon name="bulb" size={21} filled />
         </button>
-        <button class="icon-btn" aria-label={paused ? 'Resume' : 'Pause'} disabled={solved} onClick={() => s.togglePause()}>
-          <Icon name={paused ? 'play' : 'pause'} size={19} filled />
-        </button>
+        {!coop && (
+          // Co-op can't pause: the clock is shared.
+          <button class="icon-btn" aria-label={paused ? 'Resume' : 'Pause'} disabled={solved} onClick={() => s.togglePause()}>
+            <Icon name={paused ? 'play' : 'pause'} size={19} filled />
+          </button>
+        )}
         <button class="icon-btn" aria-label="Settings" onClick={() => s.open({ kind: 'settings' })}>
           <Icon name="gear" size={20} />
         </button>
       </div>
+
+      {coop && <CoopStrip />}
 
       <Board
         cells={g.cells}
@@ -96,6 +107,8 @@ export function Play() {
           peer: (!armed && g.isPeerOfSelection(r, c)) || g.isUnavailableForFocus(r, c),
           err: g.highlightMistakes && g.hasConflict(r, c),
           locked: g.isLocked(r, c),
+          partner: !g.cells[r][c].isFixed && g.cells[r][c].value !== null && partnerAt(r * 9 + c),
+          partnerSel: partnerSel(r * 9 + c),
         })}
       />
 
@@ -105,14 +118,22 @@ export function Play() {
         <button class="btn primary" onClick={() => s.goHome()}>
           <Icon name="home" size={20} /> Home
         </button>
-        {!isDaily(g.puzzle) && (
-          <button class="btn" onClick={() => s.open({ kind: 'share', puzzle: g.puzzle })}>
-            <Icon name="share" size={20} /> Share
+        {coop ? (
+          <button class="btn" onClick={() => inviteToCoop(coop.name, g.puzzle.difficulty)}>
+            <Icon name="share" size={20} /> Invite
           </button>
+        ) : (
+          <>
+            {!isDaily(g.puzzle) && (
+              <button class="btn" onClick={() => s.open({ kind: 'share', puzzle: g.puzzle })}>
+                <Icon name="share" size={20} /> Share
+              </button>
+            )}
+            <button class="btn" onClick={() => s.open({ kind: 'confirmReset' })}>
+              Reset
+            </button>
+          </>
         )}
-        <button class="btn" onClick={() => s.open({ kind: 'confirmReset' })}>
-          Reset
-        </button>
       </div>
 
       {s.autoPencilPending && (

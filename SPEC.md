@@ -701,3 +701,13 @@ Turn-based async sudoku for 2+ players. Full design + locked product decisions i
 | Background work | Web Worker (puzzle generation)          | `DispatchQueue` background queue          | Coroutine on `Dispatchers.Default`               |
 
 The puzzle generator, solver and tutor are pure logic in `Web/src/engine/` with unit tests (`npm test` in `Web/`).
+
+---
+
+## 18. Co-op (web only)
+
+2–4 signed-in players solve one board together, live. Started from Multiplayer › "Start a co-op game" (any difficulty, including Expert — the creating phone generates and grades the puzzle; the server checks it has one solution). Invite link `/c/<three-word name>` → `/play/?coop=<name>`; the name can also be typed into the lobby.
+
+- **Server:** `coop_games` / `coop_players` in D1 (index + result) and one Durable Object per game (`CoopRoom`, `Backend/src/coop-room.ts`) holding the live board. Phones connect by WebSocket to `/v1/coop/:name/ws?token=…`. Messages: client → `place` / `clear` / `sel`; server → `state`, `cell`, `presence`, `sel`, `done`. Givens and correct numbers are locked for everyone; a refused move is answered with the real square so a phone that raced its partner snaps back.
+- **Client:** the normal Play screen with `store.coop` set. Each phone runs its own `Game`; `store.act` diffs placed numbers before/after each action and sends the changes, and incoming moves apply via `Game.applyRemote`. **Pencil marks, auto-pencil, speed mode and the tutor's explanation stay on the phone** — only placed numbers are shared (a hint that places a number shares that number). Right/wrong highlighting is always on. Partner numbers are purple; a purple outline shows where a partner is looking. No pause (shared clock). The clock starts when a second player connects or the first number goes in. Moves are blocked while reconnecting. Private notes and a stable local puzzle id live in `sudoku.coop.v1`. Never written to the solo saves; recorded in Completed when solved.
+

@@ -56,6 +56,11 @@ export async function deleteMe(req: Request, env: Env): Promise<Response> {
     env.DB.prepare('DELETE FROM multiplayer_players WHERE user_id = ?').bind(userId),
     env.DB.prepare('DELETE FROM push_tokens WHERE user_id = ?').bind(userId),
     env.DB.prepare('DELETE FROM shared_puzzles WHERE created_by = ?').bind(userId),
+    env.DB.prepare('DELETE FROM coop_players WHERE user_id = ?').bind(userId),
+    env.DB.prepare(
+      'DELETE FROM coop_players WHERE name IN (SELECT name FROM coop_games WHERE created_by = ?)',
+    ).bind(userId),
+    env.DB.prepare('DELETE FROM coop_games WHERE created_by = ?').bind(userId),
     env.DB.prepare('DELETE FROM users WHERE id = ?').bind(userId),
   ];
   if (userRow?.email) {

@@ -12,7 +12,7 @@ import { NAME_WORDS } from './words';
 const DIFFICULTIES = ['easy', 'medium', 'hard', 'expert'];
 export const SHARE_NAME_RE = /^[a-z]+-[a-z]+-[a-z]+$/;
 
-function randomName(): string {
+export function randomName(): string {
   const bytes = new Uint8Array(3);
   crypto.getRandomValues(bytes);
   return [...bytes].map((b) => NAME_WORDS[b]!).join('-'); // 256 words: one byte each

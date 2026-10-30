@@ -16,6 +16,7 @@ export const KEYS = {
   coach: 'sudoku.coach.completed.v1',
   nextId: 'sudoku.next_id.v1',
   pendingSignIn: 'sudoku.pending_sign_in.v1',
+  coop: 'sudoku.coop.v1',
 } as const;
 
 export function readJSON<T>(key: string, fallback: T): T {

@@ -77,6 +77,12 @@ const POLICY_HTML = `<!DOCTYPE html>
       that game.
     </li>
     <li>
+      <strong>Co-op games</strong> — if you play co-op (web app): the
+      game, who's in it, the numbers each player places and where each
+      player is looking, shown live to the other players in that game.
+      Pencil marks stay on your device.
+    </li>
+    <li>
       <strong>Shared puzzles</strong> — if you share a puzzle (web app):
       its starting board, its difficulty, and your time if you'd finished
       it. Anyone with the link sees the board, your display name and that

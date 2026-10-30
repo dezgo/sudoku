@@ -8,6 +8,7 @@ import { difficultyLabel, MULTIPLAYER_DIFFICULTIES, type Cells, type Difficulty 
 import { ApiError, api, type MultiplayerGame, type MultiplayerGameDetail } from '../lib/api';
 import { playSound } from '../lib/sound';
 import { Board } from './Board';
+import { CoopCreate, CoopSection } from './Coop';
 import { Icon } from './icons';
 import { Segmented, Sheet, shareText, Toggle } from './Sheet';
 
@@ -30,7 +31,7 @@ export function inviteUrl(code: string): string {
 
 export function MultiplayerSheet({ gameId }: { gameId?: string }) {
   const s = useStore();
-  const [view, setView] = useState<{ kind: 'list' } | { kind: 'create' } | { kind: 'game'; id: string }>(
+  const [view, setView] = useState<{ kind: 'list' } | { kind: 'create' } | { kind: 'coopCreate' } | { kind: 'game'; id: string }>(
     gameId ? { kind: 'game', id: gameId } : { kind: 'list' },
   );
   if (!s.identity)
@@ -47,12 +48,27 @@ export function MultiplayerSheet({ gameId }: { gameId?: string }) {
         </div>
       </Sheet>
     );
+  if (view.kind === 'coopCreate') return <CoopCreate onBack={() => setView({ kind: 'list' })} />;
   if (view.kind === 'create') return <CreateGame onBack={() => setView({ kind: 'list' })} onOpen={(id) => setView({ kind: 'game', id })} />;
   if (view.kind === 'game') return <GameView id={view.id} onBack={() => setView({ kind: 'list' })} />;
-  return <Lobby onCreate={() => setView({ kind: 'create' })} onOpen={(id) => setView({ kind: 'game', id })} />;
+  return (
+    <Lobby
+      onCreate={() => setView({ kind: 'create' })}
+      onCoopCreate={() => setView({ kind: 'coopCreate' })}
+      onOpen={(id) => setView({ kind: 'game', id })}
+    />
+  );
 }
 
-function Lobby({ onCreate, onOpen }: { onCreate: () => void; onOpen: (id: string) => void }) {
+function Lobby({
+  onCreate,
+  onCoopCreate,
+  onOpen,
+}: {
+  onCreate: () => void;
+  onCoopCreate: () => void;
+  onOpen: (id: string) => void;
+}) {
   const s = useStore();
   const [data, setData] = useState<{ in_progress: MultiplayerGame[]; completed: MultiplayerGame[] } | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -119,6 +135,7 @@ function Lobby({ onCreate, onOpen }: { onCreate: () => void; onOpen: (id: string
         </button>
       }
     >
+      <CoopSection onCreate={onCoopCreate} />
       <form
         style={{ display: 'flex', gap: 8, marginBottom: 6 }}
         onSubmit={(e) => {

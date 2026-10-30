@@ -67,6 +67,28 @@ interface DailyCache {
 
 type Pending = ScoreSubmission & { completed_at: number };
 
+/** Co-op (SPEC §18): the live game this phone is in. */
+export interface CoopState {
+  name: string;
+  me: string;
+  players: Record<string, string>; // user id → display name
+  online: string[];
+  sels: Record<string, number | null>; // where each player is looking (0–80)
+  by: (string | null)[]; // who placed each number
+  started: boolean;
+  connected: boolean;
+}
+
+type CoopMsg =
+  | { t: 'state'; values: number[]; by: (string | null)[]; mistakes: number; completed: boolean }
+  | { t: 'cell'; i: number; v: number; by: string | null; mistakes: number }
+  | { t: 'presence'; players: Record<string, string>; online: string[]; sels: Record<string, number | null>; started: boolean; elapsed: number }
+  | { t: 'sel'; id: string; i: number | null }
+  | { t: 'done'; elapsed: number; mistakes: number };
+
+/** Kept on this phone per co-op game: a stable local puzzle id and the player's private notes. */
+type CoopLocal = Record<string, { id: number; notes?: number[][]; at: number }>;
+
 type Listener = () => void;
 
 class Store {
@@ -90,10 +112,15 @@ class Store {
   toast: string | null = null;
   /** A newer build is live (see updates.ts). */
   updateReady = false;
+  coop: CoopState | null = null;
 
   private listeners = new Set<Listener>();
   private timer: number | null = null;
   private wasAutoPaused = false;
+  /** The co-op game's Game object — never written to the solo saves. */
+  private coopGame: Game | null = null;
+  private coopSocket: WebSocket | null = null;
+  private coopRetry: number | null = null;
   private autoPencilTimer: number | null = null;
 
   constructor() {
@@ -158,7 +185,9 @@ class Store {
   setPref<K extends keyof Prefs>(key: K, value: Prefs[K]): void {
     this.prefs = { ...this.prefs, [key]: value };
     writeJSON(KEYS.prefs, this.prefs);
-    if (this.game && key === 'highlightMistakes') this.game.setHighlightMistakes(value as boolean);
+    // Co-op always shows right and wrong — both players see the same board.
+    if (this.game && key === 'highlightMistakes' && this.game !== this.coopGame)
+      this.game.setHighlightMistakes(value as boolean);
     if (this.game && key === 'highlightConstraints') this.game.setHighlightConstraints(value as boolean);
     this.saveProgress();
     this.emit();
@@ -171,6 +200,7 @@ class Store {
     this.timer = window.setInterval(() => {
       const g = this.game;
       if (!g || this.paused || this.phase !== 'playing' || g.isSolved) return;
+      if (this.coop && !this.coop.started) return; // co-op clock waits for a partner or a first move
       g.elapsedSeconds++;
       // Persist every 5s so a killed tab loses little time.
       if (g.elapsedSeconds % 5 === 0) this.saveProgress();
@@ -203,6 +233,7 @@ class Store {
   }
 
   private enterForeground(): void {
+    if (this.coop && !this.coopSocket) this.connectCoop();
     void this.refreshDaily();
     if (this.token) void this.refreshGroups();
     if (!this.wasAutoPaused) return;
@@ -220,7 +251,7 @@ class Store {
 
   saveProgress(): void {
     const g = this.game;
-    if (!g || g.puzzle.id === 0) return;
+    if (!g || g.puzzle.id === 0 || g === this.coopGame) return;
     if (g.hasProgress && !g.isSolved) {
       this.saves = {
         ...this.saves,
@@ -253,6 +284,7 @@ class Store {
 
   private loadPuzzle(p: Puzzle): void {
     this.saveProgress();
+    this.leaveCoop();
     const save = this.saves[p.id];
     const g = new Game(
       p,
@@ -317,6 +349,178 @@ class Store {
       this.loadingPuzzle = false;
       this.emit();
     }
+  }
+
+  // --- Co-op (SPEC §18) ---
+
+  private selIndex(): number | null {
+    const s = this.game?.selected;
+    return s ? s.row * 9 + s.col : null;
+  }
+
+  /** Join (if new) and open a live co-op game. */
+  async startCoop(name: string): Promise<void> {
+    if (!this.token) {
+      this.open({ kind: 'signIn', then: () => void this.startCoop(name) });
+      return;
+    }
+    this.loadingPuzzle = true;
+    this.emit();
+    try {
+      const d = await api.coopJoin(this.token, name);
+      this.saveProgress();
+      this.leaveCoop();
+      const local = readJSON<CoopLocal>(KEYS.coop, {});
+      const id = local[name]?.id ?? nextPuzzleId();
+      const g = new Game(
+        { id, difficulty: d.difficulty, givens: d.givens, solution: d.solution },
+        { highlightMistakes: true, highlightConstraints: this.prefs.highlightConstraints },
+      );
+      local[name]?.notes?.forEach((n, i) => {
+        const cell = g.cells[Math.floor(i / 9)][i % 9];
+        if (!cell.isFixed) cell.notes = new Set(n);
+      });
+      g.onSound = this.onSound;
+      this.game = g;
+      this.coopGame = g;
+      this.coop = {
+        name,
+        me: this.identity!.user.id,
+        players: Object.fromEntries(d.players.map((p) => [p.id, p.display_name ?? 'Player'])),
+        online: [],
+        sels: {},
+        by: Array(81).fill(null),
+        started: false,
+        connected: false,
+      };
+      this.saveCoopNotes();
+      this.paused = false;
+      this.wasAutoPaused = false;
+      this.tutor = null;
+      this.offlineDaily = false;
+      this.cancelAutoPencil();
+      this.sheets = [];
+      this.phase = 'playing';
+      this.startTimer();
+      this.connectCoop();
+    } catch (e) {
+      const d = e instanceof ApiError ? e.detail : undefined;
+      this.showToast(
+        e instanceof ApiError && e.kind === 'offline'
+          ? "You're offline."
+          : d === 'game_full'
+            ? 'That game already has 4 players.'
+            : d === 'game_finished'
+              ? "That game's already been solved."
+              : "That co-op link didn't work.",
+      );
+    } finally {
+      this.loadingPuzzle = false;
+      this.emit();
+    }
+  }
+
+  private connectCoop(): void {
+    const c = this.coop;
+    if (!c || !this.token) return;
+    if (this.coopRetry !== null) clearTimeout(this.coopRetry);
+    this.coopRetry = null;
+    const proto = location.protocol === 'https:' ? 'wss' : 'ws';
+    const ws = new WebSocket(`${proto}://${location.host}/v1/coop/${c.name}/ws?token=${encodeURIComponent(this.token)}`);
+    this.coopSocket = ws;
+    ws.onopen = () => {
+      if (!this.coop || this.coopSocket !== ws) return;
+      this.coop.connected = true;
+      this.coopSend({ t: 'sel', i: this.selIndex() });
+      this.emit();
+    };
+    ws.onmessage = (e) => {
+      try {
+        this.onCoopMessage(JSON.parse(e.data as string) as CoopMsg);
+      } catch {
+        /* malformed frame */
+      }
+    };
+    ws.onclose = () => {
+      if (this.coopSocket !== ws) return;
+      this.coopSocket = null;
+      if (!this.coop) return;
+      this.coop.connected = false;
+      this.emit();
+      // Keep trying while the game is on screen; returning to the app also reconnects.
+      if (!document.hidden) this.coopRetry = window.setTimeout(() => this.connectCoop(), 2000);
+    };
+  }
+
+  private coopSend(msg: unknown): void {
+    if (this.coopSocket?.readyState === WebSocket.OPEN) this.coopSocket.send(JSON.stringify(msg));
+  }
+
+  private onCoopMessage(m: CoopMsg): void {
+    const c = this.coop;
+    const g = this.game;
+    if (!c || !g || g !== this.coopGame) return;
+    const wasSolved = g.isSolved;
+    const at = (i: number) => [Math.floor(i / 9), i % 9] as const;
+    switch (m.t) {
+      case 'state':
+        m.values.forEach((v, i) => g.applyRemote(...at(i), v || null));
+        c.by = m.by;
+        g.mistakeCount = m.mistakes;
+        break;
+      case 'cell':
+        g.applyRemote(...at(m.i), m.v || null);
+        c.by = c.by.map((b, k) => (k === m.i ? m.by : b));
+        g.mistakeCount = m.mistakes;
+        if (m.v) c.started = true; // the server starts the clock on the first number
+        if (m.v && m.by && m.by !== c.me && !g.isSolved) this.onSound('place');
+        break;
+      case 'presence':
+        c.players = m.players;
+        c.online = m.online;
+        c.sels = m.sels;
+        c.started = m.started;
+        g.elapsedSeconds = m.elapsed;
+        break;
+      case 'sel':
+        c.sels = { ...c.sels, [m.id]: m.i };
+        break;
+      case 'done': {
+        g.elapsedSeconds = m.elapsed;
+        g.mistakeCount = m.mistakes;
+        const r = this.resultFor(g.puzzle.id);
+        if (r) {
+          r.elapsedSeconds = m.elapsed;
+          r.mistakes = m.mistakes;
+          persistHistory(this.history);
+        }
+        break;
+      }
+    }
+    // Solved by anyone (or already solved when we arrived): record it once.
+    if (!wasSolved && g.isSolved && !this.resultFor(g.puzzle.id)) this.onSolved(g);
+    this.emit();
+  }
+
+  private saveCoopNotes(): void {
+    const c = this.coop;
+    const g = this.coopGame;
+    if (!c || !g) return;
+    const local = readJSON<CoopLocal>(KEYS.coop, {});
+    local[c.name] = { id: g.puzzle.id, notes: g.cells.flat().map((x) => [...x.notes]), at: Date.now() };
+    // The 20 most recent games are plenty.
+    writeJSON(KEYS.coop, Object.fromEntries(Object.entries(local).sort((a, b) => b[1].at - a[1].at).slice(0, 20)));
+  }
+
+  leaveCoop(): void {
+    if (!this.coop) return;
+    this.saveCoopNotes();
+    this.coop = null;
+    const ws = this.coopSocket;
+    this.coopSocket = null;
+    ws?.close();
+    if (this.coopRetry !== null) clearTimeout(this.coopRetry);
+    this.coopRetry = null;
   }
 
   /** Resolve today's daily (cache → server → local stand-in) and play it. */
@@ -388,6 +592,7 @@ class Store {
 
   goHome(): void {
     this.saveProgress();
+    this.leaveCoop();
     this.cancelAutoPencil();
     this.tutor = null;
     this.phase = 'home';
@@ -409,10 +614,24 @@ class Store {
   act(fn: (g: Game) => void): void {
     const g = this.game;
     if (!g || this.paused || g.isSolved) return;
+    if (this.coop && !this.coop.connected) {
+      this.showToast('Reconnecting to the game…');
+      return;
+    }
     const before = JSON.stringify(g.snapshot().cells.map((r) => r.map((c) => [c.value, [...c.notes]])));
+    const values = this.coop ? g.cells.flat().map((c) => c.value) : null;
+    const sel = this.selIndex();
     fn(g);
     const after = JSON.stringify(g.snapshot().cells.map((r) => r.map((c) => [c.value, [...c.notes]])));
     if (before !== after) this.cancelAutoPencil();
+    if (values) {
+      // Co-op: numbers go to the room; notes stay on this phone.
+      g.cells.flat().forEach((c, i) => {
+        if (c.value !== values[i]) this.coopSend(c.value === null ? { t: 'clear', i } : { t: 'place', i, v: c.value });
+      });
+      if (this.selIndex() !== sel) this.coopSend({ t: 'sel', i: this.selIndex() });
+      this.saveCoopNotes();
+    }
     if (g.isSolved) this.onSolved(g);
     else this.saveProgress();
     this.emit();
@@ -431,7 +650,7 @@ class Store {
     this.history = [result, ...this.history.filter((r) => r.puzzleID !== g.puzzle.id)];
     persistHistory(this.history);
     this.saveProgress(); // solved → removes the save
-    const ranked = isDaily(g.puzzle) && !this.offlineDaily;
+    const ranked = isDaily(g.puzzle) && !this.offlineDaily && !this.coop;
     this.sheets = [{ kind: 'solved', rank: null, wasRanked: ranked }];
     if (ranked) {
       void this.submitScore({

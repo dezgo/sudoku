@@ -13,6 +13,9 @@ export interface CellLook {
   peer?: boolean;
   err?: boolean;
   locked?: boolean;
+  /** Co-op: placed by another player / where another player is looking. */
+  partner?: boolean;
+  partnerSel?: boolean;
 }
 
 type Kind = TutorHighlight['kind'];
@@ -71,6 +74,8 @@ export function Board({
             if (l.ghost && !t) cls.push('ghost');
             if (l.locked) cls.push('locked');
             if (l.err) cls.push('err');
+            if (l.partner) cls.push('partner');
+            if (l.partnerSel && !t) cls.push('partner-sel');
             return (
               <button
                 key={r * 9 + c}

@@ -67,6 +67,13 @@ function handleJoinLink() {
 /** `/play/?p=eagle-maple-lantern` — a shared puzzle (the Worker redirects /p/<name> here). */
 function handleShareLink() {
   const params = new URLSearchParams(location.search);
+  const coop = params.get('coop');
+  if (coop) {
+    // `/play/?coop=<name>` — a co-op invite (the Worker redirects /c/<name> here).
+    history.replaceState(null, '', location.pathname);
+    void store.startCoop(coop.toLowerCase());
+    return;
+  }
   const name = params.get('p');
   if (!name) return;
   history.replaceState(null, '', location.pathname);
