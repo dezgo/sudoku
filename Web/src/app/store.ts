@@ -19,6 +19,7 @@ import {
   type ScoreSubmission,
 } from '../lib/api';
 import { playSound } from '../lib/sound';
+import { lifelinesUsed, type Lifeline } from '../lib/lifelines';
 import {
   KEYS,
   loadHistory,
@@ -52,7 +53,8 @@ export type Sheet =
   | { kind: 'history' }
   | { kind: 'multiplayer'; gameId?: string }
   | { kind: 'confirmReset' }
-  | { kind: 'share'; puzzle: Puzzle; seconds?: number };
+  | { kind: 'share'; puzzle: Puzzle; seconds?: number }
+  | { kind: 'lifelines'; used: Lifeline[] };
 
 interface Identity {
   user: ApiUser;
@@ -77,10 +79,13 @@ export interface CoopState {
   by: (string | null)[]; // who placed each number
   started: boolean;
   connected: boolean;
+  /** Lifelines anyone in the game has used — shared, like the board. */
+  used: Lifeline[];
 }
 
 type CoopMsg =
-  | { t: 'state'; values: number[]; by: (string | null)[]; mistakes: number; completed: boolean }
+  | { t: 'state'; values: number[]; by: (string | null)[]; mistakes: number; completed: boolean; used: Lifeline[] }
+  | { t: 'used'; used: Lifeline[] }
   | { t: 'cell'; i: number; v: number; by: string | null; mistakes: number }
   | { t: 'presence'; players: Record<string, string>; online: string[]; sels: Record<string, number | null>; started: boolean; elapsed: number }
   | { t: 'sel'; id: string; i: number | null }
@@ -141,7 +146,23 @@ class Store {
   }
 
   emit(): void {
+    // Co-op: tell the room about any lifeline this phone has newly used.
+    const c = this.coop;
+    if (c?.connected && this.game === this.coopGame && this.game)
+      for (const k of lifelinesUsed(this.game))
+        if (!c.used.includes(k)) {
+          this.coopSend({ t: 'used', k });
+          c.used = [...c.used, k]; // the room echoes the full list back
+        }
     for (const l of this.listeners) l();
+  }
+
+  /** Lifelines used in the game on screen — the whole team's, in co-op. */
+  get lifelines(): Lifeline[] {
+    if (!this.game) return [];
+    const mine = lifelinesUsed(this.game);
+    if (!this.coop || this.game !== this.coopGame) return mine;
+    return [...new Set([...this.coop.used, ...mine])];
   }
 
   get token(): string | null {
@@ -392,6 +413,7 @@ class Store {
         by: Array(81).fill(null),
         started: false,
         connected: false,
+        used: [],
       };
       this.saveCoopNotes();
       this.paused = false;
@@ -466,7 +488,11 @@ class Store {
       case 'state':
         m.values.forEach((v, i) => g.applyRemote(...at(i), v || null));
         c.by = m.by;
+        c.used = m.used ?? [];
         g.mistakeCount = m.mistakes;
+        break;
+      case 'used':
+        c.used = m.used;
         break;
       case 'cell':
         g.applyRemote(...at(m.i), m.v || null);
@@ -492,6 +518,7 @@ class Store {
         if (r) {
           r.elapsedSeconds = m.elapsed;
           r.mistakes = m.mistakes;
+          r.lifelines = this.lifelines;
           persistHistory(this.history);
         }
         break;
@@ -646,6 +673,7 @@ class Store {
       elapsedSeconds: g.elapsedSeconds,
       mistakes: g.mistakeCount,
       puzzle: g.puzzle,
+      lifelines: this.lifelines,
     };
     this.history = [result, ...this.history.filter((r) => r.puzzleID !== g.puzzle.id)];
     persistHistory(this.history);

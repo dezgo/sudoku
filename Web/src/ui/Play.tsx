@@ -8,6 +8,7 @@ import { dateFromDailyId, displayLabel, formatTime, shortDate } from '../lib/for
 import { isDaily } from '../engine/types';
 import { Board } from './Board';
 import { CoopStrip, inviteToCoop } from './Coop';
+import { Lifelines } from './Lifelines';
 import { Icon } from './icons';
 
 export function Play() {
@@ -87,6 +88,7 @@ export function Play() {
       </div>
 
       {coop && <CoopStrip />}
+      <Lifelines used={s.lifelines} />
 
       <Board
         cells={g.cells}

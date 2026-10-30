@@ -154,6 +154,12 @@ const paths: Record<string, JSX.Element> = {
       <path d="M9.9 9.9a3 3 0 0 0 4.2 4.2M3 3l18 18" />
     </>
   ),
+  grid: (
+    <>
+      <rect x="3" y="3" width="18" height="18" rx="2" />
+      <path d="M9 3v18M15 3v18M3 9h18M3 15h18" />
+    </>
+  ),
   download: (
     <>
       <path d="M12 3v12M7 10l5 5 5-5" />

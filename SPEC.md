@@ -521,8 +521,9 @@ If everything in the requested tier is excluded, fall back to any puzzle in that
 
 Persisted preferences:
 
-- **Highlight mistakes** (bool, default true). See §11.
-- **Highlight rules** (bool, default true). See §8 layers 3b & 3c.
+- **Highlight mistakes** (bool, default true; **web: default false for new players since 30 Oct 2026**, existing players keep theirs). See §11.
+- **Highlight rules** (bool, default true; **web: default false for new players since 30 Oct 2026**). See §8 layers 3b & 3c.
+- **Lifelines** (web): a row of four icons under the timer (Auto-pencil, Hint, Highlighting, Show mistakes), lit until used, crossed out once used; read from `pencilAssistsUsed`, `hintsUsed` and the two `…EverOn` flags. Shown on Play, Solved and Completed (stored on `PuzzleResult.lifelines`). In co-op the set is shared through the room (`used` message); Show mistakes is always used there.
 - **Difficulty** (Easy/Medium/Hard, default Medium). Used as the pre-selection for the New Game sheet.
 - **Appearance** (System/Light/Dark, default System). Applied at the root of the UI tree.
 

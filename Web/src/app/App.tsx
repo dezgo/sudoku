@@ -7,6 +7,7 @@ import { applyColors } from '../lib/colors';
 import { Home } from '../ui/Home';
 import { Play } from '../ui/Play';
 import { CoachSheet } from '../ui/Coach';
+import { LifelinesSheet } from '../ui/Lifelines';
 import { HistorySheet } from '../ui/History';
 import { MultiplayerSheet } from '../ui/Multiplayer';
 import { CompletedSheet, ConfirmResetSheet, GamesSheet, NewGameSheet, ShareSheet, SolvedSheet } from '../ui/sheets';
@@ -40,6 +41,8 @@ function renderSheet(sheet: Sheet, i: number) {
       return <MultiplayerSheet key={i} gameId={sheet.gameId} />;
     case 'confirmReset':
       return <ConfirmResetSheet key={i} />;
+    case 'lifelines':
+      return <LifelinesSheet key={i} used={sheet.used} />;
     case 'share':
       return <ShareSheet key={i} puzzle={sheet.puzzle} seconds={sheet.seconds} />;
   }

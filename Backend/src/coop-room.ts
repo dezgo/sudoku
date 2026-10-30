@@ -17,6 +17,7 @@ interface Room {
   startedAt: number | null; // clock starts when a 2nd player arrives or the first number goes in
   completedAt: number | null;
   players: Record<string, string>; // user id → display name
+  used?: string[]; // lifelines anyone has used (co-op always shows mistakes)
 }
 
 interface Who {
@@ -25,7 +26,13 @@ interface Who {
   sel: number | null;
 }
 
-type ClientMsg = { t: 'place'; i: number; v: number } | { t: 'clear'; i: number } | { t: 'sel'; i: number | null };
+type ClientMsg =
+  | { t: 'place'; i: number; v: number }
+  | { t: 'clear'; i: number }
+  | { t: 'sel'; i: number | null }
+  | { t: 'used'; k: string };
+
+const LIFELINES = ['pencil', 'hint', 'highlight', 'mistakes'];
 
 export class CoopRoom extends DurableObject<Env> {
   private room: Room | null = null;
@@ -49,6 +56,7 @@ export class CoopRoom extends DurableObject<Env> {
       startedAt: null,
       completedAt: null,
       players: {},
+      used: ['mistakes'],
     };
     await this.save();
     return this.room;
@@ -110,7 +118,16 @@ export class CoopRoom extends DurableObject<Env> {
     if (!r.startedAt && !r.completedAt && new Set(this.connected().map((w) => w.id)).size >= 2) r.startedAt = Date.now();
     await this.save();
 
-    server.send(JSON.stringify({ t: 'state', values: r.values, by: r.by, mistakes: r.mistakes, completed: r.completedAt !== null }));
+    server.send(
+      JSON.stringify({
+        t: 'state',
+        values: r.values,
+        by: r.by,
+        mistakes: r.mistakes,
+        completed: r.completedAt !== null,
+        used: r.used ?? ['mistakes'],
+      }),
+    );
     this.broadcast(this.presence(r));
     return new Response(null, { status: 101, webSocket: client });
   }
@@ -125,6 +142,15 @@ export class CoopRoom extends DurableObject<Env> {
     }
     const r = await this.load();
     if (!r) return;
+
+    if (msg.t === 'used') {
+      r.used ??= ['mistakes'];
+      if (!LIFELINES.includes(msg.k) || r.used.includes(msg.k) || r.completedAt) return;
+      r.used.push(msg.k);
+      await this.save();
+      this.broadcast({ t: 'used', used: r.used });
+      return;
+    }
 
     if (msg.t === 'sel') {
       who.sel = Number.isInteger(msg.i) && msg.i! >= 0 && msg.i! < 81 ? msg.i : null;

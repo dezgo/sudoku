@@ -4,6 +4,7 @@
 // game must keep working in memory when it does.
 
 import type { Cell, Cells, Difficulty, Puzzle } from '../engine/types';
+import type { Lifeline } from './lifelines';
 
 export const KEYS = {
   history: 'sudoku.history.v1',
@@ -69,6 +70,8 @@ export interface PuzzleResult {
   elapsedSeconds: number;
   mistakes?: number;
   puzzle: Puzzle | null;
+  /** Lifelines used (lib/lifelines.ts); absent on results from before Oct 2026. */
+  lifelines?: Lifeline[];
 }
 
 type StoredSave = Omit<GameSave, 'cells'> & { cells: StoredCell[][] };
@@ -116,17 +119,37 @@ export interface Prefs {
   colors: Partial<Record<ColorKey, string>>;
 }
 
+// Both highlights start off for new players (Oct 2026), so every lifeline
+// (lib/lifelines.ts) starts lit. Before that they defaulted on.
 export const DEFAULT_PREFS: Prefs = {
   difficulty: 'medium',
   appearance: 'system',
-  highlightMistakes: true,
-  highlightConstraints: true,
+  highlightMistakes: false,
+  highlightConstraints: false,
   sound: true,
   colors: {},
 };
 
 export function loadPrefs(): Prefs {
-  return { ...DEFAULT_PREFS, ...readJSON<Partial<Prefs>>(KEYS.prefs, {}) };
+  const stored = readJSON<Partial<Prefs> | null>(KEYS.prefs, null);
+  // Someone who already played but never changed a setting has no stored
+  // prefs; keep them on the old defaults (highlights on) rather than
+  // switching their highlighting off under them.
+  let existing = false;
+  try {
+    existing = !stored && [KEYS.history, KEYS.saves, KEYS.identity].some((k) => localStorage.getItem(k) !== null);
+  } catch {
+    /* storage unavailable: treat as new */
+  }
+  const prefs: Prefs = {
+    ...DEFAULT_PREFS,
+    ...(existing ? { highlightMistakes: true, highlightConstraints: true } : {}),
+    ...(stored ?? {}),
+  };
+  // Write them now either way: a new player who only ever plays dailies
+  // would otherwise look "existing" next launch and get highlights back on.
+  if (!stored) writeJSON(KEYS.prefs, prefs);
+  return prefs;
 }
 
 /** Generated puzzles use ids ≥ 1000; the counter survives reloads so ids stay unique per device. */

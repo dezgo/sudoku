@@ -10,6 +10,7 @@ import type { PuzzleResult } from '../lib/storage';
 import { Board } from './Board';
 import { Icon } from './icons';
 import { Segmented, Sheet, shareText } from './Sheet';
+import { Lifelines } from './Lifelines';
 import { ApiError, api } from '../lib/api';
 
 export function NewGameSheet() {
@@ -200,6 +201,7 @@ export function SolvedSheet({ rank, wasRanked }: { rank: number | null; wasRanke
             <Icon name="alert" size={17} /> {g.mistakeCount}
           </span>
         </div>
+        <Lifelines used={s.lifelines} small />
         {rank !== null && <div style={{ fontWeight: 700, margin: '6px 0' }}>Rank #{rank}</div>}
         {s.coop && Object.keys(s.coop.players).length > 1 && (
           <div style={{ fontWeight: 700, margin: '6px 0' }}>
@@ -253,6 +255,7 @@ export function CompletedSheet({ result, fanfare }: { result: PuzzleResult; fanf
         <div class="muted small">
           {dateTime(result.completedAt)} · {formatTime(result.elapsedSeconds)}
         </div>
+        {result.lifelines && <Lifelines used={result.lifelines} small />}
       </div>
       <Board mini cells={cells} look={(r, c) => ({ locked: p.givens[r][c] !== 0 })} />
       {isDaily(p) && (

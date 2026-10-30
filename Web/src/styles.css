@@ -448,6 +448,49 @@ select:focus-visible {
 .cell.err .v {
   color: var(--error);
 }
+/* Lifelines: lit until used, crossed out once used. */
+.lifelines {
+  display: flex;
+  justify-content: center;
+  gap: 10px;
+  margin: 0 auto 8px;
+  padding: 2px 6px;
+  background: none;
+  border: 0;
+  cursor: pointer;
+}
+.lifeline {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  border: 1.5px solid var(--accent);
+  color: var(--accent);
+  flex: none;
+}
+.lifelines.small .lifeline {
+  width: 24px;
+  height: 24px;
+}
+.lifeline.used {
+  border-color: var(--line);
+  color: var(--text-2);
+  opacity: 0.6;
+}
+.lifeline.used::after {
+  content: '';
+  position: absolute;
+  left: -2px;
+  right: -2px;
+  top: 50%;
+  height: 2px;
+  background: var(--error);
+  transform: rotate(-45deg);
+}
+
 /* Co-op: who's playing, above the board. */
 .coop-strip {
   display: flex;
