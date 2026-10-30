@@ -4,14 +4,19 @@
 // throughout. Persistence (storage.ts) converts to/from plain arrays, since
 // JSON has no Set.
 
-export type Difficulty = 'easy' | 'medium' | 'hard';
+export type Difficulty = 'easy' | 'medium' | 'hard' | 'expert';
 
-export const DIFFICULTIES: Difficulty[] = ['easy', 'medium', 'hard'];
+export const DIFFICULTIES: Difficulty[] = ['easy', 'medium', 'hard', 'expert'];
+
+/** Multiplayer puzzles are made on the server, which has no technique grader,
+ * so it can't make Expert. */
+export const MULTIPLAYER_DIFFICULTIES: Difficulty[] = ['easy', 'medium', 'hard'];
 
 export const difficultyLabel: Record<Difficulty, string> = {
   easy: 'Easy',
   medium: 'Medium',
   hard: 'Hard',
+  expert: 'Expert',
 };
 
 export interface Cell {

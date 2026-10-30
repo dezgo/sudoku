@@ -4,7 +4,7 @@
 
 import { useEffect, useMemo, useState } from 'preact/hooks';
 import { useStore } from '../app/store';
-import { DIFFICULTIES, difficultyLabel, type Cells, type Difficulty } from '../engine/types';
+import { difficultyLabel, MULTIPLAYER_DIFFICULTIES, type Cells, type Difficulty } from '../engine/types';
 import { ApiError, api, type MultiplayerGame, type MultiplayerGameDetail } from '../lib/api';
 import { playSound } from '../lib/sound';
 import { Board } from './Board';
@@ -220,7 +220,7 @@ function CreateGame({ onBack, onOpen }: { onBack: () => void; onOpen: (id: strin
   return (
     <Sheet title="New multiplayer game" left={<button class="link" onClick={onBack}>Cancel</button>} right={<span />}>
       <div class="section-title">Difficulty</div>
-      <Segmented options={DIFFICULTIES.map((d) => ({ value: d, label: difficultyLabel[d] }))} value={difficulty} onChange={setDifficulty} />
+      <Segmented options={MULTIPLAYER_DIFFICULTIES.map((d) => ({ value: d, label: difficultyLabel[d] }))} value={difficulty} onChange={setDifficulty} />
       <div class="section-title">Each turn</div>
       <Segmented options={TURN_OPTIONS} value={turn} onChange={setTurn} />
       <div class="section-title">Competitive mode</div>

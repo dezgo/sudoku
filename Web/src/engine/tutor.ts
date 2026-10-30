@@ -300,11 +300,21 @@ export function findHint(cells: Cells): TutorHint | null {
  * the generator to calibrate difficulty against techniques, not clue count.
  */
 export function classify(startCells: Cells): TutorTier | null {
+  return grade(startCells)?.tier ?? null;
+}
+
+/**
+ * classify, plus how many hard-tier steps the solve took. A Hard puzzle
+ * often needs just one advanced step with Medium work either side; Expert
+ * asks for several (see generator.ts).
+ */
+export function grade(startCells: Cells): { tier: TutorTier; hardSteps: number } | null {
   const cells = autoPencil(startCells);
   let maxTier: TutorTier = 'simple';
+  let hardSteps = 0;
   // Safety cap against pathological loops; real puzzles need well under 200.
   for (let i = 0; i < 400; i++) {
-    if (isSolved(cells)) return maxTier;
+    if (isSolved(cells)) return { tier: maxTier, hardSteps };
     let hint = findHint(cells);
     // The tutor's singles read candidates straight off the placed digits
     // (deliberately — no spoilers from the player's pencil marks), so they
@@ -324,7 +334,9 @@ export function classify(startCells: Cells): TutorTier | null {
       if (!single) return null;
       hint = single;
     }
-    maxTier = harder(maxTier, techniqueTier(hint.technique));
+    const tier = techniqueTier(hint.technique);
+    if (tier === 'hard') hardSteps++;
+    maxTier = harder(maxTier, tier);
     applyHint(hint, cells);
   }
   return null;

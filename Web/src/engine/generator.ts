@@ -3,7 +3,7 @@
 // generate-and-classify attempts), so the app runs it in a Web Worker
 // (gen.worker.ts) to keep the board responsive.
 
-import { classify } from './tutor';
+import { grade } from './tutor';
 import { cellsFromGivens, type Difficulty, type Grid, type Puzzle } from './types';
 
 export type Rng = () => number; // uniform [0, 1)
@@ -108,13 +108,16 @@ export function makePuzzle(solution: Grid, targetGivens: number, rng: Rng): Grid
   return grid;
 }
 
-const TARGET_GIVENS: Record<Difficulty, number> = { easy: 48, medium: 32, hard: 26 };
+const TARGET_GIVENS: Record<Difficulty, number> = { easy: 48, medium: 32, hard: 26, expert: 24 };
 const TIER_RANK = { simple: 0, medium: 1, hard: 2 } as const;
-const EXPECTED_TIER = { easy: 'simple', medium: 'medium', hard: 'hard' } as const;
+const EXPECTED_TIER = { easy: 'simple', medium: 'medium', hard: 'hard', expert: 'hard' } as const;
+/** Expert = Hard's techniques, but needed again and again rather than once. */
+const EXPERT_HARD_STEPS = 3;
 
-function tierOf(givens: Grid): number | null {
-  const t = classify(cellsFromGivens(givens));
-  return t === null ? null : TIER_RANK[t];
+/** Tier rank plus hard-step count, or null when the engine can't solve it. */
+function scoreOf(givens: Grid): { rank: number; steps: number } | null {
+  const g = grade(cellsFromGivens(givens));
+  return g && { rank: TIER_RANK[g.tier], steps: g.hardSteps };
 }
 
 /**
@@ -128,17 +131,33 @@ function tierOf(givens: Grid): number | null {
  * engine, never "medium", and 26-clue never "hard". So every Medium/Hard
  * fell through to the "last candidate" fallback and played like Easy with
  * fewer clues. Carving on until the tier is reached fixes that.
+ *
+ * Expert is Hard that keeps carving until it needs EXPERT_HARD_STEPS
+ * advanced steps; if no attempt gets there, the hardest Hard seen is used.
  */
 export function generatePuzzle(difficulty: Difficulty, id: number, rng: Rng = Math.random): Puzzle {
   const want = TIER_RANK[EXPECTED_TIER[difficulty]];
+  const minSteps = difficulty === 'expert' ? EXPERT_HARD_STEPS : 0;
+  const done = (sc: { rank: number; steps: number } | null) => !!sc && sc.rank === want && sc.steps >= minSteps;
   let fallback: Puzzle | null = null;
-  for (let attempt = 0; attempt < 25; attempt++) {
+  let fallbackSteps = -1;
+  const consider = (givens: Grid, solution: Grid, sc: { rank: number; steps: number } | null) => {
+    const steps = sc && sc.rank === want ? sc.steps : -1;
+    if (!fallback || steps > fallbackSteps) {
+      fallback = { id, difficulty, givens: givens.map((r) => [...r]), solution };
+      fallbackSteps = steps;
+    }
+  };
+  // Expert succeeds on fewer starting grids, so it gets more of them. It's
+  // made ahead of time in a worker (puzzles.ts), so the wait isn't seen.
+  const attempts = difficulty === 'expert' ? 120 : 25;
+  for (let attempt = 0; attempt < attempts; attempt++) {
     const solution = generateSolution(rng);
     const givens = makePuzzle(solution, TARGET_GIVENS[difficulty], rng);
-    let tier = tierOf(givens);
-    fallback ??= { id, difficulty, givens: givens.map((r) => [...r]), solution };
-    if (tier === want) return { id, difficulty, givens, solution };
-    if (tier === null || tier > want) continue; // already too hard; start over
+    let sc = scoreOf(givens);
+    consider(givens, solution, sc);
+    if (done(sc)) return { id, difficulty, givens, solution };
+    if (sc === null || sc.rank > want) continue; // already too hard; start over
     const filled = shuffle(
       Array.from({ length: 81 }, (_, i) => i).filter((i) => givens[Math.floor(i / 9)][i % 9] !== 0),
       rng,
@@ -152,9 +171,10 @@ export function generatePuzzle(difficulty: Difficulty, id: number, rng: Rng = Ma
         givens[r][c] = saved;
         continue;
       }
-      tier = tierOf(givens);
-      if (tier === want) return { id, difficulty, givens, solution };
-      if (tier === null || tier > want) givens[r][c] = saved;
+      sc = scoreOf(givens);
+      if (done(sc)) return { id, difficulty, givens, solution };
+      if (sc === null || sc.rank > want) givens[r][c] = saved;
+      else consider(givens, solution, sc);
     }
   }
   return fallback!;

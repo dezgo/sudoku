@@ -103,13 +103,14 @@ Any equivalent platform-native key/value store (Android `DataStore`, web `localS
 
 ## 5. Difficulty Tiers
 
-Three tiers. Each starts from a target number of givens, but a tier is ultimately defined by the **techniques it needs** (§6), not the clue count:
+Four tiers (Expert is web-only, single-player only). Each starts from a target number of givens, but a tier is ultimately defined by the **techniques it needs** (§6), not the clue count:
 
 | Tier   | Target givens | Notes                                                         |
 |--------|---------------|---------------------------------------------------------------|
 | Easy   | 48            | Gentle introduction.                                          |
 | Medium | 32            | Default tier. Carving continues below 32 until a medium technique is required (typically ~27 givens). |
 | Hard   | 26            | Carving continues until a hard technique is required (typically ~25 givens). |
+| Expert | 24            | Web only. Hard techniques needed **at least 3 times** (a typical Hard needs one or two, with Medium work around it). Not offered for multiplayer: the server generates those puzzles and has no technique grader. |
 
 The user's preferred tier persists; default is Medium.
 
@@ -125,8 +126,9 @@ A puzzle is produced by:
    - **Easy** → `TutorTechnique.Tier.simple` (only naked / hidden singles).
    - **Medium** → `medium` (up through pair / pointing / box-line — needs at least one of those).
    - **Hard** → `hard` (needs at least one triple / wing / fish technique).
+   - **Expert** (web) → `hard`, with `grade(cells).hardSteps >= 3` — the solve applies a hard-tier technique at least three times. A Hard-tier result with fewer steps keeps carving.
 
-   Up to 25 attempts per generation, with the first candidate kept as a fallback if all miss (not observed in testing).
+   Up to 25 attempts per generation (120 for Expert, which succeeds on fewer starting grids), with the best on-tier candidate kept as a fallback if all miss. Measured on a desktop (Oct 2026): Expert 60/60 with 3+ hard steps, median ~0.4 s, slowest ~2 s; it's pre-generated in a worker, so New Game is still usually instant.
 
    **`classify` must read singles from pencil marks.** The tutor's naked/hidden singles deliberately read candidates from placed digits only (no spoilers from the player's notes), so they can't see eliminations made by pairs, wings or fish. Inside `classify`, when the next engine hint is an elimination, first check for a single in the (auto-pencilled) notes and apply that; the single is charged to the elimination's tier. Without this, any puzzle needing a medium/hard technique stalls and classifies as `nil`, so Medium and Hard can never be generated. **The iOS/Android apps have this bug**: in practice their Medium/Hard puzzles fell through to the fallback and played like Easy with fewer clues. Measured on the web generator after the fix: 30/30 on-tier for each difficulty, ~0.1–0.4 s each.
 
