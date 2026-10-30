@@ -77,6 +77,12 @@ const POLICY_HTML = `<!DOCTYPE html>
       that game.
     </li>
     <li>
+      <strong>Shared puzzles</strong> — if you share a puzzle (web app):
+      its starting board, its difficulty, and your time if you'd finished
+      it. Anyone with the link sees the board, your display name and that
+      time.
+    </li>
+    <li>
       <strong>Notification token</strong> — only in the iOS and Android
       apps, and only if you allow notifications: a token from Apple or
       Google that lets us tell you when it's your turn.
@@ -135,8 +141,8 @@ const POLICY_HTML = `<!DOCTYPE html>
 
   <h2>Data retention</h2>
   <ul>
-    <li>Your account, display name, groups, scores and multiplayer history
-    are kept until you delete your account.</li>
+    <li>Your account, display name, groups, scores, multiplayer history and
+    shared puzzles are kept until you delete your account.</li>
     <li>One-time verification codes expire after 15 minutes and are
     deleted.</li>
   </ul>

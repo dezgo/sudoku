@@ -9,7 +9,8 @@ import { playSound } from '../lib/sound';
 import type { PuzzleResult } from '../lib/storage';
 import { Board } from './Board';
 import { Icon } from './icons';
-import { Segmented, Sheet } from './Sheet';
+import { Segmented, Sheet, shareText } from './Sheet';
+import { ApiError, api } from '../lib/api';
 
 export function NewGameSheet() {
   const s = useStore();
@@ -212,6 +213,11 @@ export function SolvedSheet({ rank, wasRanked }: { rank: number | null; wasRanke
             <Icon name="person" size={20} /> Sign in to put this on the board
           </button>
         )}
+        {!isDaily(g.puzzle) && (
+          <button class="btn" onClick={() => s.open({ kind: 'share', puzzle: g.puzzle, seconds: g.elapsedSeconds })}>
+            <Icon name="share" size={20} /> Share this puzzle
+          </button>
+        )}
         <button class="btn primary" onClick={done}>
           Done
         </button>
@@ -245,6 +251,69 @@ export function CompletedSheet({ result, fanfare }: { result: PuzzleResult; fanf
           <Icon name="podium" size={20} /> Leaderboard for this day
         </button>
       )}
+      {!isDaily(p) && (
+        <button class="btn" onClick={() => s.open({ kind: 'share', puzzle: p, seconds: result.elapsedSeconds })}>
+          <Icon name="share" size={20} /> Share this puzzle
+        </button>
+      )}
+    </Sheet>
+  );
+}
+
+/**
+ * Share a puzzle's starting position under a three-word name. Two steps on
+ * purpose: the name comes from the server first, and only the "Send link"
+ * tap opens the share menu — iPhones refuse a share menu that opens after
+ * waiting on the network rather than straight from a tap.
+ */
+export function ShareSheet({ puzzle, seconds }: { puzzle: Puzzle; seconds?: number }) {
+  const s = useStore();
+  const [name, setName] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const token = s.token;
+  useEffect(() => {
+    if (!token) return;
+    setError(null);
+    api
+      .shareCreate(token, puzzle.givens, puzzle.difficulty, seconds)
+      .then(setName)
+      .catch((e) =>
+        setError(e instanceof ApiError && e.kind === 'offline' ? "You're offline. Try again when you're connected." : "Couldn't share this puzzle. Try again."),
+      );
+  }, [token]);
+  const label = difficultyLabel[puzzle.difficulty];
+  const url = name ? `${location.origin}/p/${name}` : '';
+  const message = seconds
+    ? `Try this ${label} sudoku. I did it in ${formatTime(seconds)}!`
+    : `Try this ${label} sudoku!`;
+  return (
+    <Sheet title="Share puzzle">
+      <div class="stack" style={{ paddingTop: 6 }}>
+        <p class="muted" style={{ margin: 0 }}>
+          Your friend gets the same starting board, with nothing filled in{seconds ? ', and sees your time to beat' : ''}.
+        </p>
+        {!token ? (
+          <button class="btn primary" onClick={() => s.open({ kind: 'signIn' })}>
+            <Icon name="person" size={20} /> Sign in to share
+          </button>
+        ) : error ? (
+          <div class="error">{error}</div>
+        ) : !name ? (
+          <div class="muted" style={{ textAlign: 'center', padding: '12px 0' }}>
+            Getting a link…
+          </div>
+        ) : (
+          <>
+            <div class="share-name">{name.split('-').join(' · ')}</div>
+            <div class="muted small" style={{ textAlign: 'center', marginTop: -6 }}>
+              {location.host}/p/{name}
+            </div>
+            <button class="btn primary" onClick={() => void shareText(message, url)}>
+              <Icon name="share" size={20} /> Send link
+            </button>
+          </>
+        )}
+      </div>
     </Sheet>
   );
 }

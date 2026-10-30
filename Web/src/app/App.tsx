@@ -9,7 +9,7 @@ import { Play } from '../ui/Play';
 import { CoachSheet } from '../ui/Coach';
 import { HistorySheet } from '../ui/History';
 import { MultiplayerSheet } from '../ui/Multiplayer';
-import { CompletedSheet, ConfirmResetSheet, GamesSheet, NewGameSheet, SolvedSheet } from '../ui/sheets';
+import { CompletedSheet, ConfirmResetSheet, GamesSheet, NewGameSheet, ShareSheet, SolvedSheet } from '../ui/sheets';
 import { GroupMembersSheet, GroupOnboardingSheet, LeaderboardSheet, SettingsSheet, SignInSheet } from '../ui/social';
 
 function renderSheet(sheet: Sheet, i: number) {
@@ -40,6 +40,8 @@ function renderSheet(sheet: Sheet, i: number) {
       return <MultiplayerSheet key={i} gameId={sheet.gameId} />;
     case 'confirmReset':
       return <ConfirmResetSheet key={i} />;
+    case 'share':
+      return <ShareSheet key={i} puzzle={sheet.puzzle} seconds={sheet.seconds} />;
   }
 }
 
@@ -62,6 +64,15 @@ function handleJoinLink() {
   else store.open({ kind: 'signIn', then: () => void join() });
 }
 
+/** `/play/?p=eagle-maple-lantern` — a shared puzzle (the Worker redirects /p/<name> here). */
+function handleShareLink() {
+  const params = new URLSearchParams(location.search);
+  const name = params.get('p');
+  if (!name) return;
+  history.replaceState(null, '', location.pathname);
+  void store.startShared(name.toLowerCase());
+}
+
 export function App() {
   const s = useStore();
 
@@ -70,6 +81,7 @@ export function App() {
     warmBuffers();
     startUpdateChecks();
     handleJoinLink();
+    handleShareLink();
   }, []);
 
   // Chosen colours go on <html> inline, so they win in light and dark alike.

@@ -41,6 +41,14 @@ export interface PuzzleResponse {
   givens: Grid;
   solution: Grid;
 }
+export interface SharedPuzzleResponse {
+  name: string;
+  difficulty: Difficulty;
+  givens: Grid;
+  solution: Grid;
+  shared_by: string | null;
+  sharer_seconds: number | null;
+}
 export interface RemoteScore {
   puzzle_id: number;
   elapsed_seconds: number;
@@ -193,6 +201,9 @@ export const api = {
   groupMembers: (t: string, id: string) => send<GroupMember[]>(`groups/${id}/members`, 'GET', t),
   dailyToday: () => send<{ today: PuzzleResponse; tomorrow: PuzzleResponse }>('daily/today', 'GET'),
   daily: (puzzleId: number) => send<{ puzzle: PuzzleResponse }>(`daily/${puzzleId}`, 'GET').then((r) => r.puzzle),
+  shareCreate: (t: string, givens: Grid, difficulty: Difficulty, elapsed_seconds?: number) =>
+    send<{ name: string }>('shared', 'POST', t, { givens, difficulty, elapsed_seconds }).then((r) => r.name),
+  shared: (name: string) => send<SharedPuzzleResponse>(`shared/${name}`, 'GET'),
   postScore: (t: string, s: ScoreSubmission) => send<{ rank: number }>('scores', 'POST', t, s).then((r) => r.rank),
   groupScores: (t: string, groupId: string, puzzleId: number) =>
     send<LeaderboardEntry[]>(`groups/${groupId}/scores/${puzzleId}`, 'GET', t),

@@ -128,6 +128,41 @@ function countSolutions(grid: Grid, limit: number): number {
   return count;
 }
 
+/**
+ * The unique solution of a player-supplied board, or null if the board is
+ * malformed, breaks the rules, or has zero or several solutions. Used to
+ * check a shared puzzle before saving it.
+ */
+export function solveUnique(givens: unknown): Grid | null {
+  if (!Array.isArray(givens) || givens.length !== 9) return null;
+  const grid = emptyGrid();
+  for (let r = 0; r < 9; r++) {
+    const row = givens[r];
+    if (!Array.isArray(row) || row.length !== 9) return null;
+    for (let c = 0; c < 9; c++) {
+      const v = row[c];
+      if (!Number.isInteger(v) || v < 0 || v > 9) return null;
+      if (v !== 0) {
+        if (!isValidPlacement(grid, r, c, v)) return null;
+        grid[r]![c] = v;
+      }
+    }
+  }
+  if (countSolutions(cloneGrid(grid), 2) !== 1) return null;
+  const solve = (g: Grid): boolean => {
+    const cell = findMrvEmpty(g);
+    if (!cell) return true;
+    for (const d of cell.candidates) {
+      g[cell.row]![cell.col] = d;
+      if (solve(g)) return true;
+      g[cell.row]![cell.col] = 0;
+    }
+    return false;
+  };
+  solve(grid);
+  return grid;
+}
+
 function carve(solution: Grid, targetGivens: number, rng: Rng): Grid {
   const grid = cloneGrid(solution);
   const positions: [number, number][] = [];

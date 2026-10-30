@@ -16,6 +16,7 @@ import { getLandingPage } from './landing';
 import { getVersion } from './version';
 import { getMultiplayerInvitePage } from './multiplayer-invite';
 import { getAndroidAssetLinks, getAppleAppSiteAssociation } from './well-known';
+import { createSharedPuzzle, getSharedPuzzle, SHARE_NAME_RE } from './shared';
 import {
   createMultiplayerGame,
   declineMultiplayerGame,
@@ -96,6 +97,12 @@ async function route(req: Request, env: Env, ctx: ExecutionContext): Promise<Res
   const inviteMatch = path.match(/^\/m\/([A-Za-z0-9]+)$/);
   if (inviteMatch && method === 'GET') return getMultiplayerInvitePage(inviteMatch[1]!);
 
+  // Shared puzzle link: /p/eagle-maple-lantern opens that board in the web app.
+  const shareMatch = path.match(/^\/p\/([a-z-]+)\/?$/);
+  if (shareMatch && SHARE_NAME_RE.test(shareMatch[1]!) && method === 'GET') {
+    return Response.redirect(`${url.origin}/play/?p=${shareMatch[1]}`, 302);
+  }
+
   if (path === '/v1/auth/start' && method === 'POST') return authStart(req, env);
   if (path === '/v1/auth/verify' && method === 'POST') return authVerify(req, env);
 
@@ -119,6 +126,10 @@ async function route(req: Request, env: Env, ctx: ExecutionContext): Promise<Res
   if (dailyMatch && method === 'GET') {
     return getDailyByPuzzleId(env, parseInt(dailyMatch[1]!, 10));
   }
+
+  if (path === '/v1/shared' && method === 'POST') return createSharedPuzzle(req, env);
+  const sharedMatch = path.match(/^\/v1\/shared\/([a-z-]+)$/);
+  if (sharedMatch && method === 'GET') return getSharedPuzzle(env, sharedMatch[1]!);
 
   if (path === '/v1/scores' && method === 'POST') return postScore(req, env);
   const groupScoresMatch = path.match(/^\/v1\/groups\/([^/]+)\/scores\/(\d+)$/);

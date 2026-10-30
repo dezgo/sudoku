@@ -848,6 +848,14 @@ button.row:active {
 
 /* ---------- Solved / fanfare ---------- */
 
+.share-name {
+  text-align: center;
+  font-size: 1.35rem;
+  font-weight: 700;
+  padding: 10px 0 2px;
+  color: var(--accent);
+}
+
 .fanfare {
   position: relative;
   text-align: center;

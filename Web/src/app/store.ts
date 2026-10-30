@@ -6,7 +6,7 @@
 
 import { useEffect, useReducer } from 'preact/hooks';
 import { Game, type SoundCue } from '../engine/game';
-import { isDaily, type Difficulty, type Puzzle } from '../engine/types';
+import { difficultyLabel, isDaily, type Difficulty, type Puzzle } from '../engine/types';
 import type { TutorHint } from '../engine/tutor';
 import { findHint } from '../engine/tutor';
 import {
@@ -34,7 +34,7 @@ import {
   type PuzzleResult,
 } from '../lib/storage';
 import { requestPuzzle } from './puzzles';
-import { localDailyId } from '../lib/format';
+import { formatTime, localDailyId } from '../lib/format';
 
 export type Phase = 'home' | 'playing';
 
@@ -51,7 +51,8 @@ export type Sheet =
   | { kind: 'coach' }
   | { kind: 'history' }
   | { kind: 'multiplayer'; gameId?: string }
-  | { kind: 'confirmReset' };
+  | { kind: 'confirmReset' }
+  | { kind: 'share'; puzzle: Puzzle; seconds?: number };
 
 interface Identity {
   user: ApiUser;
@@ -124,7 +125,7 @@ class Store {
     return this.daily?.today.id ?? localDailyId();
   }
 
-  showToast(msg: string): void {
+  showToast(msg: string, ms = 2600): void {
     this.toast = msg;
     this.emit();
     setTimeout(() => {
@@ -132,7 +133,7 @@ class Store {
         this.toast = null;
         this.emit();
       }
-    }, 2600);
+    }, ms);
   }
 
   // --- Sheets ---
@@ -282,6 +283,36 @@ class Store {
       const p = await requestPuzzle(difficulty, nextPuzzleId());
       this.offlineDaily = false;
       this.loadPuzzle(p);
+    } finally {
+      this.loadingPuzzle = false;
+      this.emit();
+    }
+  }
+
+  /** Open a puzzle a friend shared (/p/<name>), resuming it if already started here. */
+  async startShared(name: string): Promise<void> {
+    this.loadingPuzzle = true;
+    this.emit();
+    try {
+      const r = await api.shared(name);
+      const key = JSON.stringify(r.givens);
+      const save = Object.values(this.saves).find((sv) => !isDaily(sv.puzzle) && JSON.stringify(sv.puzzle.givens) === key);
+      if (save) this.resume(save);
+      else {
+        this.offlineDaily = false;
+        this.loadPuzzle({ id: nextPuzzleId(), difficulty: r.difficulty, givens: r.givens, solution: r.solution });
+      }
+      const who = r.shared_by ?? 'A friend';
+      this.showToast(
+        r.sharer_seconds
+          ? `${who} did this ${difficultyLabel[r.difficulty]} puzzle in ${formatTime(r.sharer_seconds)}. Your turn!`
+          : `${who} shared this ${difficultyLabel[r.difficulty]} puzzle with you.`,
+        5000,
+      );
+    } catch (e) {
+      this.showToast(
+        e instanceof ApiError && e.kind === 'offline' ? "You're offline." : "That puzzle link didn't work.",
+      );
     } finally {
       this.loadingPuzzle = false;
       this.emit();

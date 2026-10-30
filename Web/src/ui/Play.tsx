@@ -105,6 +105,11 @@ export function Play() {
         <button class="btn primary" onClick={() => s.goHome()}>
           <Icon name="home" size={20} /> Home
         </button>
+        {!isDaily(g.puzzle) && (
+          <button class="btn" onClick={() => s.open({ kind: 'share', puzzle: g.puzzle })}>
+            <Icon name="share" size={20} /> Share
+          </button>
+        )}
         <button class="btn" onClick={() => s.open({ kind: 'confirmReset' })}>
           Reset
         </button>
