@@ -224,6 +224,8 @@ export const api = {
     send<{ name: string }>('coop', 'POST', t, { givens, difficulty }).then((r) => r.name),
   coopJoin: (t: string, name: string) => send<CoopGame>(`coop/${name}/join`, 'POST', t),
   coopMine: (t: string) => send<{ games: CoopGameSummary[] }>('me/coop', 'GET', t).then((r) => r.games),
+  feedback: (t: string | null, message: string, email: string | undefined, context: string) =>
+    send<{ ok: true }>('feedback', 'POST', t, { message, email, context }),
   postScore: (t: string, s: ScoreSubmission) => send<{ rank: number }>('scores', 'POST', t, s).then((r) => r.rank),
   groupScores: (t: string, groupId: string, puzzleId: number) =>
     send<LeaderboardEntry[]>(`groups/${groupId}/scores/${puzzleId}`, 'GET', t),

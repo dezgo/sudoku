@@ -98,6 +98,9 @@ export function Home() {
         </button>
       </div>
 
+      <button class="link quiet-link" onClick={() => s.open({ kind: 'feedback' })}>
+        <Icon name="chat" size={15} /> Ideas or problems? Tell us
+      </button>
     </div>
   );
 }

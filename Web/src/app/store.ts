@@ -53,6 +53,7 @@ export type Sheet =
   | { kind: 'history' }
   | { kind: 'multiplayer'; gameId?: string }
   | { kind: 'confirmReset' }
+  | { kind: 'feedback' }
   | { kind: 'share'; puzzle: Puzzle; seconds?: number }
   | { kind: 'lifelines'; used: Lifeline[] };
 

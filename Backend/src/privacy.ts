@@ -38,7 +38,7 @@ const POLICY_HTML = `<!DOCTYPE html>
 </head>
 <body>
   <h1>Privacy Policy</h1>
-  <p class="meta">Sudoku Crew · Effective 25 October 2026</p>
+  <p class="meta">Sudoku Crew · Effective 4 November 2026</p>
 
   <p>
     This is the privacy policy for <strong>Sudoku Crew</strong> — the web
@@ -89,6 +89,13 @@ const POLICY_HTML = `<!DOCTYPE html>
       time.
     </li>
     <li>
+      <strong>Feedback</strong> — if you send feedback (web app): your
+      message, which screen you were on, your browser and device type, and
+      — so we can reply — your display name and email if you're signed in,
+      or the email you typed if you left one. You don't need an account to
+      send feedback.
+    </li>
+    <li>
       <strong>Notification token</strong> — only in the iOS and Android
       apps, and only if you allow notifications: a token from Apple or
       Google that lets us tell you when it's your turn.
@@ -118,6 +125,7 @@ const POLICY_HTML = `<!DOCTYPE html>
     <li>Showing your name and scores to other members of your groups.</li>
     <li>Running multiplayer games and telling you when it's your turn.</li>
     <li>Generating the daily puzzle and leaderboard you see.</li>
+    <li>Reading and replying to feedback you send.</li>
   </ul>
   <p>We don't use your data for marketing, profiling, or any purpose
   outside Sudoku Crew.</p>
@@ -133,8 +141,8 @@ const POLICY_HTML = `<!DOCTYPE html>
     </li>
     <li>
       <strong>Resend</strong> — delivers the verification email when you
-      sign in. Resend processes your email address only to send that
-      message. See
+      sign in, and passes feedback you send on to us by email. Resend
+      processes your email address only to send those messages. See
       <a href="https://resend.com/legal/privacy-policy" target="_blank" rel="noopener noreferrer">Resend's privacy policy</a>.
     </li>
     <li>
@@ -149,6 +157,9 @@ const POLICY_HTML = `<!DOCTYPE html>
   <ul>
     <li>Your account, display name, groups, scores, multiplayer history and
     shared puzzles are kept until you delete your account.</li>
+    <li>Feedback is kept so we can follow it up. Feedback sent while
+    signed in is deleted with your account; otherwise email us and we'll
+    delete it.</li>
     <li>One-time verification codes expire after 15 minutes and are
     deleted.</li>
   </ul>

@@ -11,7 +11,7 @@ import { LifelinesSheet } from '../ui/Lifelines';
 import { HistorySheet } from '../ui/History';
 import { MultiplayerSheet } from '../ui/Multiplayer';
 import { CompletedSheet, ConfirmResetSheet, GamesSheet, NewGameSheet, ShareSheet, SolvedSheet } from '../ui/sheets';
-import { GroupMembersSheet, GroupOnboardingSheet, LeaderboardSheet, SettingsSheet, SignInSheet } from '../ui/social';
+import { FeedbackSheet, GroupMembersSheet, GroupOnboardingSheet, LeaderboardSheet, SettingsSheet, SignInSheet } from '../ui/social';
 
 function renderSheet(sheet: Sheet, i: number) {
   switch (sheet.kind) {
@@ -21,6 +21,8 @@ function renderSheet(sheet: Sheet, i: number) {
       return <GamesSheet key={i} />;
     case 'settings':
       return <SettingsSheet key={i} />;
+    case 'feedback':
+      return <FeedbackSheet key={i} />;
     case 'signIn':
       return <SignInSheet key={i} then={sheet.then} />;
     case 'solved':

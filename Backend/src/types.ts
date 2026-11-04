@@ -3,6 +3,8 @@ export interface Env {
   COOP: DurableObjectNamespace;
   RESEND_API_KEY: string;
   EMAIL_FROM: string;
+  // Where player feedback is emailed (wrangler.toml [vars]).
+  FEEDBACK_TO?: string;
   DAILY_TIMEZONE: string;
   // Reviewer bypass: when set, signing in with REVIEWER_EMAIL skips the
   // Resend round-trip (so Play Store / App Store reviewers don't need to

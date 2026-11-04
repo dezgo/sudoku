@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from 'preact/hooks';
 import { useStore } from '../app/store';
 import { ApiError, api, type GroupListItem, type GroupMember, type LeaderboardEntry, type StandingsEntry } from '../lib/api';
-import { addDays, dateFromDailyId, formatTime, shortDate, weekdayDate } from '../lib/format';
+import { addDays, dateFromDailyId, displayLabel, formatTime, shortDate, weekdayDate } from '../lib/format';
 import { applyColors, COLOR_CHOICES, currentColor } from '../lib/colors';
 import type { Appearance } from '../lib/storage';
 import { FIRST_DAILY_ID, isCatchUp } from '../lib/streaks';
@@ -499,6 +499,16 @@ export function SettingsSheet() {
         )}
       </div>
 
+      <div class="section-title">Feedback</div>
+      <div class="group">
+        <button class="row" onClick={() => s.open({ kind: 'feedback' })}>
+          <Icon name="chat" size={18} />
+          <span class="grow" style={{ color: 'var(--accent)' }}>
+            Suggest a change or report a problem
+          </span>
+        </button>
+      </div>
+
       {s.identity && (
         <>
           <div class="section-title">Danger zone</div>
@@ -549,6 +559,94 @@ export function SettingsSheet() {
           Privacy policy
         </a>
       </p>
+    </Sheet>
+  );
+}
+
+// ---------- Feedback ----------
+
+/** Where the player was, so a "this is broken" report makes sense without a back-and-forth. */
+function feedbackContext(s: ReturnType<typeof useStore>): string {
+  const where = s.game ? `Playing ${displayLabel(s.game.puzzle)} (${s.game.puzzle.difficulty}, #${s.game.puzzle.id})` : 'Home';
+  const build = document.querySelector<HTMLScriptElement>('script[type="module"][src*="/assets/"]')?.src.split('/').pop() ?? '?';
+  const installed = matchMedia('(display-mode: standalone)').matches ? 'home-screen app' : 'browser';
+  return `${where} · ${installed} · ${build} · ${navigator.userAgent}`;
+}
+
+export function FeedbackSheet() {
+  const s = useStore();
+  const [message, setMessage] = useState('');
+  const [email, setEmail] = useState('');
+  const [sending, setSending] = useState(false);
+  const [sent, setSent] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const send = async () => {
+    if (!message.trim() || sending) return;
+    setSending(true);
+    setError(null);
+    try {
+      await api.feedback(s.token, message.trim(), email.trim() || undefined, feedbackContext(s));
+      setSent(true);
+    } catch (e) {
+      setError(
+        e instanceof ApiError && e.status === 429
+          ? "That's a lot of messages in a short time — try again in an hour or so."
+          : errorCopy(e, "Couldn't send that. Try again in a moment."),
+      );
+    } finally {
+      setSending(false);
+    }
+  };
+
+  if (sent) {
+    return (
+      <Sheet title="Feedback" right={<span />}>
+        <div class="stack center" style={{ padding: '18px 0 6px', textAlign: 'center' }}>
+          <Icon name="check" size={36} />
+          <b>Thanks — got it.</b>
+          <p class="muted" style={{ margin: 0 }}>
+            {s.identity || email.trim() ? "Every message gets read, and you'll hear back by email if there's a question." : 'Every message gets read.'}
+          </p>
+          <button class="btn primary" style={{ alignSelf: 'stretch' }} onClick={() => s.close()}>
+            Done
+          </button>
+        </div>
+      </Sheet>
+    );
+  }
+
+  return (
+    <Sheet title="Feedback" left={<button class="link" onClick={() => s.close()}>Cancel</button>} right={<span />}>
+      <div class="stack" style={{ paddingTop: 6 }}>
+        <p class="muted" style={{ margin: 0 }}>
+          Something you'd like changed or added, or something not working? Say it however you like.
+        </p>
+        <textarea
+          class="field feedback-box"
+          placeholder="I'd love it if…"
+          maxLength={4000}
+          value={message}
+          onInput={(e) => setMessage(e.currentTarget.value)}
+          autoFocus
+        />
+        {!s.identity && (
+          <input
+            class="field"
+            type="email"
+            inputMode="email"
+            autoComplete="email"
+            autoCapitalize="off"
+            placeholder="Your email, if you'd like a reply (optional)"
+            value={email}
+            onInput={(e) => setEmail(e.currentTarget.value)}
+          />
+        )}
+        {error && <div class="error">{error}</div>}
+        <button class="btn primary" disabled={!message.trim() || sending} onClick={() => void send()}>
+          {sending ? 'Sending…' : 'Send'}
+        </button>
+      </div>
     </Sheet>
   );
 }

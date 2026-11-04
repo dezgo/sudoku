@@ -61,6 +61,7 @@ directory = "./public"
 # that base URL is hardcoded in both shipped clients (APIClient.swift,
 # ApiClient.kt), so moving it would brick installed copies.
 EMAIL_FROM = "Sudoku Crew <noreply@sudokucrew.com>"
+FEEDBACK_TO = "hello@sudokucrew.com"
 DAILY_TIMEZONE = "Australia/Sydney"
 IOS_CURRENT_VERSION = "1.1.3"
 IOS_MIN_REQUIRED_VERSION = "1.0.6"

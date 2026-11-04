@@ -17,6 +17,7 @@ import { getVersion } from './version';
 import { getMultiplayerInvitePage } from './multiplayer-invite';
 import { getAndroidAssetLinks, getAppleAppSiteAssociation } from './well-known';
 import { createSharedPuzzle, getSharedPuzzle, SHARE_NAME_RE } from './shared';
+import { postFeedback } from './feedback';
 import { connectCoopGame, createCoopGame, joinCoopGame, listMyCoopGames } from './coop';
 
 export { CoopRoom } from './coop-room';
@@ -146,6 +147,8 @@ async function route(req: Request, env: Env, ctx: ExecutionContext): Promise<Res
   if (coopJoinMatch && method === 'POST') return joinCoopGame(req, env, coopJoinMatch[1]!);
   const coopWsMatch = path.match(/^\/v1\/coop\/([a-z-]+)\/ws$/);
   if (coopWsMatch && method === 'GET') return connectCoopGame(req, env, coopWsMatch[1]!, url.searchParams.get('token'));
+
+  if (path === '/v1/feedback' && method === 'POST') return postFeedback(req, env, ctx);
 
   if (path === '/v1/scores' && method === 'POST') return postScore(req, env);
   const groupScoresMatch = path.match(/^\/v1\/groups\/([^/]+)\/scores\/(\d+)$/);

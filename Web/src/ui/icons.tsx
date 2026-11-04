@@ -101,6 +101,7 @@ const paths: Record<string, JSX.Element> = {
       <path d="M4 21a8 8 0 0 1 16 0" />
     </>
   ),
+  chat: <path d="M4 5h16v11H9l-5 4z" />,
   x: <path d="M6 6l12 12M18 6 6 18" />,
   info: (
     <>
