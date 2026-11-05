@@ -64,11 +64,37 @@ describe('game input', () => {
     expect(g.cells[0][3].notes.has(6)).toBe(true);
   });
 
-  it('locks correct placements when mistakes are highlighted', () => {
+  it('locks correct placements, but lets Erase/Undo take them out', () => {
     const g = newGame();
     g.select(0, 2);
     g.pressNumber(4);
     expect(g.isLocked(0, 2)).toBe(true);
+    expect(g.canEraseSelected).toBe(true);
+    expect(g.eraseLabel).toBe('Undo');
+    g.clearSelected();
+    expect(g.cells[0][2].value).toBeNull();
+    expect(g.mistakeCount).toBe(0);
+  });
+
+  it('erases an older correct number too, but never a starting number', () => {
+    const g = newGame();
+    g.select(0, 2);
+    g.pressNumber(4);
+    g.select(0, 0);
+    expect(g.canEraseSelected).toBe(false); // given
+    g.select(0, 2);
+    expect(g.eraseLabel).toBe('Erase'); // moved away, so no longer the last move
+    expect(g.canEraseSelected).toBe(true);
+    g.clearSelected();
+    expect(g.cells[0][2].value).toBeNull();
+  });
+
+  it('keeps correct numbers in co-op, where the room owns them', () => {
+    const g = newGame();
+    g.eraseCorrectAllowed = false;
+    g.select(0, 2);
+    g.pressNumber(4);
+    expect(g.canEraseSelected).toBe(false);
     g.clearSelected();
     expect(g.cells[0][2].value).toBe(4);
   });

@@ -77,20 +77,26 @@ export function Segmented<T extends string>({
   );
 }
 
-/** Share via the OS share sheet when there is one, else copy to the clipboard. */
+/**
+ * Share via the OS share sheet when there is one, else copy to the clipboard.
+ * The link goes inside the text rather than as a separate `url`: given both,
+ * the iPhone share menu's Copy keeps only the text and drops the link. With
+ * no text, only the link is shared.
+ */
 export async function shareText(text: string, url?: string): Promise<void> {
+  const full = [text, url].filter(Boolean).join(' ');
   if (navigator.share) {
     try {
-      await navigator.share({ text, url });
+      await navigator.share(text ? { text: full } : { url });
       return;
     } catch (e) {
       if ((e as DOMException).name === 'AbortError') return;
     }
   }
   try {
-    await navigator.clipboard.writeText(url ? `${text} ${url}` : text);
+    await navigator.clipboard.writeText(full);
     store.showToast('Copied to clipboard');
   } catch {
-    store.showToast(text);
+    store.showToast(full);
   }
 }

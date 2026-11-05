@@ -293,11 +293,7 @@ export function ShareSheet({ puzzle, seconds }: { puzzle: Puzzle; seconds?: numb
         setError(e instanceof ApiError && e.kind === 'offline' ? "You're offline. Try again when you're connected." : "Couldn't share this puzzle. Try again."),
       );
   }, [token]);
-  const label = difficultyLabel[puzzle.difficulty];
   const url = name ? `${location.origin}/p/${name}` : '';
-  const message = seconds
-    ? `Try this ${label} sudoku. I did it in ${formatTime(seconds)}!`
-    : `Try this ${label} sudoku!`;
   return (
     <Sheet title="Share puzzle">
       <div class="stack" style={{ paddingTop: 6 }}>
@@ -320,7 +316,7 @@ export function ShareSheet({ puzzle, seconds }: { puzzle: Puzzle; seconds?: numb
             <div class="muted small" style={{ textAlign: 'center', marginTop: -6 }}>
               {location.host}/p/{name}
             </div>
-            <button class="btn primary" onClick={() => void shareText(message, url)}>
+            <button class="btn primary" onClick={() => void shareText('', url)}>
               <Icon name="share" size={20} /> Send link
             </button>
           </>

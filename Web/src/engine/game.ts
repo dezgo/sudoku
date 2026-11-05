@@ -63,6 +63,13 @@ export class Game {
   hintsUsed = 0;
   pencilAssistsUsed = 0;
   private lastPlacement: PlacementUndo | null = null;
+  /**
+   * A correct number is locked against being typed over, but Erase/Undo may
+   * still take it out — a player who tapped one in by luck wants to remove it
+   * and find it by logic (feedback, Nov 2026). Co-op turns this off: the room
+   * keeps a correct square for both players.
+   */
+  eraseCorrectAllowed = true;
 
   /** Fired for every audible event; the app gates it on the Sound setting. */
   onSound: (cue: SoundCue) => void = () => {};
@@ -205,9 +212,14 @@ export class Game {
     return false;
   }
 
+  /** Erase/Undo may act on this cell (a correct number is locked, but not against erasing). */
+  private isErasable(row: number, col: number): boolean {
+    return this.eraseCorrectAllowed ? !this.cells[row][col].isFixed : !this.isLocked(row, col);
+  }
+
   get canEraseSelected(): boolean {
     const s = this.selected;
-    if (!s || this.isLocked(s.row, s.col)) return false;
+    if (!s || !this.isErasable(s.row, s.col)) return false;
     const cell = this.cells[s.row][s.col];
     return cell.value !== null || cell.notes.size > 0;
   }
@@ -215,7 +227,7 @@ export class Game {
   get eraseLabel(): 'Undo' | 'Erase' {
     const s = this.selected;
     const last = this.lastPlacement;
-    if (this.highlightMistakes && s && last && s.row === last.row && s.col === last.col && !this.isLocked(s.row, s.col))
+    if (this.highlightMistakes && s && last && s.row === last.row && s.col === last.col && this.isErasable(s.row, s.col))
       return 'Undo';
     return 'Erase';
   }
@@ -366,7 +378,7 @@ export class Game {
 
   clearSelected(): void {
     const s = this.selected;
-    if (!s || this.isLocked(s.row, s.col)) return;
+    if (!s || !this.isErasable(s.row, s.col)) return;
     const cell = this.cells[s.row][s.col];
     const hadContent = cell.value !== null || cell.notes.size > 0;
     const last = this.lastPlacement;

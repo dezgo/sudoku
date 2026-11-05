@@ -212,8 +212,8 @@ When the selected cell holds a value, the pad button for that value is rendered 
 
 **Erase / Undo button.** A single button that adapts:
 
-- **Disabled** when there's nothing to clear in the selected cell, or the cell is locked (see §10).
-- **Label = "Undo"** when the selected cell is the most-recent-placement *and* is still undoable (not locked) *and* "Highlight mistakes" is on. Tapping it reverts that placement: clears the cell's value, restores its prior pencil notes, and **restores any pencil notes auto-cleared from peer cells** at the time of placement (§10).
+- **Disabled** when there's nothing to clear in the selected cell, or it holds a starting number. **Web app:** a correct number (locked, §10) can still be erased — a player who tapped one in by luck can take it out and find it by logic (player feedback, Nov 2026). In co-op it stays disabled for correct numbers, since the room keeps them for both players. The apps disable it for any locked cell.
+- **Label = "Undo"** when the selected cell is the most-recent-placement *and* is still undoable (erasable, above) *and* "Highlight mistakes" is on. Tapping it reverts that placement: clears the cell's value, restores its prior pencil notes, and **restores any pencil notes auto-cleared from peer cells** at the time of placement (§10).
 - **Label = "Erase"** otherwise. Tapping clears the selected cell's value and notes.
 
 The undo state is per-most-recent-placement only; navigating away clears it. Cross-session Undo is not required.
@@ -224,7 +224,7 @@ The undo state is per-most-recent-placement only; navigating away clears it. Cro
 
 When **"Highlight mistakes" is on**:
 
-- A user-entered cell that matches the solution is **locked** — it cannot be changed or erased. Visually, locked cells render in the same bold weight as fixed cells. (Reset still unlocks them by reloading from givens.)
+- A user-entered cell that matches the solution is **locked** — it cannot be changed (web app: it can still be erased with Erase/Undo, except in co-op — see §9). Visually, locked cells render in the same bold weight as fixed cells. (Reset still unlocks them by reloading from givens.)
 - When a user places a *new* value (not pencil), every peer cell (same row, column, or 3×3 box) has that number removed from its pencil notes. The set of peers from which notes were cleared is captured as part of the undo info, so pressing Undo restores them.
 
 When **"Highlight mistakes" is off**:

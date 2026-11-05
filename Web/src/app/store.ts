@@ -403,6 +403,7 @@ class Store {
         if (!cell.isFixed) cell.notes = new Set(n);
       });
       g.onSound = this.onSound;
+      g.eraseCorrectAllowed = false;
       this.game = g;
       this.coopGame = g;
       this.coop = {
