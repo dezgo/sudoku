@@ -161,16 +161,17 @@ describe('speed mode', () => {
     expect(g.cells[0][2].value).toBeNull();
   });
 
-  it('pencil + speed toggles notes', () => {
+  it('pencil and speed turn each other off', () => {
     const g = newGame();
     g.toggleSpeedMode();
-    g.toggleMode();
     g.pressNumber(2);
-    g.tapCell(0, 2);
-    expect(g.cells[0][2].notes.has(2)).toBe(true);
-    expect(g.cells[0][2].value).toBeNull();
-    g.tapCell(0, 2);
-    expect(g.cells[0][2].notes.has(2)).toBe(false);
+    g.toggleMode(); // pencil on → speed off, digit disarmed
+    expect(g.mode).toBe('pencil');
+    expect(g.speedMode).toBe(false);
+    expect(g.activeNumber).toBeNull();
+    g.toggleSpeedMode(); // speed on → pencil off
+    expect(g.speedMode).toBe(true);
+    expect(g.mode).toBe('normal');
   });
 
   it('pressing the armed digit again disarms; a finished digit disarms itself', () => {

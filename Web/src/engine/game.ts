@@ -236,8 +236,7 @@ export class Game {
 
   /**
    * A tap on a board cell. In speed mode with a digit armed, tapping an
-   * empty editable cell drops the digit in (or toggles it as a note in
-   * pencil mode); anything else is ordinary selection. Keeping this out of
+   * empty editable cell drops the digit in; anything else is ordinary selection. Keeping this out of
    * select() is what stops arrow keys from placing digits.
    */
   tapCell(row: number, col: number): void {
@@ -395,13 +394,22 @@ export class Game {
     if (hadContent) this.onSound('erase');
   }
 
+  /**
+   * Pencil and Speed are two different ways of playing, so turning one on
+   * turns the other off (Derek, Nov 2026).
+   */
   toggleMode(): void {
     this.mode = this.mode === 'normal' ? 'pencil' : 'normal';
+    if (this.mode === 'pencil' && this.speedMode) {
+      this.speedMode = false;
+      this.activeNumber = null;
+    }
   }
 
   toggleSpeedMode(): void {
     this.speedMode = !this.speedMode;
     this.activeNumber = null;
+    if (this.speedMode) this.mode = 'normal';
   }
 
   // --- Assists ---

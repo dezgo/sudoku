@@ -197,10 +197,10 @@ When the selected cell holds a value, the pad button for that value is rendered 
 
 **Mode toggle.** A button toggles between Normal and Pencil mode. Pencil mode adds/removes pencil marks instead of writing real values.
 
-**Speed mode toggle.** A button next to the Pencil toggle. Speed mode is "pick a number, then tap squares": it is driven by one piece of real state, the **armed digit** (`activeNumber`).
+**Speed mode toggle.** A button next to the Pencil toggle. Pencil and Speed are mutually exclusive: turning either on turns the other off (and disarms any armed digit). Speed mode is "pick a number, then tap squares": it is driven by one piece of real state, the **armed digit** (`activeNumber`).
 
 - **Pad tap** arms that digit, or disarms it if it's already armed. It never places anything, and it clears the selection so nothing stale lingers on the board.
-- **Board tap on an empty, editable cell** with a digit armed places it — or, in pencil mode, toggles it as a note (rapid note-filling).
+- **Board tap on an empty, editable cell** with a digit armed places it.
 - **Board tap on a filled or locked cell** with a digit armed clears the selection; it does not re-arm.
 - The armed digit's pad button is highlighted, and every copy of it on the board lights up (§8 layer 2).
 - While armed, the board shading means **only** "this digit can't go here" (§8 layers 3b/3c); the selection's row/column/box tint (3a) is suppressed, and the selected cell is drawn as a faint yellow outline (it's what Undo would clear) instead of the yellow fill. The hint under the pad reads "Tap empty squares to place N. Dark squares are where N can still go." The tints must agree with that sentence: when the selection tint was drawn too, it hid a legal square and misled a player into a wrong placement.

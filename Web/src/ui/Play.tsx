@@ -209,7 +209,7 @@ function NumberPad() {
         {g.speedMode
           ? g.activeNumber === null
             ? 'Speed: pick a number, then tap squares to fill them.'
-            : `Tap empty squares to place ${g.activeNumber}${g.mode === 'pencil' ? ' as a note' : ''}.${
+            : `Tap empty squares to place ${g.activeNumber}.${
                 g.highlightConstraints ? ` Dark squares are where ${g.activeNumber} can still go.` : ''
               }`
           : ''}
