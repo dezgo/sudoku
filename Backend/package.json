@@ -2,7 +2,7 @@
   "name": "sudoku-api",
   "version": "0.1.0",
   "private": true,
-  "description": "Cloudflare Workers backend for the cross-platform Sudoku app. See ../SPEC.md \u00c2\u00a717.",
+  "description": "Cloudflare Workers backend for the cross-platform Sudoku app. See ../SPEC.md Â§17.",
   "scripts": {
     "dev": "wrangler dev",
     "deploy": "npm run build:web && wrangler deploy",
@@ -15,8 +15,8 @@
     "build:web": "npm --prefix ../Web run build"
   },
   "devDependencies": {
-    "@cloudflare/workers-types": "^4.20260101.0",
+    "@cloudflare/workers-types": "^5.20261110.1",
     "typescript": "^5.5.0",
-    "wrangler": "^4.86.0"
+    "wrangler": "^4.160.0"
   }
 }

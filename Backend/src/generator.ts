@@ -172,7 +172,7 @@ function carve(solution: Grid, targetGivens: number, rng: Rng): Grid {
   let givens = 81;
   for (const [r, c] of order) {
     if (givens <= targetGivens) break;
-    const saved = grid[r]![c];
+    const saved = grid[r]![c]!;
     grid[r]![c] = 0;
     const test = cloneGrid(grid);
     if (countSolutions(test, 2) === 1) {
