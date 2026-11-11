@@ -40,7 +40,7 @@ Work autonomously, make sensible assumptions, save questions for the end, and re
 
 ### Speed mode — ✅ rebuilt in the web app (2026-10-25)
 
-Done in `Web/` as planned: real `activeNumber` state, the pad only arms, only board taps place, speed + pencil does rapid notes, the digit disarms when complete, and arrow keys never place. Two lessons from testing on Derek's phone, now in `SPEC.md` §9: while a digit is armed the board shading must mean **only** "can't go here" (the selection's row/col/box tint looked identical and hid a legal square), and the selection is drawn as a faint outline rather than the yellow fill.
+Done in `Web/` as planned: real `activeNumber` state, the pad only arms, only board taps place, the digit disarms when complete, and arrow keys never place. Two lessons from testing on Derek's phone, now in `SPEC.md` §9: while a digit is armed the board shading must mean **only** "can't go here" (the selection's row/col/box tint looked identical and hid a legal square), and the selection is drawn as a faint outline rather than the yellow fill. Since 2026-11-11 Pencil and Speed are mutually exclusive (turning one on turns the other off), so the speed + pencil rapid-notes path is gone.
 
 The app-era speed-mode bugs (arrow keys spraying digits, stray notes, the tenth-copy bypass, the pad layout) are **not being fixed in the store apps**, which are being retired.
 
@@ -81,5 +81,4 @@ Created by the 2026-08-12 outage — none of these caused it, but each one made 
 - **Doc accuracy.** `STATUS.md` carried a false DMARC claim that actively misled a diagnosis, plus a stale memory path and two memory filenames that no longer existed. When a doc asserts infrastructure state, verify it rather than trusting it.
 - **Memory store health.** The auto-memory directory was found **empty** on 2026-08-12 while `STATUS.md` referenced two notes by name — so those standing rules weren't reaching Claude at all. Worth a periodic check that `MEMORY.md` and the notes it indexes both exist.
 - **Spec drift.** `SPEC.md` describes the web app; update it in the same change as `Web/`. (The old iOS/Android mirroring rule no longer applies now the apps are being retired.)
-- **Backend typecheck.** `npx tsc --noEmit` in `Backend/` reports one existing error at `src/generator.ts:146` (`number | undefined`). It doesn't block deploys (wrangler bundles without type-checking), but fix it before relying on the typecheck.
 - **Version pins.** Only bump `*_CURRENT_VERSION` in `wrangler.toml` *after* confirming the release is live in the store, never at upload — otherwise the in-app banner offers an update the store doesn't have yet.
