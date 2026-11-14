@@ -1414,10 +1414,10 @@ export function findSkyscraper(cells: Cells): TutorHint | null {
 function buildSkyscraper(digit: number, base1: Pos, base2: Pos, top1: Pos, top2: Pos, eliminators: Pos[], rowForm: boolean): TutorHint {
   const lineLabel = rowForm ? 'row' : 'column';
   const baseLabel = rowForm ? 'column' : 'row';
-  const b1 = hl(base1.row, base1.col, 'focus', [digit]);
-  const b2 = hl(base2.row, base2.col, 'focus', [digit]);
-  const t1 = hl(top1.row, top1.col, 'target', [digit]);
-  const t2 = hl(top2.row, top2.col, 'target', [digit]);
+  const b1 = hl(base1.row, base1.col, 'focus', [digit], 'C');
+  const b2 = hl(base2.row, base2.col, 'focus', [digit], 'D');
+  const t1 = hl(top1.row, top1.col, 'target', [digit], 'A');
+  const t2 = hl(top2.row, top2.col, 'target', [digit], 'B');
   const elimHLs = eliminators.map((p) => hl(p.row, p.col, 'eliminator', [digit]));
   return {
     technique: 'skyscraper',
@@ -1425,14 +1425,17 @@ function buildSkyscraper(digit: number, base1: Pos, base2: Pos, top1: Pos, top2:
     eliminations: digitElims(eliminators, digit),
     steps: [
       {
-        narration: `In two ${lineLabel}s, ${digit} can only go in two cells each, sharing one ${baseLabel} (the 'base').`,
+        narration: `Look at ${digit} in these two ${lineLabel}s. In one, it can only go in A or C. In the other, only B or D. C and D are in the same ${baseLabel}.`,
         highlights: [b1, b2, t1, t2],
       },
       {
-        narration: `Whichever of the two base cells is ${digit}, the other ${lineLabel}'s 'top' must be ${digit}. So one of the two tops is ${digit} — any cell seeing both can't be.`,
+        narration: `C and D share a ${baseLabel}, so they can't both be ${digit}. If C isn't ${digit}, A must be. If D isn't ${digit}, B must be. So A or B (or both) is ${digit}.`,
+        highlights: [b1, b2, t1, t2],
+      },
+      {
+        narration: `Each orange cell ${SHARES} both A and B, so none of them can be ${digit}. Tap Got it to cross it off.`,
         highlights: [t1, t2, ...elimHLs],
       },
-      { narration: `Tap Got it to cross ${digit} off these cells.`, highlights: elimHLs },
     ],
   };
 }
@@ -1483,9 +1486,8 @@ function buildEmptyRectangle(
   eliminator: Pos,
 ): TutorHint {
   const boxHLs = unitCells({ kind: 'box', rowBlock: boxRow, colBlock: boxCol }).map((p) => hl(p.row, p.col, 'focus', [digit]));
-  const pivotHL = hl(pivotRow, pivotCol, 'target', [digit]);
-  const l1HL = hl(pivotRow, linkCol, 'target', [digit]);
-  const l2HL = hl(linkOtherRow, linkCol, 'target', [digit]);
+  const l1HL = hl(pivotRow, linkCol, 'target', [digit], 'A');
+  const l2HL = hl(linkOtherRow, linkCol, 'target', [digit], 'B');
   const elimHL = hl(eliminator.row, eliminator.col, 'eliminator', [digit]);
   return {
     technique: 'emptyRectangle',
@@ -1493,18 +1495,18 @@ function buildEmptyRectangle(
     eliminations: digitElims([eliminator], digit),
     steps: [
       {
-        narration: `In this 3×3 box, ${digit} is restricted such that it must land in the highlighted row or column inside the box.`,
-        highlights: [...boxHLs, pivotHL],
+        narration: `Look at ${digit} in this shaded box. Every spot left for it is on one row or one column of the box, so the box's ${digit} must sit on that row or that column.`,
+        highlights: boxHLs,
       },
       {
-        narration: `In another column, ${digit} has only two candidate cells — one on the same row as the pivot. So one end of the link is ${digit}, forcing a placement either at the box's pivot or at the link's far cell.`,
-        highlights: [pivotHL, l1HL, l2HL],
+        narration: `Now this column: ${digit} only fits in A or B. A is on the same row as the box's spots.`,
+        highlights: [...boxHLs, l1HL, l2HL],
       },
       {
-        narration: `Whichever way it resolves, the marked cell can't be ${digit} — it'd violate the chain.`,
-        highlights: [pivotHL, l1HL, l2HL, elimHL],
+        narration: `Suppose the orange cell were ${digit}. Then B can't be (same row), so A is ${digit} — which blocks the box's row. And the orange cell blocks the box's column. The box would have nowhere for ${digit}, which is impossible.`,
+        highlights: [...boxHLs, l1HL, l2HL, elimHL],
       },
-      { narration: `Tap Got it to cross ${digit} off this cell.`, highlights: [elimHL] },
+      { narration: `So the orange cell can't be ${digit}. Tap Got it to cross it off.`, highlights: [l1HL, l2HL, elimHL] },
     ],
   };
 }
@@ -1549,10 +1551,10 @@ export function findTwoStringKite(cells: Cells): TutorHint | null {
 }
 
 function buildTwoStringKite(digit: number, jointR: Pos, jointC: Pos, tipR: Pos, tipC: Pos, eliminators: Pos[]): TutorHint {
-  const jr = hl(jointR.row, jointR.col, 'focus', [digit]);
-  const jc = hl(jointC.row, jointC.col, 'focus', [digit]);
-  const tr = hl(tipR.row, tipR.col, 'target', [digit]);
-  const tc = hl(tipC.row, tipC.col, 'target', [digit]);
+  const jr = hl(jointR.row, jointR.col, 'focus', [digit], 'C');
+  const jc = hl(jointC.row, jointC.col, 'focus', [digit], 'D');
+  const tr = hl(tipR.row, tipR.col, 'target', [digit], 'A');
+  const tc = hl(tipC.row, tipC.col, 'target', [digit], 'B');
   const elimHLs = eliminators.map((p) => hl(p.row, p.col, 'eliminator', [digit]));
   return {
     technique: 'twoStringKite',
@@ -1560,14 +1562,17 @@ function buildTwoStringKite(digit: number, jointR: Pos, jointC: Pos, tipR: Pos, 
     eliminations: digitElims(eliminators, digit),
     steps: [
       {
-        narration: `${digit} is restricted to two cells in this row and two cells in this column. The 'joint' cells share a 3×3 box.`,
+        narration: `Look at ${digit}. In this row it only fits in A or C. In this column, only in B or D. C and D are in the same box.`,
         highlights: [jr, jc, tr, tc],
       },
       {
-        narration: `Whichever joint cell is ${digit} forces the other to not be — and the other tip must take ${digit} instead. Either way one of the two tips is ${digit}, so cells seeing both can't be.`,
+        narration: `C and D share a box, so they can't both be ${digit}. If C isn't ${digit}, the row needs it in A. If D isn't, the column needs it in B. So A or B (or both) is ${digit}.`,
+        highlights: [jr, jc, tr, tc],
+      },
+      {
+        narration: `Each orange cell ${SHARES} both A and B, so none of them can be ${digit}. Tap Got it to cross it off.`,
         highlights: [tr, tc, ...elimHLs],
       },
-      { narration: `Tap Got it to cross ${digit} off these cells.`, highlights: elimHLs },
     ],
   };
 }
@@ -1869,7 +1874,7 @@ function buildURType2(x: number, y: number, z: number, bivalue: Pos[], roofs: Po
         highlights: [...bivHLs, ...roofHLs],
       },
       {
-        narration: `One of those two cells must take ${z} to break the deadly rectangle. Any cell that sees both of them can't be ${z}.`,
+        narration: `If neither of those two were ${z}, all four corners would be ${xyStr} — and the puzzle would have two answers (swap them round). So one of the two must be ${z}. Each orange cell ${SHARES} both, so it can't be ${z}.`,
         highlights: [...bivHLs, ...roofHLs, ...elimHLs],
       },
       { narration: `Tap Got it to cross ${z} off those cells.`, highlights: elimHLs },
@@ -1901,7 +1906,7 @@ function buildURType4(
         highlights: [...bivHLs, ...roofHLs],
       },
       {
-        narration: `Since ${locked} is locked into those cells, placing ${eliminated} in either of them would recreate the deadly swappable pattern. So ${eliminated} is ruled out from both.`,
+        narration: `One of those two must be ${locked}. If the other were ${eliminated}, all four corners would be ${xyStr} and the puzzle would have two answers (swap them round). So neither can be ${eliminated}.`,
         highlights: [...bivHLs, ...roofHLs, ...elimHLs],
       },
       { narration: `Tap Got it to cross ${eliminated} off those cells.`, highlights: elimHLs },
