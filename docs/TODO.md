@@ -62,7 +62,8 @@ Created by the 2026-08-12 outage — none of these caused it, but each one made 
 - **✅ Done 2026-10-30: shareable puzzles.** Share (game screen, Solved, Games › Completed) saves the starting board under a three-word name; `sudokucrew.com/p/<name>` opens it for anyone, with the sharer's time if they'd finished. Not dailies (they're shared already). **Still open: "beat my time" results** — the friend's time isn't sent back yet; that needs a per-shared-puzzle results table.
 - **Decide: should the server's daily get proper difficulty grading?** `Backend/src/generator.ts` picks the daily by clue count only (32), so it's almost always solvable with singles. The web app's generator grades by technique (see `SPEC.md` §6). Changing the daily changes how hard everyone's puzzle feels, so it's Derek's call.
 - **Web push for multiplayer turns.** The web app polls while a game is open; nothing tells you it's your turn when the app is closed. Needs VAPID keys + Web Push encryption in the Worker. iPhone only delivers web push to home-screen apps.
-- **Coach: the remaining 7 technique scenarios** (carried over from the apps).
+- **✅ Done 2026-11-15: Coach covers 20 of 22 techniques**, each as lesson → worked example → your turn on real mid-game boards. Hidden Quad and Jellyfish have no board (they never came up in 4,000 generated puzzles).
+- **Check: iPhone sound after returning to the app.** Fixed 2026-11-14 (fresh audio on first tap after backgrounding), not yet confirmed on a phone. The silent switch still mutes it by design.
 
 ### Retiring the store apps
 
