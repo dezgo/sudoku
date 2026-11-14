@@ -282,7 +282,7 @@ function TutorPanel() {
               <i style={{ background: 'var(--t-elim)' }} /> Rules it out
             </span>
             <span>
-              <i style={{ background: 'var(--t-target)' }} /> The answer
+              <i style={{ background: 'var(--t-target)' }} /> Key cells
             </span>
           </div>
         </div>

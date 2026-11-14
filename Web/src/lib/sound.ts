@@ -34,35 +34,67 @@ const TUNING: Partial<Record<SoundCue, { gain: number; rate: number }>> = {
 let ctx: AudioContext | null = null;
 const buffers = new Map<SoundCue, AudioBuffer>();
 let loading: Promise<void> | null = null;
+// Set when the app comes back to the foreground: iOS can hand back a context
+// that claims "running" but plays nothing (14 Nov 2026: a whole game silent
+// with sound on). The next gesture swaps in a fresh context — cheap, because
+// decoded clips aren't tied to a context and are reused.
+let stale = false;
+let resumeTried = false;
 
-function load(c: AudioContext): Promise<void> {
-  loading ??= Promise.all(
-    (Object.keys(FILES) as SoundCue[]).map(async (cue) => {
+/** Fetch + decode any cue not loaded yet. A failed fetch (flaky network on
+ *  first launch) is retried on the next unlock instead of staying silent. */
+function load(c: AudioContext): void {
+  if (loading) return;
+  const missing = (Object.keys(FILES) as SoundCue[]).filter((cue) => !buffers.has(cue));
+  if (!missing.length) return;
+  loading = Promise.all(
+    missing.map(async (cue) => {
       try {
         const resp = await fetch(`${import.meta.env.BASE_URL}sounds/${FILES[cue]}`);
+        if (!resp.ok) return;
         buffers.set(cue, await c.decodeAudioData(await resp.arrayBuffer()));
       } catch {
-        /* a missing cue just stays silent */
+        /* stays missing — retried on a later gesture */
       }
     }),
-  ).then(() => undefined);
-  return loading;
+  ).then(() => {
+    loading = null;
+  });
+}
+
+function freshContext(): AudioContext {
+  try {
+    void ctx?.close();
+  } catch {
+    /* already gone */
+  }
+  // "ambient" (iOS 17+): respects the silent switch and mixes with music
+  // or podcasts instead of pausing them — same as the iOS app.
+  const nav = navigator as Navigator & { audioSession?: { type: string } };
+  if (nav.audioSession) nav.audioSession.type = 'ambient';
+  return new AudioContext();
 }
 
 function unlock(): void {
   try {
-    if (!ctx) {
-      // "ambient" (iOS 17+): respects the silent switch and mixes with music
-      // or podcasts instead of pausing them — same as the iOS app.
-      const nav = navigator as Navigator & { audioSession?: { type: string } };
-      if (nav.audioSession) nav.audioSession.type = 'ambient';
-      ctx = new AudioContext();
-      void load(ctx);
+    // Anything but a healthy context gets replaced, here inside the gesture
+    // where iOS allows a new one to start: none yet, back from the
+    // background, "interrupted" (a call, Siri, another app's audio), closed,
+    // or a resume from an earlier tap that never took.
+    const state = ctx?.state as string | undefined;
+    if (!ctx || stale || state === 'interrupted' || state === 'closed' || (state === 'suspended' && resumeTried)) {
+      ctx = freshContext();
+      stale = false;
+      resumeTried = false;
     }
+    load(ctx);
     if (ctx.state !== 'running') {
-      void ctx.resume();
+      resumeTried = true;
+      void ctx.resume().then(() => {
+        if (ctx?.state === 'running') resumeTried = false;
+      });
       // A silent one-sample buffer, played inside the gesture, is what
-      // actually unlocks output on older iOS versions.
+      // actually unlocks output on iOS.
       const src = ctx.createBufferSource();
       src.buffer = ctx.createBuffer(1, 1, 22050);
       src.connect(ctx.destination);
@@ -73,7 +105,14 @@ function unlock(): void {
   }
 }
 
+
 for (const ev of ['touchend', 'click', 'keydown']) window.addEventListener(ev, unlock, { capture: true, passive: true });
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'hidden') stale = true;
+});
+window.addEventListener('pageshow', () => {
+  stale = true;
+});
 
 export function playSound(cue: SoundCue): void {
   try {

@@ -1,12 +1,13 @@
 // Coach mode (SPEC.md §13.11a): short scenarios where the user applies one
 // tutor technique on a pre-built board. Port of iOS `CoachMode.swift`.
 //
-// Boards are lifted from the tutor tests (known to fire), then
-// *fast-forwarded* through any simpler moves the global `findHint` would
-// catch first, so the target technique is unambiguously the next move.
+// Boards are real mid-game positions (coachBoards.ts). Until 14 Nov 2026
+// they were hand-made near-empty grids with almost every number pencilled
+// into every cell, and only 7 techniques had one.
 
-import { candidates, cellsFromGivens, cloneCells, type Cells, type Grid } from './types';
-import { findHint, techniqueLabel, type TutorHint, type TutorTechnique } from './tutor';
+import { cellsFromGivens, type Cells, type Grid } from './types';
+import { ALL_TECHNIQUES, findHint, techniqueLabel, techniqueTier, type TutorHint, type TutorTechnique } from './tutor';
+import { COACH_BOARDS } from './coachBoards';
 
 export interface CoachScenario {
   id: string; // matches the TutorTechnique raw value
@@ -26,161 +27,67 @@ export function isValid(s: CoachScenario): boolean {
   return expectedHint(s)?.technique === s.technique;
 }
 
-const emptyGrid = (): Grid => Array.from({ length: 9 }, () => Array(9).fill(0));
-
-/** Clone with every empty cell's notes set to its engine candidates. */
-function autoPencil(cells: Cells): Cells {
-  const result = cloneCells(cells);
-  for (let r = 0; r < 9; r++)
-    for (let c = 0; c < 9; c++) if (result[r][c].value === null) result[r][c].notes = candidates(r, c, result);
-  return result;
-}
-
-/**
- * Apply simpler engine moves one at a time until `findHint` returns the
- * target technique. null if the chain dead-ends or loops.
- */
-function fastForward(cells: Cells, target: TutorTechnique): Cells | null {
-  const current = autoPencil(cells);
-  for (let i = 0; i < 200; i++) {
-    const hint = findHint(current);
-    if (!hint) return null;
-    if (hint.technique === target) return current;
-    const p = hint.placement;
-    if (p) {
-      current[p.row][p.col].value = p.value;
-      current[p.row][p.col].notes = new Set();
-      // Clear the placed digit from peers' notes so the next findHint sees a consistent board.
-      const br = Math.floor(p.row / 3) * 3;
-      const bc = Math.floor(p.col / 3) * 3;
-      for (let c = 0; c < 9; c++) if (c !== p.col) current[p.row][c].notes.delete(p.value);
-      for (let r = 0; r < 9; r++) if (r !== p.row) current[r][p.col].notes.delete(p.value);
-      for (let r = br; r < br + 3; r++)
-        for (let c = bc; c < bc + 3; c++) if (!(r === p.row && c === p.col)) current[r][c].notes.delete(p.value);
-    } else {
-      for (const e of hint.eliminations) for (const d of e.candidates) current[e.row][e.col].notes.delete(d);
-    }
-  }
-  return null;
-}
-
 function scenario(technique: TutorTechnique, intro: string, initialCells: Cells): CoachScenario {
   return { id: technique, technique, title: techniqueLabel(technique), intro, initialCells };
 }
 
-function nakedSingle(): CoachScenario {
-  const grid = emptyGrid();
-  grid[0] = [1, 2, 3, 4, 5, 6, 7, 8, 0];
-  return scenario(
-    'nakedSingle',
-    'One empty cell can only hold one digit — find it and place the value.',
-    cellsFromGivens(grid),
+const TIER_ORDER = { simple: 0, medium: 1, hard: 2 } as const;
+
+const INTROS: Partial<Record<TutorTechnique, string>> = {
+  nakedSingle: 'One empty cell has only one number left that fits. Find it and place it.',
+  hiddenSingle: 'In one row, column or box, a number fits in only one cell. Find it and place it.',
+  nakedPair:
+    'Two cells in a row, column or box can only be the same two numbers. Cross those numbers off the rest of that row, column or box.',
+  pointingPair:
+    'Inside one box, a number can only go in one row or column. Cross it off the rest of that row or column, outside the box.',
+  boxLineReduction: 'In one row or column, a number can only go inside one box. Cross it off the rest of that box.',
+  hiddenPair:
+    'Two numbers can only go in the same two cells of a row, column or box. Cross every other number off those two cells.',
+  nakedTriple:
+    'Three cells in a row, column or box only hold three numbers between them. Cross those numbers off the rest of it.',
+  nakedQuad:
+    'Four cells in a row, column or box only hold four numbers between them. Cross those numbers off the rest of it.',
+  hiddenTriple:
+    'Three numbers can only go in the same three cells of a row, column or box. Cross every other number off those cells.',
+  xWing:
+    'In two rows (or columns), a number only fits in the same two places. Cross it off the rest of those columns (or rows).',
+  swordfish: 'Like an X-Wing, but over three rows or columns. Find it and cross the number off where it can’t go.',
+  xyWing:
+    'Three cells with two choices each link up so a number must be in one of two cells. Cross it off cells that share a row, column or box with both.',
+  xyzWing:
+    'A three-choice cell and two two-choice cells guarantee a number among them. Cross it off cells that share a row, column or box with all three.',
+  wWing:
+    'Two cells with the same two choices, linked by a number with only two spots. Cross the other number off cells that line up with both.',
+  skyscraper:
+    'A number has two spots in each of two rows (or columns), lined up at one end. Cross it off cells that line up with both loose ends.',
+  twoStringKite:
+    'A number has two spots in a row and two in a column, joined through a box. Cross it off the cell that lines up with both ends.',
+  emptyRectangle:
+    'In one box, a number is stuck to one row and one column. Combine that with a line where it has two spots to cross it off somewhere.',
+  finnedXWing: 'Almost an X-Wing, with an extra spot or two in one box. Cross the number off where both cases agree.',
+  finnedSwordfish: 'Almost a Swordfish, with extra spots in one box. Cross the number off where both cases agree.',
+  uniqueRectangle:
+    'Four cells in a rectangle would allow two solutions — which a proper puzzle never has. Use that to cross a number off.',
+};
+
+function fromBoard(technique: TutorTechnique): CoachScenario | null {
+  const b = COACH_BOARDS[technique];
+  if (!b) return null;
+  const grid: Grid = Array.from({ length: 9 }, (_, r) =>
+    Array.from({ length: 9 }, (_, c) => Number(b.values[r * 9 + c])),
   );
+  const cells = cellsFromGivens(grid);
+  b.notes.forEach((n, i) => {
+    const cell = cells[Math.floor(i / 9)][i % 9];
+    if (cell.value === null) cell.notes = new Set([...n].map(Number));
+  });
+  return scenario(technique, INTROS[technique] ?? '', cells);
 }
 
-function hiddenSingle(): CoachScenario {
-  const grid = emptyGrid();
-  grid[0][0] = 1;
-  grid[0][1] = 2;
-  grid[0][2] = 3;
-  grid[1][0] = 4;
-  grid[2][0] = 6;
-  grid[2][1] = 7;
-  grid[8][2] = 5;
-  return scenario(
-    'hiddenSingle',
-    'In one of the units, a digit can only land in a single cell. Spot it and place the digit.',
-    cellsFromGivens(grid),
-  );
-}
-
-function nakedPair(): CoachScenario {
-  const grid = emptyGrid();
-  grid[0] = [0, 0, 0, 0, 5, 6, 7, 8, 9];
-  grid[3][0] = 3;
-  grid[6][1] = 3;
-  grid[6][0] = 4;
-  grid[3][1] = 4;
-  return scenario(
-    'nakedPair',
-    'Two cells in a unit share the same two candidates. Erase those candidates from every other cell in that unit.',
-    autoPencil(cellsFromGivens(grid)),
-  );
-}
-
-function pointingPair(): CoachScenario {
-  const grid = emptyGrid();
-  grid[1] = [4, 5, 6, 0, 0, 0, 0, 0, 0];
-  grid[2] = [7, 8, 9, 0, 0, 0, 0, 0, 0];
-  return scenario(
-    'pointingPair',
-    'Inside one box, a candidate is restricted to a single row or column. Erase it from the rest of that line outside the box.',
-    autoPencil(cellsFromGivens(grid)),
-  );
-}
-
-function boxLineReduction(): CoachScenario {
-  const grid = emptyGrid();
-  grid[0] = [0, 0, 0, 4, 5, 6, 7, 8, 9];
-  return scenario(
-    'boxLineReduction',
-    'A digit is restricted to a single box within its row or column. Erase that digit from the rest of the box.',
-    autoPencil(cellsFromGivens(grid)),
-  );
-}
-
-function hiddenPair(): CoachScenario {
-  const grid = emptyGrid();
-  grid[0] = [0, 0, 0, 0, 0, 6, 7, 8, 9];
-  grid[1][5] = 1;
-  grid[1][6] = 2;
-  grid[2][0] = 7;
-  grid[2][1] = 8;
-  grid[2][5] = 2;
-  grid[3][2] = 1;
-  grid[5][2] = 2;
-  return scenario(
-    'hiddenPair',
-    'Two digits live only in two cells of a unit. Erase every *other* candidate from those two cells.',
-    autoPencil(cellsFromGivens(grid)),
-  );
-}
-
-function nakedTriple(): CoachScenario {
-  const grid = emptyGrid();
-  grid[0] = [0, 0, 0, 0, 0, 6, 7, 8, 9];
-  grid[3][0] = 4;
-  grid[4][1] = 4;
-  grid[5][2] = 4;
-  grid[6][0] = 5;
-  grid[7][1] = 5;
-  grid[8][2] = 5;
-  const cells = autoPencil(cellsFromGivens(grid));
-  const forwarded = fastForward(cells, 'nakedTriple');
-  // Fallback mirrors iOS: an un-forwarded board with empty intro, which
-  // isValid() then filters out of the visible list.
-  if (!forwarded) return scenario('nakedTriple', '', cells);
-  return scenario(
-    'nakedTriple',
-    'Three cells share three candidates between them. Those digits must live in those cells — erase them from the rest of the unit.',
-    forwarded,
-  );
-}
-
-// v1 ships 7 scenarios. The rest (hiddenTriple upward) need hand-crafted
-// boards where the target is the *first* useful move under findHint — the
-// test boards let simpler patterns fire first.
-
-/** All scenarios in display order (simple → hard). Built once at module load (cheap). */
-export const ALL_SCENARIOS: readonly CoachScenario[] = [
-  nakedSingle(),
-  hiddenSingle(),
-  nakedPair(),
-  pointingPair(),
-  boxLineReduction(),
-  hiddenPair(),
-  nakedTriple(),
-];
+/** All scenarios in display order (simple → hard), one per technique that has a board. */
+export const ALL_SCENARIOS: readonly CoachScenario[] = ALL_TECHNIQUES.map(fromBoard)
+  .filter((s): s is CoachScenario => s !== null)
+  .sort((a, b) => TIER_ORDER[techniqueTier(a.technique)] - TIER_ORDER[techniqueTier(b.technique)]);
 
 /** Scenarios that actually validate — defensive net against engine-ordering regressions. */
 export function validScenarios(): CoachScenario[] {

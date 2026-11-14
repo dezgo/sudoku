@@ -22,13 +22,14 @@ type Kind = TutorHighlight['kind'];
 
 /** Background kind per cell (target > eliminator > focus) and per-digit tint. */
 function tutorMap(highlights: TutorHighlight[] | null) {
-  const map = new Map<number, { kind: Kind; digits: Map<number, Kind> }>();
+  const map = new Map<number, { kind: Kind; digits: Map<number, Kind>; label?: string }>();
   if (!highlights) return map;
   const rank: Record<Kind, number> = { focus: 0, eliminator: 1, target: 2 };
   for (const h of highlights) {
     const key = h.row * 9 + h.col;
     const cur = map.get(key) ?? { kind: h.kind, digits: new Map<number, Kind>() };
     if (rank[h.kind] > rank[cur.kind]) cur.kind = h.kind;
+    if (h.label) cur.label = h.label;
     for (const d of h.candidates) {
       const existing = cur.digits.get(d);
       if (!existing || (existing === 'eliminator' && h.kind === 'target')) cur.digits.set(d, h.kind);
@@ -94,6 +95,7 @@ export function Board({
                     : undefined
                 }
               >
+                {t?.label && <span class="t-label">{t.label}</span>}
                 {cell.value !== null ? (
                   <span class="v">{cell.value}</span>
                 ) : cell.notes.size > 0 ? (

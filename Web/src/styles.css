@@ -438,6 +438,20 @@ select:focus-visible {
 .cell.t-target {
   background: var(--t-target);
 }
+/* Tutor letters ("cell A") so a hint can name cells: a big faint letter
+   behind the cell's contents, so pencil marks stay readable on top. */
+.t-label {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: min(8.5vw, 38px);
+  font-weight: 800;
+  color: var(--text);
+  opacity: 0.2;
+  pointer-events: none;
+}
 
 .cell .v {
   line-height: 1;

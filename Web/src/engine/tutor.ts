@@ -117,6 +117,8 @@ export interface TutorHighlight {
   col: number;
   kind: 'focus' | 'eliminator' | 'target';
   candidates: Set<number>;
+  /** A letter drawn on the cell so the narration can name it ("cell A"). */
+  label?: string;
 }
 
 export interface TutorStep {
@@ -213,9 +215,12 @@ function subtract(a: Set<number>, b: Set<number>): Set<number> {
 const sorted = (s: Iterable<number>) => [...s].sort((x, y) => x - y);
 const only = (s: Set<number>) => s.values().next().value as number;
 
-function hl(row: number, col: number, kind: TutorHighlight['kind'], cands: Iterable<number> = []): TutorHighlight {
-  return { row, col, kind, candidates: new Set(cands) };
+function hl(row: number, col: number, kind: TutorHighlight['kind'], cands: Iterable<number> = [], label?: string): TutorHighlight {
+  return label ? { row, col, kind, candidates: new Set(cands), label } : { row, col, kind, candidates: new Set(cands) };
 }
+
+/** How the wing/fish narrations say "sees": plain words, not solver jargon. */
+const SHARES = 'shares a row, column or box with';
 
 function toElims(list: Elim[]): TutorHint['eliminations'] {
   return list.map((e) => ({ row: e.pos.row, col: e.pos.col, candidates: new Set(e.removed) }));
@@ -1046,22 +1051,29 @@ function buildXWing(orientation: Orientation, lines: [number, number], cross: [n
     if (orientation === 'rows') lineFocus.push(hl(lines[0], i, 'focus'), hl(lines[1], i, 'focus'));
     else lineFocus.push(hl(i, lines[0], 'focus'), hl(i, lines[1], 'focus'));
   }
-  const cornerHLs = corners.map((p) => hl(p.row, p.col, 'target', [digit]));
+  // Corners as built above, lettered so line 1 holds A/B, line 2 holds C/D,
+  // and A–C / B–D share a cross line.
+  const letters = orientation === 'rows' ? ['A', 'B', 'C', 'D'] : ['A', 'C', 'B', 'D'];
+  const cornerHLs = corners.map((p, i) => hl(p.row, p.col, 'target', [digit], letters[i]));
   const elimHLs = eliminators.map((p) => hl(p.row, p.col, 'eliminator', [digit]));
+  const cross1 = crossLabel.slice(0, -1);
   return {
     technique: 'xWing',
     placement: null,
     eliminations: digitElims(eliminators, digit),
     steps: [
       {
-        narration: `Look at these two ${lineLabel}. The digit ${digit} can only land in two cells in each — and they share the same two ${crossLabel}.`,
+        narration: `Look at ${digit} in these two ${lineLabel}. In one, it can only go in A or B. In the other, only C or D. A and C are in the same ${cross1}, and so are B and D.`,
         highlights: [...lineFocus, ...cornerHLs],
       },
       {
-        narration: `${digit} must take exactly one cell in each ${lineLabel.slice(0, -1)} — one per ${crossLabel.slice(0, -1)}. So ${digit} can't appear in those ${crossLabel} anywhere else.`,
+        narration: `So ${digit} goes either in A and D, or in B and C — there's no other way. Either way, one ${digit} lands in each of those two ${crossLabel}.`,
+        highlights: cornerHLs,
+      },
+      {
+        narration: `A ${cross1} only holds one ${digit}, so the rest of those two ${crossLabel} (orange) can't be ${digit}. Tap Got it to cross it off.`,
         highlights: [...cornerHLs, ...elimHLs],
       },
-      { narration: `Tap Got it to cross ${digit} off these cells.`, highlights: elimHLs },
     ],
   };
 }
@@ -1208,25 +1220,28 @@ export function findXYWing(cells: Cells): TutorHint | null {
 
 function buildXYWing(pivot: Pos, pincer1: Pos, pincer2: Pos, a: number, b: number, c: number, p1IsAC: boolean, eliminators: Pos[]): TutorHint {
   const [ac, bc] = p1IsAC ? [pincer1, pincer2] : [pincer2, pincer1];
-  const pivotHL = hl(pivot.row, pivot.col, 'target', [a, b]);
-  const acHL = hl(ac.row, ac.col, 'target', [a, c]);
-  const bcHL = hl(bc.row, bc.col, 'target', [b, c]);
+  const pivotHL = hl(pivot.row, pivot.col, 'target', [a, b], 'A');
+  const acHL = hl(ac.row, ac.col, 'target', [a, c], 'B');
+  const bcHL = hl(bc.row, bc.col, 'target', [b, c], 'C');
   const elimHLs = eliminators.map((p) => hl(p.row, p.col, 'eliminator', [c]));
   return {
     technique: 'xyWing',
     placement: null,
     eliminations: digitElims(eliminators, c),
     steps: [
-      { narration: `Look at this 'pivot' cell — it can only be ${a} or ${b}.`, highlights: [pivotHL] },
+      { narration: `Start with cell A. It can only be ${a} or ${b}.`, highlights: [pivotHL] },
       {
-        narration: `These two neighbors both see the pivot. One has candidates ${a} and ${c}; the other has ${b} and ${c}.`,
+        narration: `B ${SHARES} A and can only be ${a} or ${c}. C also ${SHARES} A and can only be ${b} or ${c}.`,
         highlights: [pivotHL, acHL, bcHL],
       },
       {
-        narration: `If the pivot is ${a}, the first neighbor must be ${c}. If it's ${b}, the other neighbor must be ${c}. Either way, one of them is ${c} — so any cell that sees both can't be ${c}.`,
-        highlights: [pivotHL, acHL, bcHL, ...elimHLs],
+        narration: `Try both options for A. If A is ${a}, B can't be ${a} too, so B is ${c}. If A is ${b}, C can't be ${b}, so C is ${c}. Either way, B or C ends up as ${c}.`,
+        highlights: [pivotHL, acHL, bcHL],
       },
-      { narration: `Tap Got it to cross ${c} off these cells.`, highlights: elimHLs },
+      {
+        narration: `Each orange cell ${SHARES} both B and C — so whichever of them is ${c}, none of the orange cells can be. Tap Got it to cross ${c} off.`,
+        highlights: [acHL, bcHL, ...elimHLs],
+      },
     ],
   };
 }
@@ -1252,16 +1267,16 @@ export function findXYZWing(cells: Cells): TutorHint | null {
         // Must see all three — pivot and both pincers.
         const eliminators = cellsSeeingAll(cells, c, [pivot.pos, p1.pos, p2.pos], [pivot.pos, p1.pos, p2.pos]);
         if (eliminators.length === 0) continue;
-        return buildXYZWing(pivot.pos, p1.pos, p2.pos, c, eliminators);
+        return buildXYZWing(pivot.pos, p1.pos, p2.pos, only(subtract(p1.notes, shared)), only(subtract(p2.notes, shared)), c, eliminators);
       }
   }
   return null;
 }
 
-function buildXYZWing(pivot: Pos, p1: Pos, p2: Pos, c: number, eliminators: Pos[]): TutorHint {
-  const pivotHL = hl(pivot.row, pivot.col, 'target', [c]);
-  const p1HL = hl(p1.row, p1.col, 'target', [c]);
-  const p2HL = hl(p2.row, p2.col, 'target', [c]);
+function buildXYZWing(pivot: Pos, p1: Pos, p2: Pos, a: number, b: number, c: number, eliminators: Pos[]): TutorHint {
+  const pivotHL = hl(pivot.row, pivot.col, 'target', [a, b, c], 'A');
+  const p1HL = hl(p1.row, p1.col, 'target', [a, c], 'B');
+  const p2HL = hl(p2.row, p2.col, 'target', [b, c], 'C');
   const elimHLs = eliminators.map((p) => hl(p.row, p.col, 'eliminator', [c]));
   return {
     technique: 'xyzWing',
@@ -1269,14 +1284,17 @@ function buildXYZWing(pivot: Pos, p1: Pos, p2: Pos, c: number, eliminators: Pos[
     eliminations: digitElims(eliminators, c),
     steps: [
       {
-        narration: `This trivalue cell is the pivot. The two neighbours each share two of its candidates and both have ${c}.`,
+        narration: `Cell A can be ${a}, ${b} or ${c}. B ${SHARES} A and can only be ${a} or ${c}. C also ${SHARES} A and can only be ${b} or ${c}.`,
         highlights: [pivotHL, p1HL, p2HL],
       },
       {
-        narration: `Whatever the pivot ends up being, one of these three cells must hold ${c}. So any cell that sees all three can't be ${c}.`,
+        narration: `Try each option for A. If A is ${c} — that's a ${c}. If A is ${a}, B can't be ${a}, so B is ${c}. If A is ${b}, C can't be ${b}, so C is ${c}. So one of A, B or C is always ${c}.`,
+        highlights: [pivotHL, p1HL, p2HL],
+      },
+      {
+        narration: `Each orange cell ${SHARES} all three of A, B and C, so none of them can be ${c}. Tap Got it to cross it off.`,
         highlights: [pivotHL, p1HL, p2HL, ...elimHLs],
       },
-      { narration: `Tap Got it to cross ${c} off these cells.`, highlights: elimHLs },
     ],
   };
 }
@@ -1324,10 +1342,11 @@ function findStrongLink(linkDigit: number, a: Pos, b: Pos, cells: Cells): [Pos, 
 }
 
 function buildWWing(biA: Pos, biB: Pos, elimDigit: number, linkDigit: number, link: [Pos, Pos], eliminators: Pos[]): TutorHint {
-  const aHL = hl(biA.row, biA.col, 'target', [linkDigit, elimDigit]);
-  const bHL = hl(biB.row, biB.col, 'target', [linkDigit, elimDigit]);
-  const l1HL = hl(link[0].row, link[0].col, 'focus', [linkDigit]);
-  const l2HL = hl(link[1].row, link[1].col, 'focus', [linkDigit]);
+  const aHL = hl(biA.row, biA.col, 'target', [linkDigit, elimDigit], 'A');
+  const bHL = hl(biB.row, biB.col, 'target', [linkDigit, elimDigit], 'B');
+  const l1HL = hl(link[0].row, link[0].col, 'focus', [linkDigit], 'C');
+  const l2HL = hl(link[1].row, link[1].col, 'focus', [linkDigit], 'D');
+  const unit = link[0].row === link[1].row ? 'row' : link[0].col === link[1].col ? 'column' : 'box';
   const elimHLs = eliminators.map((p) => hl(p.row, p.col, 'eliminator', [elimDigit]));
   return {
     technique: 'wWing',
@@ -1335,18 +1354,21 @@ function buildWWing(biA: Pos, biB: Pos, elimDigit: number, linkDigit: number, li
     eliminations: digitElims(eliminators, elimDigit),
     steps: [
       {
-        narration: `These two cells each have only ${linkDigit} and ${elimDigit} as candidates.`,
+        narration: `Cells A and B can each only be ${linkDigit} or ${elimDigit}.`,
         highlights: [aHL, bHL],
       },
       {
-        narration: `In a unit between them, ${linkDigit} can only land in two cells — one seeing each. So whichever of those is ${linkDigit}, the matching bivalue cell must be ${elimDigit}.`,
+        narration: `Now look at ${linkDigit} in the ${unit} holding C and D: those are the only two places it can go. C ${SHARES} A, and D ${SHARES} B.`,
         highlights: [aHL, bHL, l1HL, l2HL],
       },
       {
-        narration: `Either way, exactly one of the two bivalue cells is ${elimDigit}. Any cell that sees both can't be ${elimDigit}.`,
+        narration: `One of C or D must be ${linkDigit}. If it's C, A can't be ${linkDigit}, so A is ${elimDigit}. If it's D, B can't be ${linkDigit}, so B is ${elimDigit}. Either way, A or B is ${elimDigit}.`,
+        highlights: [aHL, bHL, l1HL, l2HL],
+      },
+      {
+        narration: `Each orange cell ${SHARES} both A and B, so none of them can be ${elimDigit}. Tap Got it to cross it off.`,
         highlights: [aHL, bHL, ...elimHLs],
       },
-      { narration: `Tap Got it to cross ${elimDigit} off these cells.`, highlights: elimHLs },
     ],
   };
 }
@@ -1553,8 +1575,8 @@ function buildTwoStringKite(digit: number, jointR: Pos, jointC: Pos, tipR: Pos, 
 // MARK: - Finned X-Wing
 //
 // An X-Wing on d where one row has extra candidate cells (the fin), all in
-// the same box as one corner. Eliminations are restricted to the other
-// column, inside the fin's box. Row form only (as on iOS).
+// the same box as one corner. Eliminations: that corner's column, inside
+// the fin's box. Row form only (as on iOS).
 
 function rowCandidateCols(cells: Cells, digit: number, min: number, max: number): { row: number; cols: number[] }[] {
   const out: { row: number; cols: number[] }[] = [];
@@ -1582,8 +1604,11 @@ export function findFinnedXWing(cells: Cells): TutorHint | null {
         // All fin cells in the same box as ONE of the corners.
         const finCol = xCols.find((cc) => fin.every((f) => div3(f.col) === div3(cc)));
         if (finCol === undefined) continue;
-        const elimCol = xCols.find((c) => c !== finCol)!;
-        // Cells in elimCol inside the fin's box band, off both X-Wing rows.
+        const otherCol = xCols.find((c) => c !== finCol)!;
+        // Cells in the corner column that shares the fin's box, inside that
+        // box, off both X-Wing rows. (Until 14 Nov 2026 this used the OTHER
+        // column, which could cross off the right answer.)
+        const elimCol = finCol;
         const finBoxRow = div3(finned.row);
         const eliminators: Pos[] = [];
         for (let r = finBoxRow * 3; r < finBoxRow * 3 + 3; r++) {
@@ -1591,18 +1616,19 @@ export function findFinnedXWing(cells: Cells): TutorHint | null {
           if (notesHave(cells, { row: r, col: elimCol }, digit)) eliminators.push({ row: r, col: elimCol });
         }
         if (eliminators.length === 0) continue;
-        return buildFinnedXWing(digit, clean.row, finned.row, finCol, elimCol, fin, eliminators);
+        return buildFinnedXWing(digit, clean.row, finned.row, finCol, otherCol, fin, eliminators);
       }
   }
   return null;
 }
 
-function buildFinnedXWing(digit: number, cleanRow: number, finnedRow: number, finCol: number, elimCol: number, fin: Pos[], eliminators: Pos[]): TutorHint {
-  const cleanFin = hl(cleanRow, finCol, 'target', [digit]);
-  const cleanElim = hl(cleanRow, elimCol, 'target', [digit]);
-  const finnedFin = hl(finnedRow, finCol, 'target', [digit]);
-  const finnedElim = hl(finnedRow, elimCol, 'target', [digit]);
-  const finHLs = fin.map((p) => hl(p.row, p.col, 'focus', [digit]));
+function buildFinnedXWing(digit: number, cleanRow: number, finnedRow: number, finCol: number, otherCol: number, fin: Pos[], eliminators: Pos[]): TutorHint {
+  const aHL = hl(cleanRow, finCol, 'target', [digit], 'A');
+  const bHL = hl(cleanRow, otherCol, 'target', [digit], 'B');
+  const cHL = hl(finnedRow, finCol, 'target', [digit], 'C');
+  const dHL = hl(finnedRow, otherCol, 'target', [digit], 'D');
+  const corners = [aHL, bHL, cHL, dHL];
+  const finHLs = fin.map((p) => hl(p.row, p.col, 'focus', [digit], 'F'));
   const elimHLs = eliminators.map((p) => hl(p.row, p.col, 'eliminator', [digit]));
   return {
     technique: 'finnedXWing',
@@ -1610,14 +1636,17 @@ function buildFinnedXWing(digit: number, cleanRow: number, finnedRow: number, fi
     eliminations: digitElims(eliminators, digit),
     steps: [
       {
-        narration: `Almost an X-Wing on ${digit} — but one row has extra candidate cells (the 'fin'), all in the same box as one corner.`,
-        highlights: [cleanFin, cleanElim, finnedFin, finnedElim, ...finHLs],
+        narration: `Look at ${digit} in these two rows. In one, it can only go in A or B. In the other, it can go in C or D — or in the extra cell${fin.length > 1 ? 's' : ''} marked F, in the same box as C.`,
+        highlights: [...corners, ...finHLs],
       },
       {
-        narration: `Either the X-Wing fires (eliminating ${digit} from the other column elsewhere), or the fin holds ${digit}. Either way, cells in the other column that share the fin's box can't be ${digit}.`,
-        highlights: [finnedFin, finnedElim, ...finHLs, ...elimHLs],
+        narration: `Two possibilities. If ${digit} is in ${fin.length > 1 ? 'an F cell' : 'F'}, nothing else in that box can be ${digit}. If not, ${digit} goes in A and D or in B and C — so the column with A and C gets its ${digit} from one of those two.`,
+        highlights: [...corners, ...finHLs],
       },
-      { narration: `Tap Got it to cross ${digit} off these cells.`, highlights: elimHLs },
+      {
+        narration: `The orange cells are in that column AND in F's box, so they lose out either way — they can't be ${digit}. Tap Got it to cross it off.`,
+        highlights: [aHL, cHL, ...finHLs, ...elimHLs],
+      },
     ],
   };
 }
@@ -1626,7 +1655,7 @@ function buildFinnedXWing(digit: number, cleanRow: number, finnedRow: number, fi
 //
 // Two clean rows with ≤3 candidates spanning exactly three columns; a third
 // row has those corners plus fin cells confined to one box aligned with one
-// of the columns. Eliminations: the other two columns, inside the fin's box.
+// of the columns. Eliminations: the Swordfish column(s) inside the fin's box.
 
 export function findFinnedSwordfish(cells: Cells): TutorHint | null {
   for (let digit = 1; digit <= 9; digit++) {
@@ -1652,10 +1681,11 @@ export function findFinnedSwordfish(cells: Cells): TutorHint | null {
           // Swift Set order: Swift took `cleanCols.first { … }`, which is
           // arbitrary when two columns share the fin's box; we take the lowest.
           const cleanSorted = sorted(cleanCols);
-          const finCornerCol = cleanSorted.find((c) => div3(c) === finBoxCol);
-          if (finCornerCol === undefined) continue;
-          // Swift Set order: elimination columns iterated ascending.
-          const elimCols = cleanSorted.filter((c) => c !== finCornerCol);
+          // Eliminations: Swordfish columns that pass through the fin's box,
+          // inside that box. (Until 14 Nov 2026 this took the OTHER columns,
+          // which could cross off the right answer.)
+          const elimCols = cleanSorted.filter((c) => div3(c) === finBoxCol);
+          if (elimCols.length === 0) continue;
           const finBoxRow = div3(finned.row);
           const swordfishRows = [finned.row, r1.row, r2.row];
           const eliminators: Pos[] = [];
@@ -1687,7 +1717,7 @@ function buildFinnedSwordfish(digit: number, rows: number[], cols: number[], fin
         highlights: [...cornerHLs, ...finHLs],
       },
       {
-        narration: `Either the Swordfish fires, eliminating ${digit} from the three columns elsewhere, or the fin takes ${digit}. Either way, cells that share the fin's box and sit in the unfinned columns can't be ${digit}.`,
+        narration: `Either it's a normal Swordfish, so ${digit} can't be anywhere else in those three columns — or a fin cell is ${digit}, so nothing else in the fin's box can be. The orange cells are in one of the columns AND the fin's box, so either way they can't be ${digit}.`,
         highlights: [...cornerHLs, ...finHLs, ...elimHLs],
       },
       { narration: `Tap Got it to cross ${digit} off these cells.`, highlights: elimHLs },
@@ -1711,7 +1741,9 @@ export function findUniqueRectangle(cells: Cells): TutorHint | null {
     for (let r2 = r1 + 1; r2 < 9; r2++)
       for (let c1 = 0; c1 < 8; c1++)
         for (let c2 = c1 + 1; c2 < 9; c2++) {
-          if (div3(r1) === div3(r2) && div3(c1) === div3(c2)) continue; // must span two boxes
+          // Exactly two boxes: the swap only gives a second solution when each
+          // box holds two corners. Four boxes (or one) is no deadly pattern.
+          if ((div3(r1) === div3(r2)) === (div3(c1) === div3(c2))) continue;
           const corners: Pos[] = [
             { row: r1, col: c1 },
             { row: r1, col: c2 },

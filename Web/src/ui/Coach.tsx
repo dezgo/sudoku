@@ -21,7 +21,7 @@ export function CoachSheet() {
     <Sheet title="Coach">
       <p class="muted" style={{ marginTop: 4 }}>
         Pick a technique to practise. Each scenario sets up a board where the named pattern is the next useful move —
-        spot it and apply it.
+        spot it and apply it. Stuck? Tap Show me for a step-by-step walkthrough.
       </p>
       <div class="group">
         {scenarios.map((sc) => (
@@ -55,6 +55,8 @@ function CoachPlay({ scenario, onBack }: { scenario: CoachScenario; onBack: () =
   const [sel, setSel] = useState<{ row: number; col: number } | null>(null);
   const [pencil, setPencil] = useState(expected.placement === null);
   const [done, setDone] = useState(false);
+  // Show me: step through the tutor's explanation on the scenario board.
+  const [walk, setWalk] = useState<number | null>(null);
 
   const check = (next: Cells) => {
     let ok: boolean;
@@ -118,11 +120,35 @@ function CoachPlay({ scenario, onBack }: { scenario: CoachScenario; onBack: () =
       <div class="coach-intro">{scenario.intro}</div>
       <Board
         mini
-        cells={cells}
+        cells={walk === null ? cells : scenario.initialCells}
+        tutor={walk === null ? null : expected.steps[walk].highlights}
         onTap={(r, c) => setSel(sel && sel.row === r && sel.col === c ? null : { row: r, col: c })}
         look={(r, c) => ({ sel: sel?.row === r && sel?.col === c, locked: cells[r][c].isFixed })}
       />
-      {done ? (
+      {walk !== null ? (
+        <div class="sheet-body">
+          <p class="tutor-narr" aria-live="polite">
+            <b>
+              Step {walk + 1} of {expected.steps.length}.
+            </b>{' '}
+            {expected.steps[walk].narration.replace(/Tap (Got it|Apply) to /, 'Your move: ')}
+          </p>
+          <div class="tutor-ctrls">
+            <button class="btn" disabled={walk === 0} onClick={() => setWalk(walk - 1)}>
+              Back
+            </button>
+            {walk === expected.steps.length - 1 ? (
+              <button class="btn primary" onClick={() => setWalk(null)}>
+                Now you try
+              </button>
+            ) : (
+              <button class="btn primary" onClick={() => setWalk(walk + 1)}>
+                Next
+              </button>
+            )}
+          </div>
+        </div>
+      ) : done ? (
         <div class="stack center">
           <div style={{ color: 'var(--gold)' }}>
             <Icon name="trophy" size={52} />
@@ -156,6 +182,9 @@ function CoachPlay({ scenario, onBack }: { scenario: CoachScenario; onBack: () =
               }}
             >
               <Icon name="undo" size={17} /> Reset
+            </button>
+            <button class="tool" onClick={() => setWalk(0)}>
+              <Icon name="cap" size={17} /> Show me
             </button>
           </div>
         </div>
