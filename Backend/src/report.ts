@@ -39,6 +39,24 @@ export interface Report {
   settings: { name: string; uses: number; devices: number }[];
   screens: { name: string; uses: number; devices: number }[];
   feedback: { at: number; who: string; message: string }[];
+  /** Every day in the period, oldest first ('YYYY-MM-DD'). */
+  dayList: string[];
+  /**
+   * "Who played when": one row per person or account-less device. A mark is
+   * 'daily' if they finished that day's daily (or any daily, for an account-
+   * less device), 'played' if they only opened the app or played something else.
+   */
+  grid: {
+    name: string;
+    kind: 'player' | 'anon' | 'quiet';
+    marks: Record<string, 'daily' | 'played'>;
+    daysActive: number;
+    dailies: number;
+    otherGames: number;
+    lastActive: number | null;
+  }[];
+  /** People active on each day of dayList (signed-in players + account-less devices). */
+  perDay: number[];
 }
 
 interface Ev {
@@ -179,9 +197,13 @@ export async function buildReport(env: Env, lastDay: string, days: number): Prom
     if (uid) addDay(uid, e.day);
   }
   const dailies = new Map<string, number>();
+  const dailyDays = new Map<string, Set<string>>();
   for (const s of scoreRes.results) {
-    addDay(s.user_id, dateInTimezone(new Date(s.completed_at), tz));
+    const day = dateInTimezone(new Date(s.completed_at), tz);
+    addDay(s.user_id, day);
     dailies.set(s.user_id, (dailies.get(s.user_id) ?? 0) + 1);
+    if (!dailyDays.has(s.user_id)) dailyDays.set(s.user_id, new Set());
+    dailyDays.get(s.user_id)!.add(day);
   }
   const otherGames = new Map<string, number>();
   for (const e of events) {
@@ -277,6 +299,78 @@ export async function buildReport(env: Env, lastDay: string, days: number): Prom
   const people = new Set([...activeDevices].map((id) => deviceUser.get(id) ?? `device:${id}`));
   for (const uid of personDays.keys()) people.add(uid);
 
+  // Same count for the period before, so the headline can say up or down.
+  const [prevEv, prevSc] = await Promise.all([
+    db
+      .prepare('SELECT DISTINCT e.device_id, COALESCE(e.user_id, d.user_id) AS user_id FROM usage_events e LEFT JOIN devices d ON d.device_id = e.device_id WHERE e.created_at >= ? AND e.created_at < ?')
+      .bind(prevFrom, from)
+      .all<{ device_id: string; user_id: string | null }>(),
+    db
+      .prepare('SELECT DISTINCT user_id FROM scores WHERE completed_at >= ? AND completed_at < ?')
+      .bind(prevFrom, from)
+      .all<{ user_id: string }>(),
+  ]);
+  const prevPeople = new Set([
+    ...prevEv.results.map((r) => r.user_id ?? `device:${r.device_id}`),
+    ...prevSc.results.map((r) => r.user_id),
+  ]);
+
+  // --- Who played when ---
+  const dayList = Array.from({ length: days }, (_, i) => addDays(lastDay, i + 1 - days));
+  const quietNames = new Set(quiet.map((q) => q.name));
+  const grid: Report['grid'] = [];
+  for (const uid of personDays.keys()) {
+    const marks: Record<string, 'daily' | 'played'> = {};
+    for (const d of personDays.get(uid)!) marks[d] = dailyDays.get(uid)?.has(d) ? 'daily' : 'played';
+    const name = nameOf(uid);
+    grid.push({
+      name,
+      kind: quietNames.has(name) ? 'quiet' : 'player',
+      marks,
+      daysActive: personDays.get(uid)!.size,
+      dailies: dailies.get(uid) ?? 0,
+      otherGames: otherGames.get(uid) ?? 0,
+      lastActive: users.get(uid)?.last_active ?? null,
+    });
+  }
+  const sameName = new Map<string, number>();
+  for (const id of anonIds) {
+    const d = devInfo.get(id);
+    const marks: Record<string, 'daily' | 'played'> = {};
+    for (const day of deviceDays.get(id) ?? []) marks[day] = 'played';
+    let finished = 0;
+    for (const e of events) {
+      if (e.device_id !== id || e.kind !== 'game_finish') continue;
+      finished++;
+      const mode = detail(e).mode;
+      if (mode === 'daily' || mode === 'past_daily') marks[e.day] = 'daily';
+    }
+    const base = `${PLATFORM_LABEL[d?.platform ?? 'unknown'] ?? 'Device'}${d?.standalone ? ' app' : ''}`;
+    const n = (sameName.get(base) ?? 0) + 1;
+    sameName.set(base, n);
+    grid.push({
+      name: n > 1 ? `${base} ${n}` : base,
+      kind: 'anon',
+      marks,
+      daysActive: deviceDays.get(id)?.size ?? 0,
+      dailies: Object.values(marks).filter((m) => m === 'daily').length,
+      otherGames: finished,
+      lastActive: d ? Math.max(...events.filter((e) => e.device_id === id).map((e) => e.created_at)) : null,
+    });
+  }
+  for (const q of quiet)
+    if (!grid.some((g) => g.name === q.name))
+      grid.push({ name: q.name, kind: 'quiet', marks: {}, daysActive: 0, dailies: 0, otherGames: 0, lastActive: q.lastActive });
+  const kindOrder = { player: 0, anon: 1, quiet: 2 };
+  grid.sort(
+    (a, b) =>
+      kindOrder[a.kind] - kindOrder[b.kind] ||
+      b.daysActive - a.daysActive ||
+      b.dailies - a.dailies ||
+      (b.lastActive ?? 0) - (a.lastActive ?? 0),
+  );
+  const perDay = dayList.map((d) => grid.filter((g) => g.marks[d]).length);
+
   return {
     from,
     to,
@@ -294,7 +388,7 @@ export async function buildReport(env: Env, lastDay: string, days: number): Prom
       avgPerDay:
         Math.round((dayDevicePairs / Math.max(1, Math.min(days, Math.ceil((Math.min(to, Date.now()) - Math.max(from, since?.t ?? to)) / DAY)))) * 10) / 10,
     },
-    people: { total: people.size, prev: (prevRes?.users ?? 0) + (prevRes?.anon ?? 0) },
+    people: { total: people.size, prev: prevPeople.size },
     players,
     quiet,
     newUsers,
@@ -306,6 +400,9 @@ export async function buildReport(env: Env, lastDay: string, days: number): Prom
     settings,
     screens,
     feedback,
+    dayList,
+    grid,
+    perDay,
   };
 }
 
@@ -410,39 +507,27 @@ export function reportSections(r: Report, tz: string): Section[] {
     );
   out.push({ title: 'Summary', lines });
 
+  const dow = (d: string) => 'SMTWTFS'[new Date(`${d}T12:00:00Z`).getUTCDay()]!;
+  const mark = (m?: 'daily' | 'played') => (m === 'daily' ? '●' : m === 'played' ? '◐' : '·');
   out.push({
-    title: 'Signed-in players',
+    title: 'Who played when',
+    lines: ['● finished a daily   ◐ opened the app or played something else   · nothing'],
     table: {
-      head: ['Player', 'Days played', 'Dailies', 'Other games', 'Last active'],
-      rows: r.players.map((p) => [p.name, p.daysActive, p.dailies, p.otherGames, ago(p.lastActive, Date.now(), tz)]),
+      head: ['', ...r.dayList.map(dow), 'Dailies', 'Last active'],
+      rows: r.grid.map((g) => [
+        g.kind === 'anon' ? `${g.name} (no account)` : g.kind === 'quiet' ? `${g.name} (gone quiet)` : g.name,
+        ...r.dayList.map((d) => mark(g.marks[d])),
+        g.dailies,
+        g.lastActive ? ago(g.lastActive, Date.now(), tz) : '',
+      ]),
     },
-    empty: 'Nobody signed in played.',
+    empty: 'Nobody played.',
   });
-
-  if (r.quiet.length)
-    out.push({
-      title: 'Gone quiet',
-      lines: r.quiet.map((q) => `${q.name} — last active ${ago(q.lastActive, Date.now(), tz)} (${plural(q.dailiesTotal, 'daily', 'dailies')} in all)`),
-    });
 
   if (r.newUsers.length)
     out.push({
       title: 'New sign-ups',
       lines: r.newUsers.map((u) => `${u.name} — joined ${dateLabel(u.joined, tz)}, ${plural(u.dailies, 'daily', 'dailies')} so far`),
-    });
-
-  if (r.anonDevices.length)
-    out.push({
-      title: 'Playing without an account',
-      table: {
-        head: ['Device', 'Days played', 'Games started', 'Games finished'],
-        rows: r.anonDevices.map((d) => [
-          `${PLATFORM_LABEL[d.platform] ?? d.platform}${d.installed ? ' (home-screen app)' : ''}`,
-          d.daysActive,
-          d.started,
-          d.finished,
-        ]),
-      },
     });
 
   out.push({
@@ -486,6 +571,14 @@ export function reportSections(r: Report, tz: string): Section[] {
   return out;
 }
 
+// The grid's marks: centred, narrow, coloured like the stats page.
+const DOT_BASE = 'padding:4px 3px;border-bottom:1px solid #e5e5e5;text-align:center;font-size:15px;';
+const DOT_STYLE: Record<string, string> = {
+  '●': `${DOT_BASE}color:#2f6fde;`,
+  '◐': `${DOT_BASE}color:#8fb2ee;`,
+  '·': `${DOT_BASE}color:#c9c9d1;`,
+};
+
 export function renderHtml(r: Report, tz: string): string {
   const td = 'padding:4px 10px;border-bottom:1px solid #e5e5e5;text-align:left;';
   const parts = reportSections(r, tz).map((s) => {
@@ -494,7 +587,7 @@ export function renderHtml(r: Report, tz: string): string {
     if (s.table?.rows.length)
       body += `<table style="border-collapse:collapse;font-size:14px">
 <tr>${s.table.head.map((h) => `<th style="${td}color:#666;font-weight:600">${esc(h)}</th>`).join('')}</tr>
-${s.table.rows.map((row) => `<tr>${row.map((c) => `<td style="${td}">${esc(String(c))}</td>`).join('')}</tr>`).join('\n')}
+${s.table.rows.map((row) => `<tr>${row.map((c) => `<td style="${DOT_STYLE[String(c)] ?? td}">${esc(String(c))}</td>`).join('')}</tr>`).join('\n')}
 </table>`;
     if (!body && s.empty) body = `<p style="margin:4px 0;color:#666">${esc(s.empty)}</p>`;
     return `<h2 style="font-size:16px;margin:22px 0 6px">${esc(s.title)}</h2>${body}`;
@@ -560,5 +653,5 @@ export async function getAdminReport(req: Request, env: Env, days: number): Prom
   const d = [1, 7, 30, 90].includes(days) ? days : 7;
   // Up to and including today (so "Today" is today so far).
   const r = await buildReport(env, dateInTimezone(new Date(), env.DAILY_TIMEZONE), d);
-  return jsonOk({ days: d, to: r.to, html: renderHtml(r, env.DAILY_TIMEZONE) });
+  return jsonOk({ report: r, labels: { mode: MODE_LABEL, feature: FEATURE_LABEL, screen: SCREEN_LABEL, platform: PLATFORM_LABEL }, tz: env.DAILY_TIMEZONE });
 }
