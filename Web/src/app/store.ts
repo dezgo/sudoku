@@ -36,8 +36,17 @@ import {
 } from '../lib/storage';
 import { requestPuzzle } from './puzzles';
 import { formatTime, localDailyId } from '../lib/format';
+import { flushUsage, initUsage, track } from '../lib/usage';
 
 export type Phase = 'home' | 'playing';
+
+/** What kind of game is on screen — for the usage stats only. */
+export type GameMode = 'daily' | 'past_daily' | 'practice' | 'shared' | 'coop';
+
+/** Sheets worth counting in the usage stats (the rest are steps inside these). */
+const TRACKED_SHEETS = new Set<Sheet['kind']>([
+  'newGame', 'games', 'settings', 'leaderboard', 'groupMembers', 'coach', 'history', 'multiplayer', 'feedback', 'share',
+]);
 
 export type Sheet =
   | { kind: 'newGame' }
@@ -119,6 +128,8 @@ class Store {
   /** A newer build is live (see updates.ts). */
   updateReady = false;
   coop: CoopState | null = null;
+  private gameMode: GameMode = 'practice';
+  private lastColorsTracked = 0;
 
   private listeners = new Set<Listener>();
   private timer: number | null = null;
@@ -131,6 +142,7 @@ class Store {
 
   constructor() {
     window.addEventListener(UNAUTHORIZED_EVENT, () => this.signOut());
+    initUsage(() => this.token);
     document.addEventListener('visibilitychange', () => {
       if (document.hidden) this.enterBackground();
       else this.enterForeground();
@@ -188,6 +200,7 @@ class Store {
   // --- Sheets ---
 
   open(sheet: Sheet): void {
+    if (TRACKED_SHEETS.has(sheet.kind)) track('screen', { s: sheet.kind });
     this.sheets = [...this.sheets, sheet];
     this.emit();
   }
@@ -207,6 +220,11 @@ class Store {
   setPref<K extends keyof Prefs>(key: K, value: Prefs[K]): void {
     this.prefs = { ...this.prefs, [key]: value };
     writeJSON(KEYS.prefs, this.prefs);
+    // Colour pickers fire on every drag step — count one change per half-minute.
+    if (key === 'colors') {
+      if (Date.now() - this.lastColorsTracked > 30_000) track('setting', { key });
+      this.lastColorsTracked = Date.now();
+    } else if (key !== 'difficulty') track('setting', { key, value });
     // Co-op always shows right and wrong — both players see the same board.
     if (this.game && key === 'highlightMistakes' && this.game !== this.coopGame)
       this.game.setHighlightMistakes(value as boolean);
@@ -255,6 +273,7 @@ class Store {
   }
 
   private enterForeground(): void {
+    track('open');
     if (this.coop && !this.coopSocket) this.connectCoop();
     void this.refreshDaily();
     if (this.token) void this.refreshGroups();
@@ -304,10 +323,12 @@ class Store {
     this.emit();
   }
 
-  private loadPuzzle(p: Puzzle): void {
+  private loadPuzzle(p: Puzzle, mode: GameMode): void {
     this.saveProgress();
     this.leaveCoop();
     const save = this.saves[p.id];
+    this.gameMode = mode;
+    track(save ? 'game_resume' : 'game_start', { mode, difficulty: p.difficulty });
     const g = new Game(
       p,
       { highlightMistakes: this.prefs.highlightMistakes, highlightConstraints: this.prefs.highlightConstraints },
@@ -324,9 +345,10 @@ class Store {
     this.emit();
   }
 
-  resume(save: GameSave): void {
+  resume(save: GameSave, mode?: GameMode): void {
     this.offlineDaily = false;
-    this.loadPuzzle(save.puzzle);
+    const p = save.puzzle;
+    this.loadPuzzle(p, mode ?? (isDaily(p) ? (p.id === this.todayId ? 'daily' : 'past_daily') : 'practice'));
   }
 
   async newGame(difficulty: Difficulty): Promise<void> {
@@ -336,7 +358,7 @@ class Store {
     try {
       const p = await requestPuzzle(difficulty, nextPuzzleId());
       this.offlineDaily = false;
-      this.loadPuzzle(p);
+      this.loadPuzzle(p, 'practice');
     } finally {
       this.loadingPuzzle = false;
       this.emit();
@@ -351,10 +373,10 @@ class Store {
       const r = await api.shared(name);
       const key = JSON.stringify(r.givens);
       const save = Object.values(this.saves).find((sv) => !isDaily(sv.puzzle) && JSON.stringify(sv.puzzle.givens) === key);
-      if (save) this.resume(save);
+      if (save) this.resume(save, 'shared');
       else {
         this.offlineDaily = false;
-        this.loadPuzzle({ id: nextPuzzleId(), difficulty: r.difficulty, givens: r.givens, solution: r.solution });
+        this.loadPuzzle({ id: nextPuzzleId(), difficulty: r.difficulty, givens: r.givens, solution: r.solution }, 'shared');
       }
       const who = r.shared_by ?? 'A friend';
       this.showToast(
@@ -394,6 +416,8 @@ class Store {
       this.leaveCoop();
       const local = readJSON<CoopLocal>(KEYS.coop, {});
       const id = local[name]?.id ?? nextPuzzleId();
+      this.gameMode = 'coop';
+      track(local[name] ? 'game_resume' : 'game_start', { mode: 'coop', difficulty: d.difficulty, players: d.players.length });
       const g = new Game(
         { id, difficulty: d.difficulty, givens: d.givens, solution: d.solution },
         { highlightMistakes: true, highlightConstraints: this.prefs.highlightConstraints },
@@ -564,13 +588,13 @@ class Store {
       }
       if (today) {
         this.offlineDaily = false;
-        this.loadPuzzle(today);
+        this.loadPuzzle(today, 'daily');
       } else {
         // Offline with no cache: a local puzzle under today's id so the
         // player has *something*. Marked unranked; never posted.
         const p = await requestPuzzle('medium', localDailyId());
         this.offlineDaily = true;
-        this.loadPuzzle(p);
+        this.loadPuzzle(p, 'daily');
       }
     } finally {
       this.loadingPuzzle = false;
@@ -581,13 +605,13 @@ class Store {
   /** Play a past daily from the server (or resume its save). */
   async startPastDaily(puzzleId: number): Promise<void> {
     const save = this.saves[puzzleId];
-    if (save) return this.resume(save);
+    if (save) return this.resume(save, puzzleId === this.todayId ? 'daily' : 'past_daily');
     this.loadingPuzzle = true;
     this.emit();
     try {
       const p = toPuzzle(await api.daily(puzzleId));
       this.offlineDaily = false;
-      this.loadPuzzle(p);
+      this.loadPuzzle(p, puzzleId === this.todayId ? 'daily' : 'past_daily');
     } catch (e) {
       this.showToast(e instanceof ApiError && e.kind === 'offline' ? "You're offline." : "Couldn't load that puzzle.");
     } finally {
@@ -677,6 +701,13 @@ class Store {
       puzzle: g.puzzle,
       lifelines: this.lifelines,
     };
+    track('game_finish', {
+      mode: this.coop ? 'coop' : this.gameMode,
+      difficulty: g.puzzle.difficulty,
+      seconds: g.elapsedSeconds,
+      mistakes: g.mistakeCount,
+      lifelines: result.lifelines,
+    });
     this.history = [result, ...this.history.filter((r) => r.puzzleID !== g.puzzle.id)];
     persistHistory(this.history);
     this.saveProgress(); // solved → removes the save
@@ -700,6 +731,7 @@ class Store {
   tapAutoPencil(): void {
     if (!this.game || this.paused || this.game.isSolved) return;
     this.cancelAutoPencil();
+    track('feature', { f: 'auto_pencil' });
     this.autoPencilPending = true;
     // 3s cancel window so the player never sees marks they're about to undo (SPEC §13.11).
     this.autoPencilTimer = window.setTimeout(() => {
@@ -724,6 +756,7 @@ class Store {
     const g = this.game;
     if (!g || this.paused || g.isSolved) return;
     const hint = findHint(g.cells);
+    track('feature', { f: 'hint', found: !!hint, technique: hint?.technique ?? null });
     // Charged on peek, not on apply — the idea is in their head either way.
     if (hint) {
       g.noteHintViewed();
@@ -897,6 +930,7 @@ class Store {
   // --- Coach ---
 
   markCoachComplete(technique: string): void {
+    if (!this.coachCompleted[technique]) track('feature', { f: 'coach_done', technique });
     this.coachCompleted = { ...this.coachCompleted, [technique]: true };
     writeJSON(KEYS.coach, this.coachCompleted);
     this.emit();
@@ -905,6 +939,8 @@ class Store {
   // --- Launch ---
 
   async launch(): Promise<void> {
+    track('open');
+    void flushUsage();
     // Came back from the mail app to a fresh page: pick the sign-in up where it was.
     if (this.pendingSignIn() && !this.sheets.some((s) => s.kind === 'signIn')) this.open({ kind: 'signIn' });
     await Promise.all([

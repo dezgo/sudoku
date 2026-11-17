@@ -8,6 +8,7 @@ import { requestPuzzle } from '../app/puzzles';
 import { difficultyLabel, DIFFICULTIES, type Difficulty } from '../engine/types';
 import { ApiError, api, type CoopGameSummary } from '../lib/api';
 import { formatTime } from '../lib/format';
+import { track } from '../lib/usage';
 import { Icon } from './icons';
 import { Segmented, Sheet, shareText } from './Sheet';
 
@@ -100,6 +101,7 @@ export function CoopCreate({ onBack }: { onBack: () => void }) {
     try {
       const p = await requestPuzzle(d, 0);
       const name = await api.coopCreate(s.token!, p.givens, d);
+      track('feature', { f: 'coop_create', difficulty: d });
       await s.startCoop(name);
     } catch (e) {
       s.showToast(e instanceof ApiError && e.kind === 'offline' ? "You're offline." : "Couldn't start the game. Try again.");

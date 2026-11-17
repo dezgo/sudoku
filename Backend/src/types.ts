@@ -5,6 +5,10 @@ export interface Env {
   EMAIL_FROM: string;
   // Where player feedback is emailed (wrangler.toml [vars]).
   FEEDBACK_TO?: string;
+  // Where the Monday usage report goes; falls back to FEEDBACK_TO.
+  REPORT_TO?: string;
+  // Comma-separated user ids allowed to see /stats.
+  ADMIN_USER_IDS?: string;
   DAILY_TIMEZONE: string;
   // Reviewer bypass: when set, signing in with REVIEWER_EMAIL skips the
   // Resend round-trip (so Play Store / App Store reviewers don't need to

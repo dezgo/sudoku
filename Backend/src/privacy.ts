@@ -38,7 +38,7 @@ const POLICY_HTML = `<!DOCTYPE html>
 </head>
 <body>
   <h1>Privacy Policy</h1>
-  <p class="meta">Sudoku Crew · Effective 4 November 2026</p>
+  <p class="meta">Sudoku Crew · Effective 18 November 2026</p>
 
   <p>
     This is the privacy policy for <strong>Sudoku Crew</strong> — the web
@@ -103,10 +103,25 @@ const POLICY_HTML = `<!DOCTYPE html>
   </ul>
 
   <p>
+    <strong>How the web app is used</strong> — whether or not you sign in,
+    the web app tells us when it's opened and what happens in it: games
+    started and finished (the kind of game, its level, your time and
+    mistakes), which features you use (such as hints, Coach or Speed mode),
+    which screens you open and which settings you change. These records
+    carry a random ID the app makes up on your device, the type of device
+    (iPhone, iPad, Android or computer), whether it's installed on your
+    home screen, and the app version — plus your account, if you're signed
+    in. They don't include your IP address or browser details. We use them
+    only to see how Sudoku Crew is used, so we know what to improve. The
+    iOS and Android apps don't send these.
+  </p>
+
+  <p>
     Sudoku Crew also keeps data locally — in your browser for the web app,
     or on your device for the mobile apps: your in-progress puzzles,
-    settings, and game history. That stays on your device and isn't sent
-    to our servers. The web app doesn't use cookies.
+    settings, and game history. The boards themselves stay on your device
+    (apart from the dailies, shared puzzles and co-op games described
+    above). The web app doesn't use cookies.
   </p>
 
   <h2>What we don't collect</h2>
@@ -126,6 +141,8 @@ const POLICY_HTML = `<!DOCTYPE html>
     <li>Running multiplayer games and telling you when it's your turn.</li>
     <li>Generating the daily puzzle and leaderboard you see.</li>
     <li>Reading and replying to feedback you send.</li>
+    <li>Seeing how the app is used — how many people play, how often, and
+    which features they use — so we know what to improve.</li>
   </ul>
   <p>We don't use your data for marketing, profiling, or any purpose
   outside Sudoku Crew.</p>
@@ -160,6 +177,8 @@ const POLICY_HTML = `<!DOCTYPE html>
     <li>Feedback is kept so we can follow it up. Feedback sent while
     signed in is deleted with your account; otherwise email us and we'll
     delete it.</li>
+    <li>Usage records are deleted after about 13 months. Records linked
+    to your account are deleted with it.</li>
     <li>One-time verification codes expire after 15 minutes and are
     deleted.</li>
   </ul>

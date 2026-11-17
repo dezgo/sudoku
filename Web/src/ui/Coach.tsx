@@ -9,6 +9,7 @@ import { exampleHint, expectedHint, validScenarios, type CoachScenario } from '.
 import { techniqueTier } from '../engine/tutor';
 import { cloneCells, type Cells } from '../engine/types';
 import { playSound } from '../lib/sound';
+import { track } from '../lib/usage';
 import { Board } from './Board';
 import { Icon } from './icons';
 import { Sheet } from './Sheet';
@@ -26,7 +27,14 @@ export function CoachSheet() {
       </p>
       <div class="group">
         {scenarios.map((sc) => (
-          <button key={sc.id} class="row" onClick={() => setActive(sc)}>
+          <button
+            key={sc.id}
+            class="row"
+            onClick={() => {
+              track('feature', { f: 'coach_lesson', technique: sc.id });
+              setActive(sc);
+            }}
+          >
             <div class="grow">
               <div>{sc.title}</div>
               <div class="sub" style={{ textTransform: 'capitalize' }}>
@@ -132,6 +140,7 @@ function CoachPlay({ scenario, onBack }: { scenario: CoachScenario; onBack: () =
             <button
               class="btn primary"
               onClick={() => {
+                track('feature', { f: 'coach_example' });
                 setExStep(0);
                 setStage('example');
               }}
@@ -241,7 +250,13 @@ function CoachPlay({ scenario, onBack }: { scenario: CoachScenario; onBack: () =
                 >
                   <Icon name="undo" size={17} /> Reset
                 </button>
-                <button class="tool" onClick={() => setWalk(0)}>
+                <button
+                  class="tool"
+                  onClick={() => {
+                    track('feature', { f: 'coach_show_me' });
+                    setWalk(0);
+                  }}
+                >
                   <Icon name="cap" size={17} /> Show me
                 </button>
               </div>

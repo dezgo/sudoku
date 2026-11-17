@@ -18,6 +18,9 @@ import { getMultiplayerInvitePage } from './multiplayer-invite';
 import { getAndroidAssetLinks, getAppleAppSiteAssociation } from './well-known';
 import { createSharedPuzzle, getSharedPuzzle, SHARE_NAME_RE } from './shared';
 import { postFeedback } from './feedback';
+import { postUsage, pruneUsage } from './usage';
+import { getAdminReport, sendWeeklyReport } from './report';
+import { getStatsPage } from './stats-page';
 import { connectCoopGame, createCoopGame, joinCoopGame, listMyCoopGames } from './coop';
 
 export { CoopRoom } from './coop-room';
@@ -36,6 +39,10 @@ import {
   startMultiplayerGame,
 } from './multiplayer';
 
+// Sunday 21:00 UTC = Monday 8am in Sydney during daylight saving (7am otherwise).
+// Must match the entry in wrangler.toml [triggers].
+const WEEKLY_REPORT_CRON = '0 21 * * SUN';
+
 export default {
   async fetch(req: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
     try {
@@ -46,7 +53,20 @@ export default {
     }
   },
 
-  async scheduled(_event: ScheduledController, env: Env, ctx: ExecutionContext): Promise<void> {
+  async scheduled(event: ScheduledController, env: Env, ctx: ExecutionContext): Promise<void> {
+    if (event.cron === WEEKLY_REPORT_CRON) {
+      try {
+        await sendWeeklyReport(env);
+      } catch (err) {
+        console.error('scheduled task: weekly report failed', err);
+      }
+      try {
+        await pruneUsage(env);
+      } catch (err) {
+        console.error('scheduled task: usage prune failed', err);
+      }
+      return;
+    }
     try {
       await ensureUpcomingDailies(env);
     } catch (err) {
@@ -90,6 +110,9 @@ async function route(req: Request, env: Env, ctx: ExecutionContext): Promise<Res
 
   // Privacy policy — public-facing page required by Play Store / App Store.
   if (path === '/privacy' && method === 'GET') return getPrivacyPolicy();
+
+  // Private usage stats (admins only — the page checks with /v1/admin/report).
+  if ((path === '/stats' || path === '/stats/') && method === 'GET') return getStatsPage();
 
   // Account deletion landing page — required by Play Store for apps that
   // allow account creation.
@@ -149,6 +172,10 @@ async function route(req: Request, env: Env, ctx: ExecutionContext): Promise<Res
   if (coopWsMatch && method === 'GET') return connectCoopGame(req, env, coopWsMatch[1]!, url.searchParams.get('token'));
 
   if (path === '/v1/feedback' && method === 'POST') return postFeedback(req, env, ctx);
+  if (path === '/v1/usage' && method === 'POST') return postUsage(req, env);
+  if (path === '/v1/admin/report' && method === 'GET') {
+    return getAdminReport(req, env, parseInt(url.searchParams.get('days') ?? '7', 10));
+  }
 
   if (path === '/v1/scores' && method === 'POST') return postScore(req, env);
   const groupScoresMatch = path.match(/^\/v1\/groups\/([^/]+)\/scores\/(\d+)$/);

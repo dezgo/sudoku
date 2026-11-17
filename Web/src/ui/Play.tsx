@@ -10,6 +10,7 @@ import { Board } from './Board';
 import { CoopStrip, inviteToCoop } from './Coop';
 import { Lifelines } from './Lifelines';
 import { Icon } from './icons';
+import { track } from '../lib/usage';
 
 export function Play() {
   const s = useStore();
@@ -189,7 +190,10 @@ function NumberPad() {
           class={`tool${g.mode === 'pencil' ? ' on' : ''}`}
           disabled={gated}
           aria-pressed={g.mode === 'pencil'}
-          onClick={() => s.act((game) => game.toggleMode())}
+          onClick={() => {
+            s.act((game) => game.toggleMode());
+            if (s.game?.mode === 'pencil') track('feature', { f: 'pencil_on' });
+          }}
         >
           <Icon name="pencil" size={17} /> Pencil
         </button>
@@ -197,7 +201,10 @@ function NumberPad() {
           class={`tool${g.speedMode ? ' on' : ''}`}
           disabled={gated}
           aria-pressed={g.speedMode}
-          onClick={() => s.act((game) => game.toggleSpeedMode())}
+          onClick={() => {
+            s.act((game) => game.toggleSpeedMode());
+            if (s.game?.speedMode) track('feature', { f: 'speed_on' });
+          }}
         >
           <Icon name="bolt" size={17} filled={g.speedMode} /> Speed
         </button>

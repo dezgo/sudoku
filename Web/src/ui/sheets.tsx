@@ -5,6 +5,7 @@ import { useEffect, useMemo, useState } from 'preact/hooks';
 import { useStore } from '../app/store';
 import { cellsFromGivens, difficultyLabel, DIFFICULTIES, isDaily, type Difficulty, type Puzzle } from '../engine/types';
 import { dateTime, displayLabel, formatTime } from '../lib/format';
+import { track } from '../lib/usage';
 import { playSound } from '../lib/sound';
 import type { PuzzleResult } from '../lib/storage';
 import { Board } from './Board';
@@ -288,7 +289,10 @@ export function ShareSheet({ puzzle, seconds }: { puzzle: Puzzle; seconds?: numb
     setError(null);
     api
       .shareCreate(token, puzzle.givens, puzzle.difficulty, seconds)
-      .then(setName)
+      .then((n) => {
+        track('feature', { f: 'share', difficulty: puzzle.difficulty });
+        setName(n);
+      })
       .catch((e) =>
         setError(e instanceof ApiError && e.kind === 'offline' ? "You're offline. Try again when you're connected." : "Couldn't share this puzzle. Try again."),
       );

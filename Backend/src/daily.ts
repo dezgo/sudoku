@@ -90,7 +90,7 @@ async function ensureDailyForDate(env: Env, date: string): Promise<PuzzleRespons
   };
 }
 
-function dateInTimezone(d: Date, tz: string): string {
+export function dateInTimezone(d: Date, tz: string): string {
   // en-CA produces YYYY-MM-DD, sortable, no locale surprises.
   const fmt = new Intl.DateTimeFormat('en-CA', {
     timeZone: tz,
@@ -101,7 +101,7 @@ function dateInTimezone(d: Date, tz: string): string {
   return fmt.format(d);
 }
 
-function addDays(date: string, days: number): string {
+export function addDays(date: string, days: number): string {
   const [y, m, d] = date.split('-').map(Number) as [number, number, number];
   const dt = new Date(Date.UTC(y, m - 1, d + days));
   const yy = dt.getUTCFullYear();

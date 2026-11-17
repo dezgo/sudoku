@@ -141,8 +141,14 @@ export async function requireAuth(
   if (!row) return jsonError(401, 'invalid_token');
 
   // Best-effort touch of last_used_at; don't block on it.
+  const now = Date.now();
   await env.DB.prepare('UPDATE auth_tokens SET last_used_at = ? WHERE token_hash = ?')
-    .bind(Date.now(), tokenHash)
+    .bind(now, tokenHash)
+    .run();
+  // "Last seen" used to move only at sign-in, so a player who'd stayed signed
+  // in for months looked long gone. Touch it on use, at most once an hour.
+  await env.DB.prepare('UPDATE users SET last_seen_at = ? WHERE id = ? AND last_seen_at < ?')
+    .bind(now, row.user_id, now - 60 * 60 * 1000)
     .run();
 
   return { user_id: row.user_id };
