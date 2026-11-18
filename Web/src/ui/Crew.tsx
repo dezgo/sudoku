@@ -113,6 +113,60 @@ export function inviteFriend(): void {
  * The plain-English rules, shown on the crew screen (and opened from the
  * invite flow) so nobody has to guess who sees what.
  */
+/**
+ * Exactly what connecting with someone shares, and what it never does.
+ * Shown in "How your crew works" and behind "How privacy works" on an invite.
+ */
+export function PrivacyDetails({ neverOnly = false }: { neverOnly?: boolean }) {
+  return (
+    <div class="privacy-details">
+      {!neverOnly && (
+        <>
+          <div class="section-title">What you share with someone in your crew</div>
+          <div class="group invite-list">
+            <div class="row">
+              <span class="invite-mark yes">✓</span>
+              <span class="grow">Puzzles you finish, and how you rated them</span>
+            </div>
+            <div class="row">
+              <span class="invite-mark yes">✓</span>
+              <span class="grow">Which days you play, and when you’re playing now</span>
+            </div>
+            <div class="row">
+              <span class="invite-mark yes">✓</span>
+              <span class="grow">Your times on daily puzzles</span>
+            </div>
+          </div>
+        </>
+      )}
+      <div class="section-title">What you never share</div>
+      <div class="group invite-list">
+        <div class="row">
+          <span class="invite-mark no">✕</span>
+          <span class="grow">
+            <b>Anything, until you both say yes.</b> Opening an invite shares nothing.
+          </span>
+        </div>
+        <div class="row">
+          <span class="invite-mark no">✕</span>
+          <span class="grow">
+            <b>Your other connections.</b> Each one is just between two people. Connecting with someone never shows
+            you to their friends, or their friends to you.
+          </span>
+        </div>
+        <div class="row">
+          <span class="invite-mark no">✕</span>
+          <span class="grow">
+            <b>Anything not listed above.</b> Not your email, not your games in progress. Watching you play live
+            only happens if you say yes, each time.
+          </span>
+        </div>
+      </div>
+      <p class="muted small invite-also">You can disconnect from anyone, any time.</p>
+    </div>
+  );
+}
+
 export function HowCrewWorks({ open: initiallyOpen = false }: { open?: boolean }) {
   const [open, setOpen] = useState(initiallyOpen);
   return (
@@ -121,22 +175,12 @@ export function HowCrewWorks({ open: initiallyOpen = false }: { open?: boolean }
         <span>How your crew works</span>
         <span class="muted">{open ? '–' : '+'}</span>
       </button>
+      {open && <PrivacyDetails />}
       {open && (
         <ul>
           <li>
             <b>Your crew is your own list of friends.</b> When someone opens your invite link, you get a request. They’re
             only added if you accept — and then it’s just the two of you who are connected.
-          </li>
-          <li>
-            <b>You see each other’s finished games</b> and how you rated them, so you can try the same puzzle. Times only
-            show for daily puzzles, under “Times for today’s daily”.
-          </li>
-          <li>
-            <b>Their friends don’t see you, and yours don’t see them.</b> If Ash is in your crew and you invite a mate, Ash
-            doesn’t see your mate and your mate doesn’t see Ash — unless they connect too.
-          </li>
-          <li>
-            <b>Watching only happens if you say yes</b>, each time (you can change that in Settings).
           </li>
           <li>
             <b>You can introduce two people in your crew.</b> They’re each asked, and only connect if both say yes. You
@@ -146,7 +190,7 @@ export function HowCrewWorks({ open: initiallyOpen = false }: { open?: boolean }
             <b>Notes are just for you.</b> Add one to remember who someone is (“Sam from work”). They never see it.
           </li>
           <li>
-            <b>You can remove anyone</b>, any time. They aren’t told; you just stop seeing each other.
+            <b>You can remove anyone</b>, any time. You just stop seeing each other.
           </li>
         </ul>
       )}
@@ -919,6 +963,7 @@ export function InviteSheet({ code }: { code: string }) {
   const s = useStore();
   const [name, setName] = useState<string | null | undefined>(undefined);
   const [bad, setBad] = useState(false);
+  const [more, setMore] = useState(false);
   useEffect(() => {
     api
       .inviteFrom(code)
@@ -953,10 +998,10 @@ export function InviteSheet({ code }: { code: string }) {
   return (
     <Sheet title={`${Who} invited you`}>
       <p class="invite-lead">
-        Play the daily sudoku alongside <b>{who}</b>. You’ll see each other’s games, privately — just the two of you.
+        <b>{who}</b> would like to play the daily sudoku with you. It’s just the two of you, and it’s private.
       </p>
 
-      <div class="section-title">Shared privately with {who}</div>
+      <div class="section-title">You’ll both see</div>
       <div class="group invite-list">
         <div class="row">
           <span class="invite-mark yes">✓</span>
@@ -964,19 +1009,18 @@ export function InviteSheet({ code }: { code: string }) {
         </div>
         <div class="row">
           <span class="invite-mark yes">✓</span>
-          <span class="grow">Which days you play, and when you’re on now</span>
+          <span class="grow">Which days you play, and when you’re on</span>
         </div>
         <div class="row">
           <span class="invite-mark yes">✓</span>
           <span class="grow">Your daily puzzle times</span>
         </div>
       </div>
-      <p class="muted small invite-also">{Who} shares the same with you.</p>
 
-      <p class="muted small invite-also">
-        Nobody else {who} knows can see you, your email stays private, and {who} can only watch you play if you
-        say yes. You can disconnect any time.
-      </p>
+      <button class="link invite-more" aria-expanded={more} onClick={() => setMore(!more)}>
+        How privacy works {more ? '–' : '›'}
+      </button>
+      {more && <PrivacyDetails neverOnly />}
 
       <button class="btn primary" style={{ marginTop: 16 }} onClick={connect}>
         {s.token ? `Connect with ${who}` : `Sign in to connect with ${who}`}

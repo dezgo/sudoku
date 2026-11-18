@@ -2033,6 +2033,17 @@ div.crew-note,
   background: var(--surface-2);
   color: var(--text-2);
 }
+.invite-mark.lock {
+  background: var(--surface-2);
+  font-size: 0.7rem;
+}
+.invite-more {
+  display: block;
+  margin: 14px auto 0;
+}
+.privacy-details {
+  margin-bottom: 12px;
+}
 .invite-also {
   margin: 8px 4px 0;
 }
