@@ -144,12 +144,6 @@ export function PrivacyDetails({ neverOnly = false }: { neverOnly?: boolean }) {
         <div class="row">
           <span class="invite-mark no">✕</span>
           <span class="grow">
-            <b>Anything, until you both say yes.</b> Opening an invite shares nothing.
-          </span>
-        </div>
-        <div class="row">
-          <span class="invite-mark no">✕</span>
-          <span class="grow">
             <b>Your other connections.</b> Each one is just between two people. Connecting with someone never shows
             you to their friends, or their friends to you.
           </span>
