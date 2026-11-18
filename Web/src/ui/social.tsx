@@ -9,6 +9,7 @@ import type { Appearance } from '../lib/storage';
 import { FIRST_DAILY_ID, isCatchUp } from '../lib/streaks';
 import { Icon } from './icons';
 import { Segmented, Sheet, shareText, Toggle } from './Sheet';
+import { inviteFriend } from './Crew';
 
 function errorCopy(e: unknown, fallback: string): string {
   if (e instanceof ApiError) {
@@ -77,11 +78,8 @@ export function SignInSheet({ then }: { then?: () => void }) {
 
   const finish = async () => {
     await s.refreshGroups();
-    if (s.groups.length === 0) setStep('groups');
-    else {
-      s.close();
-      then?.();
-    }
+    s.close();
+    then?.();
   };
 
   const verify = () =>
@@ -385,11 +383,11 @@ export function SettingsSheet() {
             <button class="row" onClick={() => s.open({ kind: 'crew' })}>
               <Icon name="users" size={18} />
               <span class="grow">
-                <div>{s.groups.length ? s.groups.map((g) => g.group.name).join(', ') : 'Start your crew'}</div>
+                <div>Your crew</div>
                 <div class="sub">
-                  {s.groups.length
-                    ? `${s.groups.reduce((n, g) => n + g.member_count, 0)} people · see who's playing, invite friends`
-                    : 'Friends whose games you see, and who see yours'}
+                  {s.crewMates.length
+                    ? `${s.crewMates.length} ${s.crewMates.length === 1 ? 'person' : 'people'} · see who's playing, invite friends`
+                    : 'Invite friends to see each other’s games'}
                 </div>
               </span>
               <span class="muted">›</span>
@@ -709,7 +707,8 @@ function periodStart(period: Exclude<Period, 'day'>, today: number): number {
 
 export function LeaderboardSheet({ puzzleId }: { puzzleId: number }) {
   const s = useStore();
-  const [groupId, setGroupId] = useState<string | null>(s.groups[0]?.group.id ?? null);
+  // Always "my crew": me and the people I'm connected to.
+  const groupId = s.token ? 'crew' : null;
   const [period, setPeriod] = useState<Period>('day');
   const [day, setDay] = useState(puzzleId);
   const [rows, setRows] = useState<LeaderboardEntry[] | null>(null);
@@ -746,21 +745,21 @@ export function LeaderboardSheet({ puzzleId }: { puzzleId: number }) {
           <p>
             <b>Sign in to see leaderboards.</b>
           </p>
-          <p>You'll be able to compare your time with friends in your groups.</p>
+          <p>You'll be able to compare times with the friends in your crew.</p>
           <button class="btn primary" onClick={() => s.open({ kind: 'signIn' })}>
             Sign in
           </button>
         </div>
       );
-    if (!s.groups.length)
+    if (!s.crewMates.length)
       return (
         <div class="empty">
           <p>
-            <b>Join a group to see leaderboards.</b>
+            <b>Times are shared with your crew.</b>
           </p>
-          <p>Create one and share the invite code, or join with a code from a friend.</p>
-          <button class="btn primary" onClick={() => s.open({ kind: 'groupOnboarding', mode: 'choose' })}>
-            Set up a group
+          <p>Invite a friend and you’ll be able to compare times for each day’s puzzle — only with each other.</p>
+          <button class="btn primary" onClick={() => inviteFriend()}>
+            Invite a friend
           </button>
         </div>
       );
@@ -928,15 +927,6 @@ export function LeaderboardSheet({ puzzleId }: { puzzleId: number }) {
             Mistakes add a small time penalty (about 10% each, capped at five) when ranking. You'll never see anyone's
             count, just the resulting position.
           </p>
-        </div>
-      )}
-      {s.groups.length > 1 && (
-        <div style={{ marginBottom: 12 }}>
-          <Segmented
-            options={s.groups.map((g) => ({ value: g.group.id, label: g.group.name }))}
-            value={groupId ?? ''}
-            onChange={setGroupId}
-          />
         </div>
       )}
       <div style={{ marginBottom: 12 }}>

@@ -206,7 +206,7 @@ function CreateGame({ onBack, onOpen }: { onBack: () => void; onOpen: (id: strin
   const [difficulty, setDifficulty] = useState<Difficulty>('medium');
   const [turn, setTurn] = useState('21600');
   const [competitive, setCompetitive] = useState(false);
-  const [groupId, setGroupId] = useState('');
+  const [invited, setInvited] = useState<string[]>([]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -218,7 +218,7 @@ function CreateGame({ onBack, onOpen }: { onBack: () => void; onOpen: (id: strin
         difficulty,
         turn_duration_seconds: Number(turn),
         competitive_mode: competitive,
-        ...(groupId ? { group_id: groupId } : {}),
+        ...(invited.length ? { invited_user_ids: invited } : {}),
       });
       onOpen(r.game.id);
     } catch (e) {
@@ -247,18 +247,20 @@ function CreateGame({ onBack, onOpen }: { onBack: () => void; onOpen: (id: strin
       <p class="footnote">
         {competitive ? 'A winner is crowned by score (correct − 2 × mistakes).' : 'Stats salad — everyone earns a badge category.'}
       </p>
-      {s.groups.length > 0 && (
+      {s.crewMates.length > 0 && (
         <>
-          <div class="section-title">Invite a group (optional)</div>
-          <select class="field" value={groupId} onChange={(e) => setGroupId(e.currentTarget.value)}>
-            <option value="">No group</option>
-            {s.groups.map((g) => (
-              <option key={g.group.id} value={g.group.id}>
-                {g.group.name}
-              </option>
+          <div class="section-title">Invite friends from your crew (optional)</div>
+          <div class="group">
+            {s.crewMates.map((p) => (
+              <Toggle
+                key={p.id}
+                label={p.name}
+                checked={invited.includes(p.id)}
+                onChange={(v) => setInvited(v ? [...invited, p.id] : invited.filter((x) => x !== p.id))}
+              />
             ))}
-          </select>
-          {groupId && <p class="footnote">Everyone in the group is invited automatically.</p>}
+          </div>
+          <p class="footnote">Or share the game's invite code with anyone once it's created.</p>
         </>
       )}
       {error && <p class="error">{error}</p>}

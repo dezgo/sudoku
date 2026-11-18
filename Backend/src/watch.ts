@@ -5,6 +5,7 @@
 import type { Env } from './types';
 import { jsonError } from './http';
 import { requireAuth } from './auth';
+import { areConnected } from './crew';
 
 export async function connectWatch(req: Request, env: Env, hostId: string, token: string | null, role: string | null): Promise<Response> {
   if (req.headers.get('upgrade')?.toLowerCase() !== 'websocket') return jsonError(426, 'expected_websocket');
@@ -14,13 +15,7 @@ export async function connectWatch(req: Request, env: Env, hostId: string, token
   if (asHost && auth.user_id !== hostId) return jsonError(403, 'not_you');
   if (!asHost) {
     if (auth.user_id === hostId) return jsonError(400, 'cant_watch_yourself');
-    const shared = await env.DB.prepare(
-      `SELECT 1 FROM group_members a JOIN group_members b ON a.group_id = b.group_id
-       WHERE a.user_id = ? AND b.user_id = ? LIMIT 1`,
-    )
-      .bind(auth.user_id, hostId)
-      .first();
-    if (!shared) return jsonError(403, 'not_in_your_crew');
+    if (!(await areConnected(env, auth.user_id, hostId))) return jsonError(403, 'not_in_your_crew');
   }
   const u = await env.DB.prepare('SELECT display_name FROM users WHERE id = ?').bind(auth.user_id).first<{ display_name: string | null }>();
   const headers = new Headers(req.headers);

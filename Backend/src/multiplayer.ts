@@ -12,6 +12,7 @@ import { requireAuth } from './auth';
 import { generateMultiplayerGameId, generateInviteCode } from './crypto';
 import { generatePuzzle } from './generator';
 import { sendPush, type PushMessage } from './push';
+import { crewOf } from './crew';
 
 const VALID_DIFFICULTIES: Difficulty[] = ['easy', 'medium', 'hard'];
 const VALID_TURN_DURATIONS = [3600, 21600, 86400, 0]; // 1h, 6h, 24h, unlimited
@@ -75,7 +76,9 @@ export async function createMultiplayerGame(req: Request, env: Env, ctx: Executi
       .all<{ user_id: string }>();
     inviteeIds = (members.results ?? []).map((r) => r.user_id);
   } else if (Array.isArray(body?.invited_user_ids)) {
-    inviteeIds = body.invited_user_ids.filter((id) => id !== auth.user_id);
+    // Only people in your crew can be invited (Nov 2026: before this, any user id was accepted).
+    const crew = new Set(await crewOf(env, auth.user_id));
+    inviteeIds = body.invited_user_ids.filter((id) => typeof id === 'string' && crew.has(id));
   }
   // Deduplicate.
   inviteeIds = Array.from(new Set(inviteeIds));

@@ -1806,3 +1806,37 @@ button.crew-head {
   gap: 4px;
   vertical-align: middle;
 }
+.how-crew {
+  background: var(--surface);
+  border-radius: 12px;
+  padding: 2px 14px;
+}
+.how-crew-head {
+  width: 100%;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 0;
+  background: none;
+  border: 0;
+  font: inherit;
+  font-weight: 700;
+  color: var(--text);
+  cursor: pointer;
+}
+.how-crew ul {
+  margin: 0 0 12px;
+  padding-left: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  font-size: 0.9rem;
+  line-height: 1.4;
+  color: var(--text-2);
+}
+.how-crew ul b {
+  color: var(--text);
+}
+.link.inline-caption.danger {
+  color: var(--error);
+}

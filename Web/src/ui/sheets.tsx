@@ -222,7 +222,7 @@ export function SolvedSheet({ rank, wasRanked }: { rank: number | null; wasRanke
         )}
       </div>
       <div class="stack">
-        {wasRanked && signedIn && s.groups.length > 0 && (
+        {wasRanked && signedIn && s.crewMates.length > 0 && (
           <button class="btn" onClick={() => s.open({ kind: 'leaderboard', puzzleId: g.puzzle.id })}>
             <Icon name="podium" size={20} /> View leaderboard
           </button>

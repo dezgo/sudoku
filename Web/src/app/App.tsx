@@ -50,7 +50,7 @@ function renderSheet(sheet: Sheet, i: number) {
     case 'share':
       return <ShareSheet key={i} puzzle={sheet.puzzle} seconds={sheet.seconds} />;
     case 'crew':
-      return <CrewSheet key={i} tab={sheet.tab} />;
+      return <CrewSheet key={i} tab={sheet.tab} explain={sheet.explain} />;
     case 'everyone':
       return <EveryoneSheet key={i} />;
     case 'watch':

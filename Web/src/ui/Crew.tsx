@@ -5,7 +5,7 @@
 
 import { useEffect, useState } from 'preact/hooks';
 import { store, useStore } from '../app/store';
-import { api, type CrewFavourite, type CrewGroup, type CrewPlay, type Enjoyment } from '../lib/api';
+import { api, type CrewFavourite, type CrewPlay, type Enjoyment } from '../lib/api';
 import { deviceId } from '../lib/usage';
 import { dateFromDailyId, weekdayDate } from '../lib/format';
 import { difficultyLabel } from '../engine/types';
@@ -101,30 +101,71 @@ function FavouriteRow({ f }: { f: CrewFavourite }) {
   );
 }
 
-export function inviteFriend(groupId?: string): void {
+export function inviteFriend(): void {
   track('feature', { f: 'invite' });
-  const { text, url } = store.inviteLink(groupId);
+  const { text, url } = store.inviteLink();
   void shareText(text, url);
 }
 
-const WHAT_IS_A_CREW = "Your crew is the people whose games you see, and who see yours. No scores, no pressure — just what everyone's playing.";
+/**
+ * The plain-English rules, shown on the crew screen (and opened from the
+ * invite flow) so nobody has to guess who sees what.
+ */
+export function HowCrewWorks({ open: initiallyOpen = false }: { open?: boolean }) {
+  const [open, setOpen] = useState(initiallyOpen);
+  return (
+    <div class="how-crew">
+      <button class="how-crew-head" aria-expanded={open} onClick={() => setOpen(!open)}>
+        <span>How your crew works</span>
+        <span class="muted">{open ? '–' : '+'}</span>
+      </button>
+      {open && (
+        <ul>
+          <li>
+            <b>Your crew is your own list of friends.</b> When someone opens your invite link, the two of you are connected —
+            just you two.
+          </li>
+          <li>
+            <b>You see each other’s finished games</b> and how you rated them, so you can try the same puzzle. Never your
+            times, unless you open “Times for today’s daily”.
+          </li>
+          <li>
+            <b>Their friends don’t see you, and yours don’t see them.</b> If Ash is in your crew and you invite a mate, Ash
+            doesn’t see your mate and your mate doesn’t see Ash — unless they connect too.
+          </li>
+          <li>
+            <b>Watching only happens if you say yes</b>, each time (you can change that in Settings).
+          </li>
+          <li>
+            <b>You can remove anyone</b>, any time. They aren’t told; you just stop seeing each other.
+          </li>
+        </ul>
+      )}
+    </div>
+  );
+}
 
 /** Home screen: the latest few, and the way into "Your crew". */
 export function CrewCard() {
   const s = useStore();
   if (!s.identity) return null;
-  if (!s.groups.length)
+  const feed = s.crew?.feed ?? [];
+  if (!s.crewMates.length && !feed.some((p) => !p.you))
     return (
       <div class="crew-card">
         <div class="group crew-start">
-          <div class="crew-start-text">Play alongside friends: see what they finish and try the same puzzles.</div>
-          <button class="btn compact" onClick={() => s.open({ kind: 'crew' })}>
-            Start your crew
+          <div class="crew-start-text">
+            Play alongside friends: see what they finish and try the same puzzles. Only the people you invite see your games.
+          </div>
+          <button class="btn compact primary" onClick={() => inviteFriend()}>
+            Invite a friend
+          </button>
+          <button class="link" onClick={() => s.open({ kind: 'crew' })}>
+            How it works
           </button>
         </div>
       </div>
     );
-  const feed = s.crew?.feed ?? [];
   const latest = feed.slice(0, 3);
   return (
     <div class="crew-card">
@@ -180,105 +221,108 @@ export function PlayingNow() {
   );
 }
 
-/** One crew: who's in it and the days each played this week. */
-function Members({ g }: { g: CrewGroup }) {
+/** Me and my crew, with the days each played this week. */
+function People() {
+  const s = useStore();
+  const crew = s.crew;
+  const [editing, setEditing] = useState(false);
+  const [removing, setRemoving] = useState<string | null>(null);
+  if (!crew) return <p class="muted">Loading…</p>;
   const letter = (d: string) => 'SMTWTFS'[new Date(`${d}T12:00:00Z`).getUTCDay()];
   return (
-    <div class="group">
-      <div class="row crew-days-head">
-        <span class="grow" />
-        <span class="crew-dots">
-          {g.days.map((d) => (
-            <i key={d}>{letter(d)}</i>
-          ))}
-        </span>
-      </div>
-      {g.members.map((m, i) => (
-        <div class="row crew-member" key={i}>
-          <Initial name={m.name} />
-          <div class="grow">
-            <div>
-              {m.name}
-              {m.you && <span class="muted"> (you)</span>}
-            </div>
-            <div class="sub">{m.last_at ? `last played ${ago(m.last_at)}` : 'not played yet'}</div>
-          </div>
+    <>
+      <div class="group">
+        <div class="row crew-days-head">
+          <span class="grow" />
           <span class="crew-dots">
-            {g.days.map((d) => (
-              <b key={d} class={m.played.includes(d) ? 'on' : ''} title={d} />
+            {crew.days.map((d) => (
+              <i key={d}>{letter(d)}</i>
             ))}
           </span>
         </div>
-      ))}
-      <button class="row crew-invite" onClick={() => inviteFriend(g.id)}>
-        <Icon name="plus" size={18} />
-        <span class="grow">Invite a friend to {g.name}</span>
-      </button>
-    </div>
+        {crew.people.map((m) => (
+          <div class="row crew-member" key={m.id}>
+            <Initial name={m.name} />
+            <div class="grow">
+              <div>
+                {m.name}
+                {m.you && <span class="muted"> (you)</span>}
+              </div>
+              {removing === m.id ? (
+                <div class="sub">
+                  Remove {m.name}? You’ll stop seeing each other.{' '}
+                  <button class="link inline-caption" onClick={() => setRemoving(null)}>
+                    Keep
+                  </button>{' '}
+                  <button
+                    class="link inline-caption danger"
+                    onClick={async () => {
+                      setRemoving(null);
+                      await s.removeFromCrew(m.id);
+                    }}
+                  >
+                    Remove
+                  </button>
+                </div>
+              ) : (
+                <div class="sub">
+                  {m.last_at ? `last played ${ago(m.last_at)}` : 'not played yet'}
+                  {editing && !m.you && (
+                    <>
+                      {' · '}
+                      <button class="link inline-caption danger" onClick={() => setRemoving(m.id)}>
+                        Remove
+                      </button>
+                    </>
+                  )}
+                </div>
+              )}
+            </div>
+            <span class="crew-dots">
+              {crew.days.map((d) => (
+                <b key={d} class={m.played.includes(d) ? 'on' : ''} title={d} />
+              ))}
+            </span>
+          </div>
+        ))}
+        <button class="row crew-invite" onClick={() => inviteFriend()}>
+          <Icon name="plus" size={18} />
+          <span class="grow">Invite a friend</span>
+        </button>
+      </div>
+      {crew.people.length > 1 && (
+        <div style={{ textAlign: 'right', marginTop: 6 }}>
+          <button class="link inline-caption muted-link" onClick={() => (setEditing(!editing), setRemoving(null))}>
+            {editing ? 'Finish editing' : 'Edit crew'}
+          </button>
+        </div>
+      )}
+    </>
   );
 }
 
-export function CrewSheet({ tab: initial }: { tab?: 'recent' | 'favourites' }) {
+export function CrewSheet({ tab: initial, explain = false }: { tab?: 'recent' | 'favourites'; explain?: boolean }) {
   const s = useStore();
   const [tab, setTab] = useState<'recent' | 'favourites'>(initial ?? 'recent');
-  const [which, setWhich] = useState(0);
-  const [leaving, setLeaving] = useState(false);
-  const [renaming, setRenaming] = useState<string | null>(null);
-  const [busy, setBusy] = useState(false);
   const crew = s.crew;
 
   if (!s.identity)
     return (
       <Sheet title="Your crew">
-        <p class="muted">{WHAT_IS_A_CREW}</p>
-        <button class="btn primary" onClick={() => s.open({ kind: 'signIn' })}>
+        <HowCrewWorks open />
+        <button class="btn primary" style={{ marginTop: 14 }} onClick={() => s.open({ kind: 'signIn' })}>
           Sign in to start your crew
         </button>
       </Sheet>
     );
 
-  if (!s.groups.length)
-    return (
-      <Sheet title="Your crew">
-        <p class="muted">{WHAT_IS_A_CREW}</p>
-        <div class="stack">
-          <button
-            class="btn primary"
-            disabled={busy}
-            onClick={async () => {
-              setBusy(true);
-              await s.startCrew();
-              setBusy(false);
-            }}
-          >
-            <Icon name="users" size={20} /> {busy ? 'Starting…' : 'Start your crew'}
-          </button>
-          <button class="link" onClick={() => s.open({ kind: 'groupOnboarding', mode: 'join' })}>
-            Have a code from a friend? Join their crew
-          </button>
-        </div>
-      </Sheet>
-    );
-
-  const groups = crew?.groups ?? [];
-  const g = groups[Math.min(which, groups.length - 1)];
   return (
     <Sheet title="Your crew">
-      <p class="muted small" style={{ margin: '2px 2px 12px' }}>
-        {WHAT_IS_A_CREW}
-      </p>
-      {groups.length > 1 && (
-        <div class="crew-picker">
-          {groups.map((x, i) => (
-            <button key={x.id} class={`chip${i === which ? ' on' : ''}`} onClick={() => (setWhich(i), setLeaving(false), setRenaming(null))}>
-              {x.name}
-            </button>
-          ))}
-        </div>
-      )}
-      {g ? <Members g={g} /> : <p class="muted">Loading…</p>}
+      <HowCrewWorks open={explain || !s.crewMates.length} />
+      <div style={{ height: 12 }} />
+      <People />
 
-      <div class="section-title">What they've been playing</div>
+      <div class="section-title">What they’ve been playing</div>
       <Segmented<'recent' | 'favourites'>
         options={[
           { value: 'recent', label: 'Recently played' },
@@ -319,69 +363,13 @@ export function CrewSheet({ tab: initial }: { tab?: 'recent' | 'favourites' }) {
         </p>
       )}
 
-      <div class="crew-more">
-        <button class="link" onClick={() => s.open({ kind: 'leaderboard', puzzleId: s.todayId })}>
-          Times for today’s daily ›
-        </button>
-        {g?.can_rename &&
-          (renaming === null ? (
-            <button class="link" onClick={() => setRenaming(g.name)}>
-              Rename {g.name}
-            </button>
-          ) : (
-            <form
-              class="crew-rename"
-              onSubmit={async (e) => {
-                e.preventDefault();
-                if (await s.renameCrew(g.id, renaming)) setRenaming(null);
-              }}
-            >
-              <input
-                class="field"
-                value={renaming}
-                maxLength={64}
-                aria-label="Crew name"
-                autoFocus
-                onInput={(e) => setRenaming(e.currentTarget.value)}
-              />
-              <button class="btn compact primary" type="submit" disabled={!renaming.trim()}>
-                Save
-              </button>
-              <button class="link" type="button" onClick={() => setRenaming(null)}>
-                Cancel
-              </button>
-              <div class="muted small" style={{ width: '100%', textAlign: 'center' }}>
-                Everyone in the crew sees this name.
-              </div>
-            </form>
-          ))}
-        <button class="link" onClick={() => s.open({ kind: 'groupOnboarding', mode: 'join' })}>
-          Join another crew with a code
-        </button>
-        {g &&
-          (leaving ? (
-            <span class="crew-leave">
-              Leave {g.name}? You'll stop seeing their games.{' '}
-              <button class="link" onClick={() => setLeaving(false)}>
-                Keep
-              </button>{' '}
-              <button
-                class="link danger"
-                onClick={async () => {
-                  setLeaving(false);
-                  setWhich(0);
-                  await s.leaveCrew(g.id);
-                }}
-              >
-                Leave
-              </button>
-            </span>
-          ) : (
-            <button class="link muted-link" onClick={() => setLeaving(true)}>
-              Leave {g.name}
-            </button>
-          ))}
-      </div>
+      {s.crewMates.length > 0 && (
+        <div class="crew-more">
+          <button class="link" onClick={() => s.open({ kind: 'leaderboard', puzzleId: s.todayId })}>
+            Times for today’s daily ›
+          </button>
+        </div>
+      )}
     </Sheet>
   );
 }
@@ -418,7 +406,7 @@ export function RatePlay() {
         </button>
       </div>
       <div class="muted small rate-note">
-        {s.identity && s.groups.length > 0 ? 'Your crew sees this, not your time.' : 'Helps others find puzzles they’ll enjoy. No names, no times.'}
+        {s.identity && s.crewMates.length > 0 ? 'Your crew sees this, not your time.' : 'Helps others find puzzles they’ll enjoy. No names, no times.'}
       </div>
     </div>
   );

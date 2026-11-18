@@ -64,6 +64,9 @@ export async function joinGroup(req: Request, env: Env): Promise<Response> {
   )
     .bind(group.id, auth.user_id, Date.now())
     .run();
+  // Only the old store apps still join groups. Crews in the web app are personal
+  // connections now (crew.ts); groups were turned into connections once, on
+  // 18 Nov 2026 (migration 0011), and joining a group no longer adds any.
 
   return jsonOk({ group });
 }

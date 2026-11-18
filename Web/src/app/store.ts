@@ -15,9 +15,7 @@ import {
   toPuzzle,
   UNAUTHORIZED_EVENT,
   type ApiUser,
-  type CrewFavourite,
-  type CrewGroup,
-  type CrewPlay,
+  type CrewData,
   type Enjoyment,
   type GroupListItem,
   type Pulse,
@@ -70,7 +68,7 @@ export type Sheet =
   | { kind: 'feedback' }
   | { kind: 'share'; puzzle: Puzzle; seconds?: number }
   | { kind: 'lifelines'; used: Lifeline[] }
-  | { kind: 'crew'; tab?: 'recent' | 'favourites' }
+  | { kind: 'crew'; tab?: 'recent' | 'favourites'; explain?: boolean }
   | { kind: 'everyone' }
   | { kind: 'watch'; id: string; name: string };
 
@@ -141,7 +139,7 @@ class Store {
   /** Hint techniques peeked at in the game on screen — "learnt X-Wing" in the crew feed. */
   private hintTechniques = new Set<string>();
   /** What the crew has been playing (signed in, in a group). */
-  crew: { groups: CrewGroup[]; feed: CrewPlay[]; favourites: CrewFavourite[] } | null = null;
+  crew: CrewData | null = null;
   /** Anonymous live counts: playing right now, solved today's daily. */
   pulse: Pulse | null = null;
   private pulseTimer: number | null = null;
@@ -833,7 +831,7 @@ class Store {
     const g = this.game;
     const should =
       !!this.token &&
-      this.groups.length > 0 &&
+      this.crewMates.length > 0 &&
       this.prefs.shareActivity &&
       this.prefs.crewCanWatch &&
       this.phase === 'playing' &&
@@ -967,8 +965,13 @@ class Store {
     if (this.pulseTimer === null) this.pulseTimer = window.setInterval(() => void this.sendPulse(), 60_000);
   }
 
+  /** The people in my crew (not me). */
+  get crewMates() {
+    return this.crew?.people.filter((p) => !p.you) ?? [];
+  }
+
   async refreshCrew(): Promise<void> {
-    if (!this.token || !this.groups.length) {
+    if (!this.token) {
       if (this.crew) {
         this.crew = null;
         this.emit();
@@ -983,44 +986,20 @@ class Store {
     }
   }
 
-  /** "Start your crew": a group named after the player, ready to invite into. */
-  async startCrew(): Promise<void> {
-    if (!this.token) return;
-    const first = this.identity?.user.display_name?.split(' ')[0];
-    try {
-      await api.createGroup(this.token, first ? `${first}'s crew` : 'My crew');
-      track('feature', { f: 'crew_start' });
-      await this.refreshGroups();
-    } catch (e) {
-      this.showToast(e instanceof ApiError && e.kind === 'offline' ? "You're offline." : "Couldn't start your crew. Try again.");
-    }
-  }
-
-  async renameCrew(groupId: string, name: string): Promise<boolean> {
-    if (!this.token || !name.trim()) return false;
-    try {
-      await api.renameGroup(this.token, groupId, name.trim());
-      await this.refreshGroups();
-      return true;
-    } catch (e) {
-      this.showToast(e instanceof ApiError && e.kind === 'offline' ? "You're offline." : "Couldn't rename it. Try again.");
-      return false;
-    }
-  }
-
-  async leaveCrew(groupId: string): Promise<void> {
+  /** Remove someone from my crew — both ways, quietly. */
+  async removeFromCrew(userId: string): Promise<void> {
     if (!this.token) return;
     try {
-      await api.leaveGroup(this.token, groupId);
-      await this.refreshGroups();
+      await api.crewRemove(this.token, userId);
+      await this.refreshCrew();
     } catch (e) {
-      this.showToast(e instanceof ApiError && e.kind === 'offline' ? "You're offline." : "Couldn't leave. Try again.");
+      this.showToast(e instanceof ApiError && e.kind === 'offline' ? "You're offline." : "Couldn't remove them. Try again.");
     }
   }
 
   /** The link a friend taps to join: your group if you have one, else just the app. */
-  inviteLink(groupId?: string): { text: string; url: string } {
-    const code = (this.groups.find((g) => g.group.id === groupId) ?? this.groups.find((g) => g.invite_code))?.invite_code;
+  inviteLink(): { text: string; url: string } {
+    const code = this.crew?.invite_code;
     return code
       ? {
           text: 'Come play sudoku with me! A free daily puzzle, and we can see each other’s games:',
@@ -1029,16 +1008,23 @@ class Store {
       : { text: 'Come play sudoku with me! A free daily puzzle:', url: `${location.origin}/play/` };
   }
 
-  /** Arrived from a friend's /g/<code> link. */
+  /** Arrived from a friend's /g/<code> link: connect the two of us. */
   async joinGroupByLink(code: string): Promise<void> {
     if (!this.token) return;
     try {
-      const g = await api.joinGroup(this.token, code.toUpperCase());
+      const r = await api.crewJoin(this.token, code.toUpperCase());
       track('feature', { f: 'joined_by_link' });
-      await this.refreshGroups();
-      this.showToast(`You’re in ${g.name}! Their games will show up on your home screen.`, 5000);
+      await this.refreshCrew();
+      this.showToast(`You and ${r.name} are now in each other’s crew.`, 5000);
+      this.open({ kind: 'crew', explain: true });
     } catch (e) {
-      this.showToast(e instanceof ApiError && e.kind === 'offline' ? "You're offline — try the link again later." : "That invite link didn't work. Ask your friend for a new one.");
+      this.showToast(
+        e instanceof ApiError && e.kind === 'offline'
+          ? "You're offline — try the link again later."
+          : e instanceof ApiError && e.detail === 'thats_you'
+            ? "That's your own invite link — send it to a friend."
+            : "That invite link didn't work. Ask your friend for a new one.",
+      );
     }
   }
 

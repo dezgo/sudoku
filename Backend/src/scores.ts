@@ -1,6 +1,7 @@
 import type { Env } from './types';
 import { jsonError, jsonOk, readJson } from './http';
 import { requireAuth } from './auth';
+import { crewOf } from './crew';
 
 const MAX_ELAPSED_SECONDS = 24 * 60 * 60;
 const MAX_MISTAKES = 10_000;
@@ -108,6 +109,15 @@ export async function postScore(req: Request, env: Env): Promise<Response> {
   return jsonOk({ rank });
 }
 
+/** Whose scores a leaderboard covers, as a JSON list of user ids — or null if I'm not allowed. */
+async function scopeFor(env: Env, groupId: string, me: string): Promise<string | null> {
+  if (groupId === 'crew') return JSON.stringify([me, ...(await crewOf(env, me))]);
+  const member = await env.DB.prepare('SELECT 1 FROM group_members WHERE group_id = ? AND user_id = ?').bind(groupId, me).first();
+  if (!member) return null;
+  const r = await env.DB.prepare('SELECT user_id FROM group_members WHERE group_id = ?').bind(groupId).all<{ user_id: string }>();
+  return JSON.stringify(r.results.map((x) => x.user_id));
+}
+
 export async function getGroupScores(
   req: Request,
   env: Env,
@@ -117,12 +127,9 @@ export async function getGroupScores(
   const auth = await requireAuth(req, env);
   if (auth instanceof Response) return auth;
 
-  const member = await env.DB.prepare(
-    'SELECT 1 FROM group_members WHERE group_id = ? AND user_id = ?',
-  )
-    .bind(groupId, auth.user_id)
-    .first();
-  if (!member) return jsonError(403, 'not_a_member');
+  // 'crew' = me and the people I'm connected to (the web app); a real group id = that group (old apps).
+  const scope = await scopeFor(env, groupId, auth.user_id);
+  if (!scope) return jsonError(403, 'not_a_member');
 
   // Order by penalised time: +10% per mistake, capped at 5 mistakes (+50%).
   // Stored as integer x10 in SQL to keep the comparison float-free:
@@ -134,12 +141,11 @@ export async function getGroupScores(
             s.hints_used, s.pencil_assists_used,
             s.highlight_mistakes_was_on, s.highlight_rules_was_on
        FROM scores s
-       JOIN group_members gm ON gm.user_id = s.user_id
        JOIN users u ON u.id = s.user_id
-      WHERE gm.group_id = ? AND s.puzzle_id = ?
+      WHERE s.user_id IN (SELECT value FROM json_each(?)) AND s.puzzle_id = ?
       ORDER BY s.elapsed_seconds * (10 + MIN(s.mistakes, 5)) ASC, s.completed_at ASC`,
   )
-    .bind(groupId, puzzleId)
+    .bind(scope, puzzleId)
     .all<{
       display_name: string | null;
       elapsed_seconds: number;
@@ -186,23 +192,19 @@ export async function getGroupStandings(
   if (auth instanceof Response) return auth;
   if (!Number.isInteger(from) || !Number.isInteger(to) || from > to) return jsonError(400, 'invalid_range');
 
-  const member = await env.DB.prepare(
-    'SELECT 1 FROM group_members WHERE group_id = ? AND user_id = ?',
-  )
-    .bind(groupId, auth.user_id)
-    .first();
-  if (!member) return jsonError(403, 'not_a_member');
+  // 'crew' = me and the people I'm connected to (the web app); a real group id = that group (old apps).
+  const scope = await scopeFor(env, groupId, auth.user_id);
+  if (!scope) return jsonError(403, 'not_a_member');
 
   const result = await env.DB.prepare(
     `SELECT s.user_id, u.display_name, s.puzzle_id,
             s.elapsed_seconds * (10 + MIN(s.mistakes, 5)) AS penalised_x10
        FROM scores s
-       JOIN group_members gm ON gm.user_id = s.user_id
        JOIN users u ON u.id = s.user_id
-      WHERE gm.group_id = ? AND s.puzzle_id BETWEEN ? AND ?
+      WHERE s.user_id IN (SELECT value FROM json_each(?)) AND s.puzzle_id BETWEEN ? AND ?
       ORDER BY s.puzzle_id, penalised_x10 ASC, s.completed_at ASC`,
   )
-    .bind(groupId, from, to)
+    .bind(scope, from, to)
     .all<{ user_id: string; display_name: string | null; puzzle_id: number; penalised_x10: number }>();
 
   const players = new Map<

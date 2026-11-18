@@ -20,6 +20,7 @@ import { getAndroidAssetLinks, getAppleAppSiteAssociation } from './well-known';
 import { createSharedPuzzle, getSharedPuzzle, SHARE_NAME_RE } from './shared';
 import { postFeedback } from './feedback';
 import { postUsage, pruneUsage } from './usage';
+import { getMyInvite, joinCrew, removeFromCrew } from './crew';
 import { getCrew, getEveryone, postPlay, postPulse, prunePresence, ratePlay } from './plays';
 import { getAdminReport, sendWeeklyReport } from './report';
 import { getStatsPage } from './stats-page';
@@ -197,6 +198,10 @@ async function route(req: Request, env: Env, ctx: ExecutionContext): Promise<Res
   const playMatch = path.match(/^\/v1\/plays\/(\d+)$/);
   if (playMatch && method === 'PUT') return ratePlay(req, env, parseInt(playMatch[1]!, 10));
   if (path === '/v1/crew' && method === 'GET') return getCrew(req, env);
+  if (path === '/v1/me/invite' && method === 'GET') return getMyInvite(req, env);
+  if (path === '/v1/crew/join' && method === 'POST') return joinCrew(req, env);
+  const crewRemoveMatch = path.match(/^\/v1\/crew\/([A-Za-z0-9_-]+)$/);
+  if (crewRemoveMatch && method === 'DELETE') return removeFromCrew(req, env, crewRemoveMatch[1]!);
   if (path === '/v1/pulse' && method === 'POST') return postPulse(req, env);
   const watchMatch = path.match(/^\/v1\/watch\/([A-Za-z0-9]+)\/ws$/);
   if (watchMatch && method === 'GET')

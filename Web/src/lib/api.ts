@@ -151,15 +151,21 @@ export interface MultiplayerGameDetail {
 
 /** Crew feed (Backend/src/plays.ts). A board is a daily (puzzle_id) or a shared puzzle (name). */
 export type Enjoyment = 1 | 2 | 3;
-export interface CrewGroup {
+export interface CrewPerson {
   id: string;
   name: string;
+  you: boolean;
+  /** Days this week they played ('YYYY-MM-DD'). */
+  played: string[];
+  last_at: number | null;
+}
+export interface CrewData {
   invite_code: string;
-  /** True for whoever started this crew. */
-  can_rename: boolean;
-  /** The last 7 days, oldest first ('YYYY-MM-DD'). */
+  /** The last 7 days, oldest first. */
   days: string[];
-  members: { name: string; you: boolean; played: string[]; last_at: number | null }[];
+  people: CrewPerson[];
+  feed: CrewPlay[];
+  favourites: CrewFavourite[];
 }
 export interface CrewPlay {
   id: string;
@@ -290,7 +296,9 @@ export const api = {
     send<Pulse>('pulse', 'POST', t, body),
   everyone: (t: string | null, device_id: string) =>
     send<Pulse & { favourites: CrewFavourite[] }>(`everyone?device_id=${encodeURIComponent(device_id)}`, 'GET', t),
-  crew: (t: string) => send<{ groups: CrewGroup[]; feed: CrewPlay[]; favourites: CrewFavourite[] }>('crew', 'GET', t),
+  crew: (t: string) => send<CrewData>('crew', 'GET', t),
+  crewJoin: (t: string, code: string) => send<{ name: string }>('crew/join', 'POST', t, { code }),
+  crewRemove: (t: string, userId: string) => send<void>(`crew/${userId}`, 'DELETE', t),
   postScore: (t: string, s: ScoreSubmission) => send<{ rank: number }>('scores', 'POST', t, s).then((r) => r.rank),
   groupScores: (t: string, groupId: string, puzzleId: number) =>
     send<LeaderboardEntry[]>(`groups/${groupId}/scores/${puzzleId}`, 'GET', t),

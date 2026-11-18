@@ -89,11 +89,17 @@ const POLICY_HTML = `<!DOCTYPE html>
       time.
     </li>
     <li>
+      <strong>Your crew</strong> — the people you've connected with, one
+      at a time, by sharing or opening an invite link (people who were in a
+      group with you are connected too). Connections go both ways and you can
+      remove anyone. Your crew sees your name; their own friends don't.
+    </li>
+    <li>
       <strong>Finished games</strong> — if you're signed in and haven't
       turned it off in Settings (web app): which puzzles you finish, their
       level, which hint techniques you used, and — if you choose to answer —
-      whether you enjoyed it and learnt something. Members of your groups
-      see these so they can try the same puzzle. Your time isn't included.
+      whether you enjoyed it and learnt something. People in your crew see
+      these so they can try the same puzzle. Your time isn't included.
     </li>
     <li>
       <strong>Watching</strong> — someone in your crew can ask to watch

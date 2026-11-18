@@ -12,6 +12,7 @@ import { jsonError, jsonOk, readJson } from './http';
 import { requireAuth } from './auth';
 import { ensureSharedName } from './shared';
 import { addDays, dateInTimezone } from './daily';
+import { crewOf, inviteCodeFor } from './crew';
 
 const MODES = ['daily', 'past_daily', 'practice', 'shared', 'coop'];
 const DAY = 24 * 60 * 60 * 1000;
@@ -147,8 +148,10 @@ export async function getCrew(req: Request, env: Env): Promise<Response> {
   if (auth instanceof Response) return auth;
   const me = auth.user_id;
   const now = Date.now();
-  const crewSql = `SELECT DISTINCT gm2.user_id FROM group_members gm1
-                   JOIN group_members gm2 ON gm2.group_id = gm1.group_id WHERE gm1.user_id = ?`;
+  // Me and the people I'm connected to, as one bound JSON list.
+  const crew = await crewOf(env, me);
+  const ids = JSON.stringify([me, ...crew]);
+  const crewSql = 'SELECT value FROM json_each(?)';
 
   const [feedRes, favRes, mineRes, myScores] = await Promise.all([
     env.DB.prepare(
@@ -156,7 +159,7 @@ export async function getCrew(req: Request, env: Env): Promise<Response> {
        WHERE p.user_id IN (${crewSql}) AND p.completed_at > ?
        ORDER BY p.completed_at DESC LIMIT 40`,
     )
-      .bind(me, now - 14 * DAY)
+      .bind(ids, now - 14 * DAY)
       .all<PlayRow>(),
     // Favourites include your own ratings: it's the crew's taste, you're in the crew.
     env.DB.prepare(
@@ -169,7 +172,7 @@ export async function getCrew(req: Request, env: Env): Promise<Response> {
        GROUP BY p.puzzle_ref HAVING COUNT(p.enjoyment) > 0 AND AVG(p.enjoyment) >= 2
        ORDER BY loved DESC, avg DESC, last_at DESC LIMIT 12`,
     )
-      .bind(me, now - 60 * DAY)
+      .bind(ids, now - 60 * DAY)
       .all<{ puzzle_ref: string; difficulty: string; last_at: number; ratings: number; loved: number; avg: number; learnt: number; players: number; names: string }>(),
     env.DB.prepare('SELECT DISTINCT puzzle_ref FROM plays WHERE user_id = ?').bind(me).all<{ puzzle_ref: string }>(),
     env.DB.prepare('SELECT puzzle_id FROM scores WHERE user_id = ?').bind(me).all<{ puzzle_id: number }>(),
@@ -184,7 +187,7 @@ export async function getCrew(req: Request, env: Env): Promise<Response> {
      WHERE s.user_id IN (${crewSql}) AND s.completed_at > ?
      ORDER BY s.completed_at DESC LIMIT 60`,
   )
-    .bind(me, now - 14 * DAY)
+    .bind(ids, now - 14 * DAY)
     .all<{ user_id: string; puzzle_id: number; completed_at: number; difficulty: string; display_name: string | null }>();
   const posted = new Set(feedRes.results.map((p) => `${p.user_id}|${p.puzzle_ref}`));
 
@@ -211,7 +214,8 @@ export async function getCrew(req: Request, env: Env): Promise<Response> {
     }));
 
   return jsonOk({
-    groups: await crewGroups(env, me),
+    invite_code: await inviteCodeFor(env, me),
+    ...(await crewPeople(env, me, crew)),
     feed: [...feedRes.results.map((p) => ({
       id: String(p.id),
       who: p.display_name ?? 'Someone',
@@ -242,42 +246,29 @@ export async function getCrew(req: Request, env: Env): Promise<Response> {
 }
 
 /**
- * Each of my groups with its members and the days each played this week —
- * for the "Your crew" screen. A day counts if they finished a daily or any
- * other game (from `scores` and `plays`).
+ * Me and my crew, with the days each played this week — for the "Your crew"
+ * screen. A day counts if they finished a daily or any other game.
  */
-async function crewGroups(env: Env, me: string) {
+async function crewPeople(env: Env, me: string, crew: string[]) {
   const tz = env.DAILY_TIMEZONE;
   const today = dateInTimezone(new Date(), tz);
   const days = Array.from({ length: 7 }, (_, i) => addDays(today, i - 6));
   const since = Date.now() - 8 * DAY;
-  const [groups, members, sc, pl] = await Promise.all([
+  const ids = JSON.stringify([me, ...crew]);
+  const [people, sc, pl] = await Promise.all([
     env.DB.prepare(
-      `SELECT g.id, g.name, g.invite_code, g.created_by FROM groups g JOIN group_members m ON m.group_id = g.id
-       WHERE m.user_id = ? ORDER BY m.joined_at`,
+      `SELECT u.id, u.display_name,
+              MAX(COALESCE((SELECT MAX(completed_at) FROM scores s WHERE s.user_id = u.id), 0),
+                  COALESCE((SELECT MAX(completed_at) FROM plays p WHERE p.user_id = u.id), 0)) AS last_at
+       FROM users u WHERE u.id IN (SELECT value FROM json_each(?))`,
     )
-      .bind(me)
-      .all<{ id: string; name: string; invite_code: string; created_by: string }>(),
-    env.DB.prepare(
-      `SELECT m.group_id, m.user_id, u.display_name,
-              MAX(COALESCE((SELECT MAX(completed_at) FROM scores s WHERE s.user_id = m.user_id), 0),
-                  COALESCE((SELECT MAX(completed_at) FROM plays p WHERE p.user_id = m.user_id), 0)) AS last_at
-       FROM group_members m JOIN users u ON u.id = m.user_id
-       WHERE m.group_id IN (SELECT group_id FROM group_members WHERE user_id = ?)`,
-    )
-      .bind(me)
-      .all<{ group_id: string; user_id: string; display_name: string | null; last_at: number }>(),
-    env.DB.prepare(
-      `SELECT user_id, completed_at FROM scores WHERE completed_at > ? AND user_id IN
-         (SELECT gm2.user_id FROM group_members gm1 JOIN group_members gm2 ON gm2.group_id = gm1.group_id WHERE gm1.user_id = ?)`,
-    )
-      .bind(since, me)
+      .bind(ids)
+      .all<{ id: string; display_name: string | null; last_at: number }>(),
+    env.DB.prepare('SELECT user_id, completed_at FROM scores WHERE completed_at > ? AND user_id IN (SELECT value FROM json_each(?))')
+      .bind(since, ids)
       .all<{ user_id: string; completed_at: number }>(),
-    env.DB.prepare(
-      `SELECT user_id, completed_at FROM plays WHERE completed_at > ? AND user_id IN
-         (SELECT gm2.user_id FROM group_members gm1 JOIN group_members gm2 ON gm2.group_id = gm1.group_id WHERE gm1.user_id = ?)`,
-    )
-      .bind(since, me)
+    env.DB.prepare('SELECT user_id, completed_at FROM plays WHERE completed_at > ? AND user_id IN (SELECT value FROM json_each(?))')
+      .bind(since, ids)
       .all<{ user_id: string; completed_at: number }>(),
   ]);
   const played = new Map<string, Set<string>>();
@@ -285,22 +276,18 @@ async function crewGroups(env: Env, me: string) {
     if (!played.has(r.user_id)) played.set(r.user_id, new Set());
     played.get(r.user_id)!.add(dateInTimezone(new Date(r.completed_at), tz));
   }
-  return groups.results.map((g) => ({
-    id: g.id,
-    name: g.name,
-    invite_code: g.invite_code,
-    can_rename: g.created_by === me,
+  return {
     days,
-    members: members.results
-      .filter((m) => m.group_id === g.id)
+    people: people.results
       .map((m) => ({
+        id: m.id,
         name: m.display_name ?? 'Someone',
-        you: m.user_id === me,
-        played: days.filter((d) => played.get(m.user_id)?.has(d)),
+        you: m.id === me,
+        played: days.filter((d) => played.get(m.id)?.has(d)),
         last_at: m.last_at || null,
       }))
       .sort((a, b) => Number(b.you) - Number(a.you) || b.played.length - a.played.length || (b.last_at ?? 0) - (a.last_at ?? 0)),
-  }));
+  };
 }
 
 // --- Everyone (anonymous) ----------------------------------------------------
@@ -335,11 +322,10 @@ export async function postPulse(req: Request, env: Env): Promise<Response> {
     ? (
         await env.DB.prepare(
           `SELECT p.user_id, MAX(p.watchable) AS watchable, u.display_name FROM presence p JOIN users u ON u.id = p.user_id
-           WHERE p.playing = 1 AND p.visible = 1 AND p.at > ?1 AND p.user_id != ?2 AND p.user_id IN
-             (SELECT gm2.user_id FROM group_members gm1 JOIN group_members gm2 ON gm2.group_id = gm1.group_id WHERE gm1.user_id = ?2)
+           WHERE p.playing = 1 AND p.visible = 1 AND p.at > ?1 AND p.user_id IN (SELECT value FROM json_each(?2))
            GROUP BY p.user_id`,
         )
-          .bind(now - 150_000, me)
+          .bind(now - 150_000, JSON.stringify(await crewOf(env, me)))
           .all<{ user_id: string; watchable: number; display_name: string | null }>()
       ).results.map((r) => ({ id: r.user_id, name: r.display_name ?? 'Someone', watchable: r.watchable === 1 }))
     : [];
