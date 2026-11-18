@@ -3,9 +3,10 @@
 // board. Deliberately not competitive: no times, no ranks. Plus the two-tap
 // "How was it?" on the Solved sheet that feeds it.
 
-import { useState } from 'preact/hooks';
+import { useEffect, useState } from 'preact/hooks';
 import { store, useStore } from '../app/store';
-import type { CrewFavourite, CrewGroup, CrewPlay, Enjoyment } from '../lib/api';
+import { api, type CrewFavourite, type CrewGroup, type CrewPlay, type Enjoyment } from '../lib/api';
+import { deviceId } from '../lib/usage';
 import { dateFromDailyId, weekdayDate } from '../lib/format';
 import { difficultyLabel } from '../engine/types';
 import { techniqueLabel, type TutorTechnique } from '../engine/tutor';
@@ -85,7 +86,8 @@ function FavouriteRow({ f }: { f: CrewFavourite }) {
   const bits: string[] = [];
   if (f.loved) bits.push(`😍 × ${f.loved}`);
   if (f.learnt) bits.push(`${f.learnt} learnt something`);
-  bits.push(f.names.slice(0, 3).join(', ') + (f.names.length > 3 ? ` +${f.names.length - 3}` : ''));
+  if (f.names.length) bits.push(f.names.slice(0, 3).join(', ') + (f.names.length > 3 ? ` +${f.names.length - 3}` : ''));
+  else bits.push(`${f.players} ${f.players === 1 ? 'player' : 'players'}`);
   const label = what(f);
   return (
     <div class="row crew-row">
@@ -270,7 +272,10 @@ export function CrewSheet({ tab: initial }: { tab?: 'recent' | 'favourites' }) {
       ) : crew?.favourites.length ? (
         <>
           <p class="muted small" style={{ margin: '12px 2px 0' }}>
-            Puzzles your crew enjoyed most in the last two months.
+            Puzzles your crew enjoyed most in the last two months.{' '}
+            <button class="link inline" onClick={() => s.open({ kind: 'everyone' })}>
+              What everyone loved ›
+            </button>
           </p>
           <div class="group" style={{ marginTop: 8 }}>
             {crew.favourites.map((f) => (
@@ -379,7 +384,75 @@ export function RatePlay() {
           Not really
         </button>
       </div>
-      {s.groups.length > 0 && <div class="muted small rate-note">Your group sees this, not your time.</div>}
+      <div class="muted small rate-note">
+        {s.identity && s.groups.length > 0 ? 'Your crew sees this, not your time.' : 'Helps others find puzzles they’ll enjoy. No names, no times.'}
+      </div>
     </div>
+  );
+}
+
+/** "● 3 playing now · 14 solved today's daily" — anonymous, for everyone. Tapping opens Everyone. */
+export function PulseLine() {
+  const s = useStore();
+  const p = s.pulse;
+  if (!p || (p.playing_now === 0 && p.solved_today === 0)) return null;
+  const bits: string[] = [];
+  if (p.playing_now > 0) bits.push(`${p.playing_now} playing right now`);
+  if (p.solved_today > 0) bits.push(`${p.solved_today} solved today’s daily`);
+  return (
+    <button class="pulse-line" onClick={() => s.open({ kind: 'everyone' })}>
+      {p.playing_now > 0 && <span class="pulse-dot" aria-hidden="true" />}
+      {bits.join(' · ')}
+    </button>
+  );
+}
+
+/** Everyone: live counts and the puzzles all players loved this week. No names. */
+export function EveryoneSheet() {
+  const s = useStore();
+  const [data, setData] = useState<{ favourites: CrewFavourite[] } | null>(null);
+  const [failed, setFailed] = useState(false);
+  useEffect(() => {
+    api
+      .everyone(s.token, deviceId())
+      .then((r) => {
+        s.pulse = { playing_now: r.playing_now, solved_today: r.solved_today };
+        setData(r);
+      })
+      .catch(() => setFailed(true));
+  }, []);
+  const p = s.pulse;
+  return (
+    <Sheet title="Everyone">
+      <div class="everyone-stats">
+        <div>
+          <b>{p?.playing_now ?? '–'}</b>
+          <span>
+            {p?.playing_now ? <span class="pulse-dot" aria-hidden="true" /> : null}playing right now
+          </span>
+        </div>
+        <div>
+          <b>{p?.solved_today ?? '–'}</b>
+          <span>solved today’s daily</span>
+        </div>
+      </div>
+      <div class="section-title">Most loved this week</div>
+      {failed ? (
+        <p class="muted">Couldn’t load this. Check your connection.</p>
+      ) : !data ? (
+        <p class="muted">Loading…</p>
+      ) : data.favourites.length ? (
+        <div class="group">
+          {data.favourites.map((f) => (
+            <FavouriteRow key={`${f.puzzle_id ?? f.name}`} f={f} />
+          ))}
+        </div>
+      ) : (
+        <p class="muted">Nothing rated yet this week. Rate a puzzle after you solve it and it could show up here.</p>
+      )}
+      <p class="muted small" style={{ marginTop: 14 }}>
+        Everyone who plays Sudoku Crew, counted without names.
+      </p>
+    </Sheet>
   );
 }

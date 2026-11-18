@@ -23,7 +23,7 @@ let timer: number | null = null;
 let sending = false;
 let tokenFn: () => string | null = () => null;
 
-function deviceId(): string {
+export function deviceId(): string {
   let id = readJSON<string | null>(DEVICE_KEY, null);
   if (!id) {
     id = crypto.randomUUID?.() ?? `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 12)}`;

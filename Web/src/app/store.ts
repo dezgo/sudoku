@@ -20,6 +20,7 @@ import {
   type CrewPlay,
   type Enjoyment,
   type GroupListItem,
+  type Pulse,
   type ScoreSubmission,
 } from '../lib/api';
 import { playSound } from '../lib/sound';
@@ -40,7 +41,7 @@ import {
 } from '../lib/storage';
 import { requestPuzzle } from './puzzles';
 import { formatTime, localDailyId } from '../lib/format';
-import { flushUsage, initUsage, track } from '../lib/usage';
+import { deviceId, flushUsage, initUsage, track } from '../lib/usage';
 
 export type Phase = 'home' | 'playing';
 
@@ -49,7 +50,7 @@ export type GameMode = 'daily' | 'past_daily' | 'practice' | 'shared' | 'coop';
 
 /** Sheets worth counting in the usage stats (the rest are steps inside these). */
 const TRACKED_SHEETS = new Set<Sheet['kind']>([
-  'newGame', 'games', 'settings', 'leaderboard', 'groupMembers', 'coach', 'history', 'multiplayer', 'feedback', 'share', 'crew',
+  'newGame', 'games', 'settings', 'leaderboard', 'groupMembers', 'coach', 'history', 'multiplayer', 'feedback', 'share', 'crew', 'everyone',
 ]);
 
 export type Sheet =
@@ -69,7 +70,8 @@ export type Sheet =
   | { kind: 'feedback' }
   | { kind: 'share'; puzzle: Puzzle; seconds?: number }
   | { kind: 'lifelines'; used: Lifeline[] }
-  | { kind: 'crew'; tab?: 'recent' | 'favourites' };
+  | { kind: 'crew'; tab?: 'recent' | 'favourites' }
+  | { kind: 'everyone' };
 
 
 interface Identity {
@@ -139,6 +141,9 @@ class Store {
   private hintTechniques = new Set<string>();
   /** What the crew has been playing (signed in, in a group). */
   crew: { groups: CrewGroup[]; feed: CrewPlay[]; favourites: CrewFavourite[] } | null = null;
+  /** Anonymous live counts: playing right now, solved today's daily. */
+  pulse: Pulse | null = null;
+  private pulseTimer: number | null = null;
   /** The game just solved, for its rating on the Solved sheet. */
   lastPlay: { id: number | null; enjoyment: Enjoyment | null; learnt: boolean | null; techniques: string[] } | null = null;
   private lastColorsTracked = 0;
@@ -286,6 +291,7 @@ class Store {
 
   private enterForeground(): void {
     track('open');
+    void this.sendPulse();
     if (this.coop && !this.coopSocket) this.connectCoop();
     void this.refreshDaily();
     if (this.token) void this.refreshGroups();
@@ -356,6 +362,7 @@ class Store {
     this.phase = 'playing';
     this.startTimer();
     this.emit();
+    void this.sendPulse(); // count this player as "playing now" straight away
   }
 
   resume(save: GameSave, mode?: GameMode): void {
@@ -466,6 +473,7 @@ class Store {
       this.phase = 'playing';
       this.startTimer();
       this.connectCoop();
+      void this.sendPulse();
     } catch (e) {
       const d = e instanceof ApiError ? e.detail : undefined;
       this.showToast(
@@ -668,6 +676,7 @@ class Store {
     this.phase = 'home';
     this.stopTimer();
     this.emit();
+    void this.sendPulse();
   }
 
   confirmReset(): void {
@@ -709,6 +718,7 @@ class Store {
 
   private onSolved(g: Game): void {
     this.stopTimer();
+    void this.sendPulse();
     this.tutor = null;
     const result: PuzzleResult = {
       puzzleID: g.puzzle.id,
@@ -749,14 +759,19 @@ class Store {
   /** Tell the crew about a finished game — unless the player turned that off. */
   private recordPlay(g: Game): void {
     this.lastPlay = null;
-    if (!this.token || !this.prefs.shareActivity || this.offlineDaily) return;
+    if (!this.prefs.shareActivity || this.offlineDaily) return;
     const mode: GameMode = this.coop ? 'coop' : this.gameMode;
     const daily = isDaily(g.puzzle) && !this.coop;
+    // Without an account only dailies and shared boards can be rated: other
+    // boards have no name anyone else could open.
+    if (!this.token && !daily && mode !== 'shared') return;
     const play = { id: null as number | null, enjoyment: null as Enjoyment | null, learnt: null as boolean | null, techniques: [...this.hintTechniques] };
     this.lastPlay = play;
     const token = this.token;
+    const device = token ? undefined : deviceId();
     api
       .postPlay(token, {
+        device_id: device,
         mode: daily ? (g.puzzle.id === this.todayId ? 'daily' : 'past_daily') : mode === 'daily' || mode === 'past_daily' ? 'practice' : mode,
         difficulty: g.puzzle.difficulty,
         ...(daily ? { puzzle_id: g.puzzle.id } : { givens: g.puzzle.givens }),
@@ -766,8 +781,8 @@ class Store {
       .then((r) => {
         play.id = r.id;
         // Rated before the post came back: send the answers now.
-        if (play.enjoyment !== null || play.learnt !== null)
-          void api.ratePlay(token, r.id, { enjoyment: play.enjoyment, learnt: play.learnt }).catch(() => {});
+        if (r.id !== null && (play.enjoyment !== null || play.learnt !== null))
+          void api.ratePlay(token, r.id, { enjoyment: play.enjoyment, learnt: play.learnt, device_id: device }).catch(() => {});
       })
       .catch(() => {
         /* best effort — the feed just won't show this one */
@@ -777,13 +792,30 @@ class Store {
   /** Answer "How was it?" / "Learn anything?" on the Solved sheet. Tapping the same answer again clears it. */
   ratePlay(answer: { enjoyment?: Enjoyment; learnt?: boolean }): void {
     const play = this.lastPlay;
-    if (!play || !this.token) return;
+    if (!play) return;
     const change: { enjoyment?: Enjoyment | null; learnt?: boolean | null } = {};
     if (answer.enjoyment !== undefined) change.enjoyment = play.enjoyment = play.enjoyment === answer.enjoyment ? null : answer.enjoyment;
     if (answer.learnt !== undefined) change.learnt = play.learnt = play.learnt === answer.learnt ? null : answer.learnt;
     track('feature', { f: 'rated', ...change });
-    if (play.id !== null) void api.ratePlay(this.token, play.id, change).catch(() => {});
+    if (play.id !== null)
+      void api.ratePlay(this.token, play.id, { ...change, device_id: this.token ? undefined : deviceId() }).catch(() => {});
     this.emit();
+  }
+
+  /** Heartbeat for "playing right now": on launch, on return, and every minute while the app is on screen. */
+  private async sendPulse(): Promise<void> {
+    if (document.hidden) return;
+    try {
+      this.pulse = await api.pulse(deviceId(), this.phase === 'playing' && !this.paused && !!this.game && !this.game.isSolved);
+      this.emit();
+    } catch {
+      /* offline: keep the last numbers */
+    }
+  }
+
+  private startPulse(): void {
+    void this.sendPulse();
+    if (this.pulseTimer === null) this.pulseTimer = window.setInterval(() => void this.sendPulse(), 60_000);
   }
 
   async refreshCrew(): Promise<void> {
@@ -1092,6 +1124,7 @@ class Store {
   async launch(): Promise<void> {
     track('open');
     void flushUsage();
+    this.startPulse();
     // Came back from the mail app to a fresh page: pick the sign-in up where it was.
     if (this.pendingSignIn() && !this.sheets.some((s) => s.kind === 'signIn')) this.open({ kind: 'signIn' });
     await Promise.all([

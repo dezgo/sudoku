@@ -17,10 +17,27 @@ const MODES = ['daily', 'past_daily', 'practice', 'shared', 'coop'];
 const DAY = 24 * 60 * 60 * 1000;
 const TECHNIQUE_RE = /^[a-zA-Z]{2,40}$/;
 
+const DEVICE_RE = /^[A-Za-z0-9-]{8,64}$/;
+
+/**
+ * Who a play belongs to: the signed-in account, or — for someone playing
+ * without an account — 'anon:<device id>'. Anonymous plays never appear in a
+ * crew (they belong to no group); they only add to the anonymous counts and
+ * "Most loved this week".
+ */
+async function owner(req: Request, env: Env, deviceId: unknown): Promise<{ id: string; anon: boolean } | Response> {
+  if (req.headers.get('authorization')) {
+    const auth = await requireAuth(req, env);
+    if (auth instanceof Response) return auth;
+    return { id: auth.user_id, anon: false };
+  }
+  if (typeof deviceId === 'string' && DEVICE_RE.test(deviceId)) return { id: `anon:${deviceId}`, anon: true };
+  return jsonError(401, 'unauthenticated');
+}
+
 export async function postPlay(req: Request, env: Env): Promise<Response> {
-  const auth = await requireAuth(req, env);
-  if (auth instanceof Response) return auth;
   const body = await readJson<{
+    device_id?: unknown;
     mode?: unknown;
     difficulty?: unknown;
     puzzle_id?: unknown;
@@ -28,9 +45,19 @@ export async function postPlay(req: Request, env: Env): Promise<Response> {
     techniques?: unknown;
     completed_at?: unknown;
   }>(req);
+  const who = await owner(req, env, body?.device_id);
+  if (who instanceof Response) return who;
+  const auth = { user_id: who.id };
   const mode = typeof body?.mode === 'string' && MODES.includes(body.mode) ? body.mode : null;
   const difficulty = typeof body?.difficulty === 'string' ? body.difficulty : '';
   if (!mode) return jsonError(400, 'invalid_mode');
+  if (who.anon) {
+    // No account to answer for: cap a device at a busy day's worth.
+    const n = await env.DB.prepare('SELECT COUNT(*) AS n FROM plays WHERE user_id = ? AND completed_at > ?')
+      .bind(who.id, Date.now() - DAY)
+      .first<{ n: number }>();
+    if ((n?.n ?? 0) >= 100) return jsonError(429, 'rate_limited');
+  }
 
   let ref: string | null = null;
   if (mode === 'daily' || mode === 'past_daily') {
@@ -41,6 +68,14 @@ export async function postPlay(req: Request, env: Env): Promise<Response> {
       .first<{ difficulty: string }>();
     if (!row) return jsonError(400, 'invalid_puzzle');
     ref = `d:${id}`;
+  } else if (who.anon) {
+    // Without an account we can't make a new shared name (it needs an owner),
+    // so only boards that already have one — e.g. opened from a share link — count.
+    const row = await env.DB.prepare('SELECT name FROM shared_puzzles WHERE givens = ? ORDER BY created_at LIMIT 1')
+      .bind(JSON.stringify(body?.givens))
+      .first<{ name: string }>();
+    if (!row) return jsonOk({ id: null, ref: null });
+    ref = `s:${row.name}`;
   } else {
     const name = await ensureSharedName(env, auth.user_id, body?.givens, difficulty);
     if (!name) return jsonError(400, 'invalid_puzzle');
@@ -69,14 +104,15 @@ export async function postPlay(req: Request, env: Env): Promise<Response> {
 }
 
 export async function ratePlay(req: Request, env: Env, id: number): Promise<Response> {
-  const auth = await requireAuth(req, env);
-  if (auth instanceof Response) return auth;
-  const body = await readJson<{ enjoyment?: unknown; learnt?: unknown }>(req);
+  const body = await readJson<{ enjoyment?: unknown; learnt?: unknown; device_id?: unknown }>(req);
+  const who = await owner(req, env, body?.device_id);
+  if (who instanceof Response) return who;
+  const auth = { user_id: who.id };
   const enjoyment = body?.enjoyment === null ? null : Number(body?.enjoyment);
   const learnt = body?.learnt === null ? null : body?.learnt === true ? 1 : body?.learnt === false ? 0 : undefined;
   const sets: string[] = [];
   const vals: (number | null)[] = [];
-  if (body && 'enjoyment' in body) {
+  if (body && 'enjoyment' in body && body.enjoyment !== undefined) {
     if (enjoyment !== null && ![1, 2, 3].includes(enjoyment)) return jsonError(400, 'invalid_enjoyment');
     sets.push('enjoyment = ?');
     vals.push(enjoyment);
@@ -265,4 +301,104 @@ async function crewGroups(env: Env, me: string) {
       }))
       .sort((a, b) => Number(b.you) - Number(a.you) || b.played.length - a.played.length || (b.last_at ?? 0) - (a.last_at ?? 0)),
   }));
+}
+
+// --- Everyone (anonymous) ----------------------------------------------------
+
+/**
+ * POST /v1/pulse { device_id, playing } — the heartbeat behind "playing right
+ * now". Returns the live counts: other devices with a game running in the
+ * last two and a half minutes, and how many people have solved today's daily.
+ * No names, ever.
+ */
+export async function postPulse(req: Request, env: Env): Promise<Response> {
+  const body = await readJson<{ device_id?: unknown; playing?: unknown }>(req);
+  const device = typeof body?.device_id === 'string' && DEVICE_RE.test(body.device_id) ? body.device_id : null;
+  const now = Date.now();
+  if (device)
+    await env.DB.prepare(
+      'INSERT INTO presence (device_id, playing, at) VALUES (?1, ?2, ?3) ON CONFLICT(device_id) DO UPDATE SET playing = ?2, at = ?3',
+    )
+      .bind(device, body?.playing === true ? 1 : 0, now)
+      .run();
+  const counts = await liveCounts(env);
+  const mine = device && body?.playing === true ? 1 : 0;
+  return jsonOk({ playing_now: Math.max(0, counts.playing - mine), solved_today: counts.solvedToday });
+}
+
+// A minute-ish of staleness is fine and keeps a busy day cheap: each copy of
+// the Worker recomputes at most every 10 seconds.
+let cached: { at: number; playing: number; solvedToday: number } | null = null;
+
+async function liveCounts(env: Env): Promise<{ playing: number; solvedToday: number }> {
+  const now = Date.now();
+  if (cached && now - cached.at < 10_000) return cached;
+  const today = dateToId(dateInTimezone(new Date(now), env.DAILY_TIMEZONE));
+  const [p, solved] = await Promise.all([
+    env.DB.prepare('SELECT COUNT(*) AS n FROM presence WHERE playing = 1 AND at > ?')
+      .bind(now - 150_000)
+      .first<{ n: number }>(),
+    // Signed-in solves are in scores; account-less ones only in plays.
+    env.DB.prepare(
+      `SELECT (SELECT COUNT(DISTINCT user_id) FROM scores WHERE puzzle_id = ?1)
+            + (SELECT COUNT(DISTINCT user_id) FROM plays WHERE puzzle_ref = ?2 AND user_id LIKE 'anon:%') AS n`,
+    )
+      .bind(today, `d:${today}`)
+      .first<{ n: number }>(),
+  ]);
+  cached = { at: now, playing: p?.n ?? 0, solvedToday: solved?.n ?? 0 };
+  return cached;
+}
+
+const dateToId = (d: string) => parseInt(d.replace(/-/g, ''), 10);
+
+/** GET /v1/everyone?device_id= — puzzles everyone loved this week, anonymously. */
+export async function getEveryone(req: Request, env: Env, deviceId: string | null): Promise<Response> {
+  let me: string | null = null;
+  if (req.headers.get('authorization')) {
+    const auth = await requireAuth(req, env);
+    if (!(auth instanceof Response)) me = auth.user_id;
+  }
+  const anon = deviceId && DEVICE_RE.test(deviceId) ? `anon:${deviceId}` : null;
+  const [fav, mine, scores] = await Promise.all([
+    env.DB.prepare(
+      `SELECT puzzle_ref, MAX(difficulty) AS difficulty, COUNT(enjoyment) AS ratings, SUM(enjoyment = 3) AS loved,
+              AVG(enjoyment) AS avg, SUM(learnt = 1) AS learnt, COUNT(DISTINCT user_id) AS players, MAX(completed_at) AS last_at
+       FROM plays WHERE completed_at > ?
+       GROUP BY puzzle_ref HAVING COUNT(enjoyment) > 0 AND AVG(enjoyment) >= 2
+       ORDER BY loved DESC, avg DESC, players DESC, last_at DESC LIMIT 15`,
+    )
+      .bind(Date.now() - 7 * DAY)
+      .all<{ puzzle_ref: string; difficulty: string; ratings: number; loved: number; learnt: number; players: number; last_at: number }>(),
+    env.DB.prepare('SELECT DISTINCT puzzle_ref FROM plays WHERE user_id IN (?, ?)')
+      .bind(me ?? '-', anon ?? '-')
+      .all<{ puzzle_ref: string }>(),
+    me
+      ? env.DB.prepare('SELECT puzzle_id FROM scores WHERE user_id = ?').bind(me).all<{ puzzle_id: number }>()
+      : Promise.resolve({ results: [] as { puzzle_id: number }[] }),
+  ]);
+  const done = new Set(mine.results.map((r) => r.puzzle_ref));
+  for (const s of scores.results) done.add(`d:${s.puzzle_id}`);
+  const counts = await liveCounts(env);
+  return jsonOk({
+    playing_now: counts.playing,
+    solved_today: counts.solvedToday,
+    favourites: fav.results.map((f) => ({
+      ...(f.puzzle_ref.startsWith('d:')
+        ? { puzzle_id: Number(f.puzzle_ref.slice(2)), name: null }
+        : { puzzle_id: null, name: f.puzzle_ref.slice(2) }),
+      difficulty: f.difficulty,
+      ratings: f.ratings,
+      loved: f.loved,
+      learnt: f.learnt ?? 0,
+      players: f.players,
+      names: [] as string[],
+      last_at: f.last_at,
+      done: done.has(f.puzzle_ref),
+    })),
+  });
+}
+
+export async function prunePresence(env: Env): Promise<void> {
+  await env.DB.prepare('DELETE FROM presence WHERE at < ?').bind(Date.now() - DAY).run();
 }

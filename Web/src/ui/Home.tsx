@@ -5,7 +5,7 @@ import { dateFromDailyId, displayLabel, formatTime, weekdayDate } from '../lib/f
 import { addDays, FIRST_DAILY_ID, streakStats } from '../lib/streaks';
 import { Icon } from './icons';
 import { InstallHint } from './InstallHint';
-import { CrewCard, inviteFriend } from './Crew';
+import { CrewCard, inviteFriend, PulseLine } from './Crew';
 
 export function Home() {
   const s = useStore();
@@ -41,6 +41,7 @@ export function Home() {
       <InstallHint />
 
       <h1 class="home-title">Sudoku Crew</h1>
+      <PulseLine />
 
       <div class="home-buttons">
         {done ? (

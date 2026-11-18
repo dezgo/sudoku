@@ -96,6 +96,13 @@ const POLICY_HTML = `<!DOCTYPE html>
       see these so they can try the same puzzle. Your time isn't included.
     </li>
     <li>
+      <strong>Without an account</strong> (web app): if you finish a daily
+      or a shared puzzle and rate it, we keep the puzzle, its level and your
+      answers against the app's random device ID — no name or email. And
+      while the app is open it tells us, about once a minute, whether a game
+      is running, so we can show how many people are playing right now.
+    </li>
+    <li>
       <strong>Feedback</strong> — if you send feedback (web app): your
       message, which screen you were on, your browser and device type, and
       — so we can reply — your display name and email if you're signed in,
@@ -150,6 +157,9 @@ const POLICY_HTML = `<!DOCTYPE html>
     <li>Reading and replying to feedback you send.</li>
     <li>Showing your groups which puzzles you've finished and enjoyed, if
     you've left that on.</li>
+    <li>Showing every player anonymous totals — how many people are playing
+    right now, how many solved today's daily, and the puzzles rated most
+    enjoyable this week. These never include names.</li>
     <li>Seeing how the app is used — how many people play, how often, and
     which features they use — so we know what to improve.</li>
   </ul>

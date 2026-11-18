@@ -20,7 +20,7 @@ import { getAndroidAssetLinks, getAppleAppSiteAssociation } from './well-known';
 import { createSharedPuzzle, getSharedPuzzle, SHARE_NAME_RE } from './shared';
 import { postFeedback } from './feedback';
 import { postUsage, pruneUsage } from './usage';
-import { getCrew, postPlay, ratePlay } from './plays';
+import { getCrew, getEveryone, postPlay, postPulse, prunePresence, ratePlay } from './plays';
 import { getAdminReport, sendWeeklyReport } from './report';
 import { getStatsPage } from './stats-page';
 import { connectCoopGame, createCoopGame, joinCoopGame, listMyCoopGames } from './coop';
@@ -78,6 +78,13 @@ export default {
       await processForfeits(env, ctx);
     } catch (err) {
       console.error('scheduled task: forfeits failed', err);
+    }
+    if (event.cron === '0 * * * *') {
+      try {
+        await prunePresence(env);
+      } catch (err) {
+        console.error('scheduled task: presence prune failed', err);
+      }
     }
   },
 };
@@ -188,6 +195,8 @@ async function route(req: Request, env: Env, ctx: ExecutionContext): Promise<Res
   const playMatch = path.match(/^\/v1\/plays\/(\d+)$/);
   if (playMatch && method === 'PUT') return ratePlay(req, env, parseInt(playMatch[1]!, 10));
   if (path === '/v1/crew' && method === 'GET') return getCrew(req, env);
+  if (path === '/v1/pulse' && method === 'POST') return postPulse(req, env);
+  if (path === '/v1/everyone' && method === 'GET') return getEveryone(req, env, url.searchParams.get('device_id'));
   if (path === '/v1/admin/report' && method === 'GET') {
     return getAdminReport(req, env, parseInt(url.searchParams.get('days') ?? '7', 10));
   }

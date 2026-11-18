@@ -188,7 +188,12 @@ export interface CrewFavourite {
   last_at: number;
   done: boolean;
 }
+export interface Pulse {
+  playing_now: number;
+  solved_today: number;
+}
 export interface PlaySubmission {
+  device_id?: string;
   mode: string;
   difficulty: Difficulty;
   puzzle_id?: number;
@@ -276,9 +281,12 @@ export const api = {
   coopMine: (t: string) => send<{ games: CoopGameSummary[] }>('me/coop', 'GET', t).then((r) => r.games),
   feedback: (t: string | null, message: string, email: string | undefined, context: string) =>
     send<{ ok: true }>('feedback', 'POST', t, { message, email, context }),
-  postPlay: (t: string, p: PlaySubmission) => send<{ id: number; ref: string }>('plays', 'POST', t, p),
-  ratePlay: (t: string, id: number, r: { enjoyment?: Enjoyment | null; learnt?: boolean | null }) =>
+  postPlay: (t: string | null, p: PlaySubmission) => send<{ id: number | null; ref: string | null }>('plays', 'POST', t, p),
+  ratePlay: (t: string | null, id: number, r: { enjoyment?: Enjoyment | null; learnt?: boolean | null; device_id?: string }) =>
     send<void>(`plays/${id}`, 'PUT', t, r),
+  pulse: (device_id: string, playing: boolean) => send<Pulse>('pulse', 'POST', null, { device_id, playing }),
+  everyone: (t: string | null, device_id: string) =>
+    send<Pulse & { favourites: CrewFavourite[] }>(`everyone?device_id=${encodeURIComponent(device_id)}`, 'GET', t),
   crew: (t: string) => send<{ groups: CrewGroup[]; feed: CrewPlay[]; favourites: CrewFavourite[] }>('crew', 'GET', t),
   postScore: (t: string, s: ScoreSubmission) => send<{ rank: number }>('scores', 'POST', t, s).then((r) => r.rank),
   groupScores: (t: string, groupId: string, puzzleId: number) =>

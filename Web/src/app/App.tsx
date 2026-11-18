@@ -7,7 +7,7 @@ import { applyColors } from '../lib/colors';
 import { Home } from '../ui/Home';
 import { Play } from '../ui/Play';
 import { CoachSheet } from '../ui/Coach';
-import { CrewSheet } from '../ui/Crew';
+import { CrewSheet, EveryoneSheet } from '../ui/Crew';
 import { LifelinesSheet } from '../ui/Lifelines';
 import { HistorySheet } from '../ui/History';
 import { MultiplayerSheet } from '../ui/Multiplayer';
@@ -50,6 +50,8 @@ function renderSheet(sheet: Sheet, i: number) {
       return <ShareSheet key={i} puzzle={sheet.puzzle} seconds={sheet.seconds} />;
     case 'crew':
       return <CrewSheet key={i} tab={sheet.tab} />;
+    case 'everyone':
+      return <EveryoneSheet key={i} />;
   }
 }
 
