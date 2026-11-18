@@ -72,11 +72,11 @@ function PlayRow({ p }: { p: CrewPlay }) {
       <Initial name={p.who} />
       <div class="grow">
         <div>
-          <b>{p.who}</b> finished {what(p)}
+          <b>{p.you ? 'You' : p.who}</b> finished {what(p)}
         </div>
         <div class="sub">{bits.join(' · ')}</div>
       </div>
-      <TryButton done={p.done} onClick={() => store.tryFromCrew(p)} />
+      {!p.you && <TryButton done={p.done} onClick={() => store.tryFromCrew(p)} />}
     </div>
   );
 }

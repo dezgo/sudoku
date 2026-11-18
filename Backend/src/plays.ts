@@ -117,10 +117,10 @@ export async function getCrew(req: Request, env: Env): Promise<Response> {
   const [feedRes, favRes, mineRes, myScores] = await Promise.all([
     env.DB.prepare(
       `SELECT p.*, u.display_name FROM plays p JOIN users u ON u.id = p.user_id
-       WHERE p.user_id IN (${crewSql}) AND p.user_id != ? AND p.completed_at > ?
+       WHERE p.user_id IN (${crewSql}) AND p.completed_at > ?
        ORDER BY p.completed_at DESC LIMIT 40`,
     )
-      .bind(me, me, now - 14 * DAY)
+      .bind(me, now - 14 * DAY)
       .all<PlayRow>(),
     // Favourites include your own ratings: it's the crew's taste, you're in the crew.
     env.DB.prepare(
@@ -145,10 +145,10 @@ export async function getCrew(req: Request, env: Env): Promise<Response> {
   const crewScores = await env.DB.prepare(
     `SELECT s.user_id, s.puzzle_id, s.completed_at, d.difficulty, u.display_name
      FROM scores s JOIN users u ON u.id = s.user_id JOIN daily_puzzles d ON d.puzzle_id = s.puzzle_id
-     WHERE s.user_id IN (${crewSql}) AND s.user_id != ? AND s.completed_at > ?
+     WHERE s.user_id IN (${crewSql}) AND s.completed_at > ?
      ORDER BY s.completed_at DESC LIMIT 60`,
   )
-    .bind(me, me, now - 14 * DAY)
+    .bind(me, now - 14 * DAY)
     .all<{ user_id: string; puzzle_id: number; completed_at: number; difficulty: string; display_name: string | null }>();
   const posted = new Set(feedRes.results.map((p) => `${p.user_id}|${p.puzzle_ref}`));
 
@@ -162,6 +162,7 @@ export async function getCrew(req: Request, env: Env): Promise<Response> {
     .map((sc) => ({
       id: `s${sc.puzzle_id}-${sc.user_id}`,
       who: sc.display_name ?? 'Someone',
+      you: sc.user_id === me,
       puzzle_id: sc.puzzle_id,
       name: null,
       mode: 'daily',
@@ -178,6 +179,7 @@ export async function getCrew(req: Request, env: Env): Promise<Response> {
     feed: [...feedRes.results.map((p) => ({
       id: String(p.id),
       who: p.display_name ?? 'Someone',
+      you: p.user_id === me,
       ...where(p.puzzle_ref),
       mode: p.mode,
       difficulty: p.difficulty,

@@ -164,6 +164,8 @@ export interface CrewGroup {
 export interface CrewPlay {
   id: string;
   who: string;
+  /** My own game — shown as "You finished…", with nothing to try. */
+  you: boolean;
   puzzle_id: number | null;
   name: string | null;
   mode: string;
