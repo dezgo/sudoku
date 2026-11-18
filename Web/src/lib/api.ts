@@ -151,8 +151,16 @@ export interface MultiplayerGameDetail {
 
 /** Crew feed (Backend/src/plays.ts). A board is a daily (puzzle_id) or a shared puzzle (name). */
 export type Enjoyment = 1 | 2 | 3;
+export interface CrewGroup {
+  id: string;
+  name: string;
+  invite_code: string;
+  /** The last 7 days, oldest first ('YYYY-MM-DD'). */
+  days: string[];
+  members: { name: string; you: boolean; played: string[]; last_at: number | null }[];
+}
 export interface CrewPlay {
-  id: number;
+  id: string;
   who: string;
   puzzle_id: number | null;
   name: string | null;
@@ -265,7 +273,7 @@ export const api = {
   postPlay: (t: string, p: PlaySubmission) => send<{ id: number; ref: string }>('plays', 'POST', t, p),
   ratePlay: (t: string, id: number, r: { enjoyment?: Enjoyment | null; learnt?: boolean | null }) =>
     send<void>(`plays/${id}`, 'PUT', t, r),
-  crew: (t: string) => send<{ feed: CrewPlay[]; favourites: CrewFavourite[] }>('crew', 'GET', t),
+  crew: (t: string) => send<{ groups: CrewGroup[]; feed: CrewPlay[]; favourites: CrewFavourite[] }>('crew', 'GET', t),
   postScore: (t: string, s: ScoreSubmission) => send<{ rank: number }>('scores', 'POST', t, s).then((r) => r.rank),
   groupScores: (t: string, groupId: string, puzzleId: number) =>
     send<LeaderboardEntry[]>(`groups/${groupId}/scores/${puzzleId}`, 'GET', t),

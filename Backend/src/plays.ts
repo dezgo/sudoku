@@ -11,6 +11,7 @@ import type { Env } from './types';
 import { jsonError, jsonOk, readJson } from './http';
 import { requireAuth } from './auth';
 import { ensureSharedName } from './shared';
+import { addDays, dateInTimezone } from './daily';
 
 const MODES = ['daily', 'past_daily', 'practice', 'shared', 'coop'];
 const DAY = 24 * 60 * 60 * 1000;
@@ -138,14 +139,44 @@ export async function getCrew(req: Request, env: Env): Promise<Response> {
     env.DB.prepare('SELECT puzzle_id FROM scores WHERE user_id = ?').bind(me).all<{ puzzle_id: number }>(),
   ]);
 
+  // Dailies finished before the feed existed (or by players on the old store
+  // apps) are already in `scores` and already visible to the group on the
+  // leaderboard, so show those too — with no rating, and no time.
+  const crewScores = await env.DB.prepare(
+    `SELECT s.user_id, s.puzzle_id, s.completed_at, d.difficulty, u.display_name
+     FROM scores s JOIN users u ON u.id = s.user_id JOIN daily_puzzles d ON d.puzzle_id = s.puzzle_id
+     WHERE s.user_id IN (${crewSql}) AND s.user_id != ? AND s.completed_at > ?
+     ORDER BY s.completed_at DESC LIMIT 60`,
+  )
+    .bind(me, me, now - 14 * DAY)
+    .all<{ user_id: string; puzzle_id: number; completed_at: number; difficulty: string; display_name: string | null }>();
+  const posted = new Set(feedRes.results.map((p) => `${p.user_id}|${p.puzzle_ref}`));
+
   const done = new Set(mineRes.results.map((r) => r.puzzle_ref));
   for (const s of myScores.results) done.add(`d:${s.puzzle_id}`);
   const where = (ref: string) =>
     ref.startsWith('d:') ? { puzzle_id: Number(ref.slice(2)), name: null } : { puzzle_id: null, name: ref.slice(2) };
 
+  const fromScores = crewScores.results
+    .filter((sc) => !posted.has(`${sc.user_id}|d:${sc.puzzle_id}`))
+    .map((sc) => ({
+      id: `s${sc.puzzle_id}-${sc.user_id}`,
+      who: sc.display_name ?? 'Someone',
+      puzzle_id: sc.puzzle_id,
+      name: null,
+      mode: 'daily',
+      difficulty: sc.difficulty,
+      techniques: [] as string[],
+      enjoyment: null,
+      learnt: null,
+      completed_at: sc.completed_at,
+      done: done.has(`d:${sc.puzzle_id}`),
+    }));
+
   return jsonOk({
-    feed: feedRes.results.map((p) => ({
-      id: p.id,
+    groups: await crewGroups(env, me),
+    feed: [...feedRes.results.map((p) => ({
+      id: String(p.id),
       who: p.display_name ?? 'Someone',
       ...where(p.puzzle_ref),
       mode: p.mode,
@@ -155,7 +186,9 @@ export async function getCrew(req: Request, env: Env): Promise<Response> {
       learnt: p.learnt === null ? null : p.learnt === 1,
       completed_at: p.completed_at,
       done: done.has(p.puzzle_ref),
-    })),
+    })), ...fromScores]
+      .sort((a, b) => b.completed_at - a.completed_at)
+      .slice(0, 40),
     favourites: favRes.results.map((f) => ({
       ...where(f.puzzle_ref),
       difficulty: f.difficulty,
@@ -168,4 +201,65 @@ export async function getCrew(req: Request, env: Env): Promise<Response> {
       done: done.has(f.puzzle_ref),
     })),
   });
+}
+
+/**
+ * Each of my groups with its members and the days each played this week —
+ * for the "Your crew" screen. A day counts if they finished a daily or any
+ * other game (from `scores` and `plays`).
+ */
+async function crewGroups(env: Env, me: string) {
+  const tz = env.DAILY_TIMEZONE;
+  const today = dateInTimezone(new Date(), tz);
+  const days = Array.from({ length: 7 }, (_, i) => addDays(today, i - 6));
+  const since = Date.now() - 8 * DAY;
+  const [groups, members, sc, pl] = await Promise.all([
+    env.DB.prepare(
+      `SELECT g.id, g.name, g.invite_code FROM groups g JOIN group_members m ON m.group_id = g.id
+       WHERE m.user_id = ? ORDER BY m.joined_at`,
+    )
+      .bind(me)
+      .all<{ id: string; name: string; invite_code: string }>(),
+    env.DB.prepare(
+      `SELECT m.group_id, m.user_id, u.display_name,
+              MAX(COALESCE((SELECT MAX(completed_at) FROM scores s WHERE s.user_id = m.user_id), 0),
+                  COALESCE((SELECT MAX(completed_at) FROM plays p WHERE p.user_id = m.user_id), 0)) AS last_at
+       FROM group_members m JOIN users u ON u.id = m.user_id
+       WHERE m.group_id IN (SELECT group_id FROM group_members WHERE user_id = ?)`,
+    )
+      .bind(me)
+      .all<{ group_id: string; user_id: string; display_name: string | null; last_at: number }>(),
+    env.DB.prepare(
+      `SELECT user_id, completed_at FROM scores WHERE completed_at > ? AND user_id IN
+         (SELECT gm2.user_id FROM group_members gm1 JOIN group_members gm2 ON gm2.group_id = gm1.group_id WHERE gm1.user_id = ?)`,
+    )
+      .bind(since, me)
+      .all<{ user_id: string; completed_at: number }>(),
+    env.DB.prepare(
+      `SELECT user_id, completed_at FROM plays WHERE completed_at > ? AND user_id IN
+         (SELECT gm2.user_id FROM group_members gm1 JOIN group_members gm2 ON gm2.group_id = gm1.group_id WHERE gm1.user_id = ?)`,
+    )
+      .bind(since, me)
+      .all<{ user_id: string; completed_at: number }>(),
+  ]);
+  const played = new Map<string, Set<string>>();
+  for (const r of [...sc.results, ...pl.results]) {
+    if (!played.has(r.user_id)) played.set(r.user_id, new Set());
+    played.get(r.user_id)!.add(dateInTimezone(new Date(r.completed_at), tz));
+  }
+  return groups.results.map((g) => ({
+    id: g.id,
+    name: g.name,
+    invite_code: g.invite_code,
+    days,
+    members: members.results
+      .filter((m) => m.group_id === g.id)
+      .map((m) => ({
+        name: m.display_name ?? 'Someone',
+        you: m.user_id === me,
+        played: days.filter((d) => played.get(m.user_id)?.has(d)),
+        last_at: m.last_at || null,
+      }))
+      .sort((a, b) => Number(b.you) - Number(a.you) || b.played.length - a.played.length || (b.last_at ?? 0) - (a.last_at ?? 0)),
+  }));
 }

@@ -427,6 +427,7 @@ const FEATURE_LABEL: Record<string, string> = {
   rated: 'Rated a game',
   crew_try: 'Tried a game from the crew',
   invite: 'Invited a friend',
+  crew_start: 'Started a crew',
   joined_by_link: 'Joined a group from a link',
   share: 'Shared a puzzle',
   coop_create: 'Started a co-op game',

@@ -350,7 +350,6 @@ export function SettingsSheet() {
   const s = useStore();
   const p = s.prefs;
   const [confirmDelete, setConfirmDelete] = useState(false);
-  const [leaving, setLeaving] = useState<GroupListItem | null>(null);
   const [deleting, setDeleting] = useState(false);
 
   return (
@@ -381,85 +380,28 @@ export function SettingsSheet() {
 
       {s.identity && (
         <>
-          <div class="section-title">Groups</div>
-          <div class="group">
-            {s.groups.map((g) => (
-              <div class="row" key={g.group.id}>
-                <button class="grow" style={{ textAlign: 'left' }} onClick={() => s.open({ kind: 'groupMembers', group: g })}>
-                  <div>{g.group.name}</div>
-                  <div class="sub">
-                    {g.member_count} {g.member_count === 1 ? 'member' : 'members'}
-                    {g.invite_code ? ` · Code ${g.invite_code}` : ''}
-                  </div>
-                </button>
-                {g.invite_code && (
-                  <button
-                    class="icon-btn"
-                    aria-label={`Share ${g.group.name} invite`}
-                    onClick={() => void shareText(`Join my Sudoku Crew group “${g.group.name}”:`, `${location.origin}/g/${g.invite_code}`)}
-                  >
-                    <Icon name="share" size={18} />
-                  </button>
-                )}
-                <button class="link" style={{ color: 'var(--error)' }} onClick={() => setLeaving(g)}>
-                  Leave
-                </button>
-              </div>
-            ))}
-            <button class="row" onClick={() => s.open({ kind: 'groupOnboarding', mode: 'create' })}>
-              <Icon name="plus" size={18} />
-              <span class="grow" style={{ color: 'var(--accent)' }}>
-                Create a group
-              </span>
-            </button>
-            <button class="row" onClick={() => s.open({ kind: 'groupOnboarding', mode: 'join' })}>
-              <Icon name="users" size={18} />
-              <span class="grow" style={{ color: 'var(--accent)' }}>
-                Join with a code
-              </span>
-            </button>
-          </div>
-          {leaving && (
-            <div class="group" style={{ padding: 14, marginTop: 10 }}>
-              <b>Leave {leaving.group.name}?</b>
-              <p class="muted small">You'll stop seeing the leaderboard for {leaving.group.name}.</p>
-              <div style={{ display: 'flex', gap: 10 }}>
-                <button class="btn compact" style={{ flex: 1 }} onClick={() => setLeaving(null)}>
-                  Cancel
-                </button>
-                <button
-                  class="btn compact danger"
-                  style={{ flex: 1 }}
-                  onClick={async () => {
-                    try {
-                      await api.leaveGroup(s.token!, leaving.group.id);
-                      await s.refreshGroups();
-                    } catch (e) {
-                      s.showToast(errorCopy(e, "Couldn't leave the group."));
-                    }
-                    setLeaving(null);
-                  }}
-                >
-                  Leave
-                </button>
-              </div>
-            </div>
-          )}
-        </>
-      )}
-
-      {s.identity && (
-        <>
           <div class="section-title">Your crew</div>
           <div class="group">
+            <button class="row" onClick={() => s.open({ kind: 'crew' })}>
+              <Icon name="users" size={18} />
+              <span class="grow">
+                <div>{s.groups.length ? s.groups.map((g) => g.group.name).join(', ') : 'Start your crew'}</div>
+                <div class="sub">
+                  {s.groups.length
+                    ? `${s.groups.reduce((n, g) => n + g.member_count, 0)} people · see who's playing, invite friends`
+                    : 'Friends whose games you see, and who see yours'}
+                </div>
+              </span>
+              <span class="muted">›</span>
+            </button>
             <Toggle
-              label="Show my finished games to my groups"
+              label="Show my finished games to my crew"
               checked={p.shareActivity}
               onChange={(v) => s.setPref('shareActivity', v)}
             />
           </div>
           <div class="muted small" style={{ margin: '6px 6px 0' }}>
-            Which puzzles you finish and how you rated them, so your group can try them too. Never your time.
+            Which puzzles you finish and how you rated them, so your crew can try them too. Never your time.
           </div>
         </>
       )}

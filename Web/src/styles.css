@@ -1503,3 +1503,94 @@ button.row:active {
   font-weight: 600;
   font-size: 0.92rem;
 }
+button.crew-head {
+  width: calc(100% - 8px);
+  background: none;
+  border: 0;
+  padding: 0;
+  cursor: pointer;
+}
+.crew-head-more {
+  text-transform: none;
+  letter-spacing: 0;
+  font-size: 0.85rem;
+  color: var(--accent);
+}
+.crew-start {
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  align-items: center;
+  text-align: center;
+}
+.crew-start-text {
+  font-size: 0.92rem;
+  color: var(--text-2);
+}
+.crew-dots {
+  display: inline-flex;
+  gap: 4px;
+  flex: none;
+}
+.crew-dots b,
+.crew-dots i {
+  width: 13px;
+  height: 13px;
+  border-radius: 50%;
+  display: inline-block;
+}
+.crew-dots b {
+  background: var(--line);
+}
+.crew-dots b.on {
+  background: var(--accent);
+}
+.crew-dots i {
+  font-style: normal;
+  font-size: 0.68rem;
+  text-align: center;
+  color: var(--text-2);
+  font-weight: 600;
+  height: auto;
+}
+.crew-days-head {
+  min-height: 0;
+  padding-top: 8px;
+  padding-bottom: 2px;
+  border-bottom: 0;
+}
+.crew-member {
+  gap: 10px;
+}
+.crew-picker {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: 10px;
+}
+.crew-picker .chip {
+  cursor: pointer;
+}
+.crew-picker .chip.on {
+  background: var(--accent);
+  color: var(--accent-text);
+}
+.crew-more {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  margin: 22px 0 6px;
+  font-size: 0.88rem;
+}
+.crew-more .muted-link {
+  color: var(--text-2);
+}
+.crew-more .danger {
+  color: var(--error);
+}
+.crew-leave {
+  text-align: center;
+  color: var(--text-2);
+}

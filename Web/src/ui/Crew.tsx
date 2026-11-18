@@ -5,7 +5,7 @@
 
 import { useState } from 'preact/hooks';
 import { store, useStore } from '../app/store';
-import type { CrewFavourite, CrewPlay, Enjoyment } from '../lib/api';
+import type { CrewFavourite, CrewGroup, CrewPlay, Enjoyment } from '../lib/api';
 import { dateFromDailyId, weekdayDate } from '../lib/format';
 import { difficultyLabel } from '../engine/types';
 import { techniqueLabel, type TutorTechnique } from '../engine/tutor';
@@ -99,42 +99,89 @@ function FavouriteRow({ f }: { f: CrewFavourite }) {
   );
 }
 
-export function inviteFriend(): void {
+export function inviteFriend(groupId?: string): void {
   track('feature', { f: 'invite' });
-  const { text, url } = store.inviteLink();
+  const { text, url } = store.inviteLink(groupId);
   void shareText(text, url);
 }
 
-/** Home screen: the latest few, and a way into the rest. Only when signed in and in a group. */
+const WHAT_IS_A_CREW = "Your crew is the people whose games you see, and who see yours. No scores, no pressure — just what everyone's playing.";
+
+/** Home screen: the latest few, and the way into "Your crew". */
 export function CrewCard() {
   const s = useStore();
-  if (!s.identity || !s.groups.length || !s.crew) return null;
-  const { feed, favourites } = s.crew;
+  if (!s.identity) return null;
+  if (!s.groups.length)
+    return (
+      <div class="crew-card">
+        <div class="group crew-start">
+          <div class="crew-start-text">Play alongside friends: see what they finish and try the same puzzles.</div>
+          <button class="btn compact" onClick={() => s.open({ kind: 'crew' })}>
+            Start your crew
+          </button>
+        </div>
+      </div>
+    );
+  const feed = s.crew?.feed ?? [];
   const latest = feed.slice(0, 3);
   return (
     <div class="crew-card">
-      <div class="crew-head">
-        <span>From your crew</span>
-        {(feed.length > 3 || favourites.length > 0) && (
-          <button class="link" onClick={() => s.open({ kind: 'crew' })}>
-            {favourites.length ? 'Favourites & more' : 'See all'}
-          </button>
-        )}
-      </div>
+      <button class="crew-head" onClick={() => s.open({ kind: 'crew' })}>
+        <span>Your crew</span>
+        <span class="crew-head-more">See everyone ›</span>
+      </button>
       <div class="group">
         {latest.map((p) => (
           <PlayRow key={p.id} p={p} />
         ))}
         {!latest.length && (
           <div class="row">
-            <span class="grow muted small">When someone in your group finishes a game, it shows up here so you can try it too.</span>
+            <span class="grow muted small">Nothing in the last two weeks. When someone in your crew finishes a game, it shows up here.</span>
           </div>
         )}
-        <button class="row crew-invite" onClick={inviteFriend}>
+        <button class="row crew-invite" onClick={() => inviteFriend()}>
           <Icon name="plus" size={18} />
-          <span class="grow">Invite a friend to your crew</span>
+          <span class="grow">Invite a friend</span>
         </button>
       </div>
+    </div>
+  );
+}
+
+/** One crew: who's in it and the days each played this week. */
+function Members({ g }: { g: CrewGroup }) {
+  const letter = (d: string) => 'SMTWTFS'[new Date(`${d}T12:00:00Z`).getUTCDay()];
+  return (
+    <div class="group">
+      <div class="row crew-days-head">
+        <span class="grow" />
+        <span class="crew-dots">
+          {g.days.map((d) => (
+            <i key={d}>{letter(d)}</i>
+          ))}
+        </span>
+      </div>
+      {g.members.map((m, i) => (
+        <div class="row crew-member" key={i}>
+          <Initial name={m.name} />
+          <div class="grow">
+            <div>
+              {m.name}
+              {m.you && <span class="muted"> (you)</span>}
+            </div>
+            <div class="sub">{m.last_at ? `last played ${ago(m.last_at)}` : 'not played yet'}</div>
+          </div>
+          <span class="crew-dots">
+            {g.days.map((d) => (
+              <b key={d} class={m.played.includes(d) ? 'on' : ''} title={d} />
+            ))}
+          </span>
+        </div>
+      ))}
+      <button class="row crew-invite" onClick={() => inviteFriend(g.id)}>
+        <Icon name="plus" size={18} />
+        <span class="grow">Invite a friend to {g.name}</span>
+      </button>
     </div>
   );
 }
@@ -142,9 +189,63 @@ export function CrewCard() {
 export function CrewSheet({ tab: initial }: { tab?: 'recent' | 'favourites' }) {
   const s = useStore();
   const [tab, setTab] = useState<'recent' | 'favourites'>(initial ?? 'recent');
+  const [which, setWhich] = useState(0);
+  const [leaving, setLeaving] = useState(false);
+  const [busy, setBusy] = useState(false);
   const crew = s.crew;
+
+  if (!s.identity)
+    return (
+      <Sheet title="Your crew">
+        <p class="muted">{WHAT_IS_A_CREW}</p>
+        <button class="btn primary" onClick={() => s.open({ kind: 'signIn' })}>
+          Sign in to start your crew
+        </button>
+      </Sheet>
+    );
+
+  if (!s.groups.length)
+    return (
+      <Sheet title="Your crew">
+        <p class="muted">{WHAT_IS_A_CREW}</p>
+        <div class="stack">
+          <button
+            class="btn primary"
+            disabled={busy}
+            onClick={async () => {
+              setBusy(true);
+              await s.startCrew();
+              setBusy(false);
+            }}
+          >
+            <Icon name="users" size={20} /> {busy ? 'Starting…' : 'Start your crew'}
+          </button>
+          <button class="link" onClick={() => s.open({ kind: 'groupOnboarding', mode: 'join' })}>
+            Have a code from a friend? Join their crew
+          </button>
+        </div>
+      </Sheet>
+    );
+
+  const groups = crew?.groups ?? [];
+  const g = groups[Math.min(which, groups.length - 1)];
   return (
     <Sheet title="Your crew">
+      <p class="muted small" style={{ margin: '2px 2px 12px' }}>
+        {WHAT_IS_A_CREW}
+      </p>
+      {groups.length > 1 && (
+        <div class="crew-picker">
+          {groups.map((x, i) => (
+            <button key={x.id} class={`chip${i === which ? ' on' : ''}`} onClick={() => (setWhich(i), setLeaving(false))}>
+              {x.name}
+            </button>
+          ))}
+        </div>
+      )}
+      {g ? <Members g={g} /> : <p class="muted">Loading…</p>}
+
+      <div class="section-title">What they've been playing</div>
       <Segmented<'recent' | 'favourites'>
         options={[
           { value: 'recent', label: 'Recently played' },
@@ -162,7 +263,7 @@ export function CrewSheet({ tab: initial }: { tab?: 'recent' | 'favourites' }) {
           </div>
         ) : (
           <p class="muted" style={{ marginTop: 16 }}>
-            Nothing in the last two weeks yet. Games your group finishes show up here.
+            Nothing in the last two weeks yet.
           </p>
         )
       ) : crew?.favourites.length ? (
@@ -181,6 +282,35 @@ export function CrewSheet({ tab: initial }: { tab?: 'recent' | 'favourites' }) {
           No favourites yet. When someone rates a game 🙂 or 😍 after solving it, it appears here.
         </p>
       )}
+
+      <div class="crew-more">
+        <button class="link" onClick={() => s.open({ kind: 'groupOnboarding', mode: 'join' })}>
+          Join another crew with a code
+        </button>
+        {g &&
+          (leaving ? (
+            <span class="crew-leave">
+              Leave {g.name}? You'll stop seeing their games.{' '}
+              <button class="link" onClick={() => setLeaving(false)}>
+                Keep
+              </button>{' '}
+              <button
+                class="link danger"
+                onClick={async () => {
+                  setLeaving(false);
+                  setWhich(0);
+                  await s.leaveCrew(g.id);
+                }}
+              >
+                Leave
+              </button>
+            </span>
+          ) : (
+            <button class="link muted-link" onClick={() => setLeaving(true)}>
+              Leave {g.name}
+            </button>
+          ))}
+      </div>
     </Sheet>
   );
 }

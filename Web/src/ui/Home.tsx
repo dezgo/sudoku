@@ -101,7 +101,7 @@ export function Home() {
         </button>
       </div>
 
-      <button class="link quiet-link" onClick={inviteFriend}>
+      <button class="link quiet-link" onClick={() => inviteFriend()}>
         <Icon name="share" size={15} /> Share Sudoku Crew with a friend
       </button>
       <button class="link quiet-link" style={{ marginTop: 0 }} onClick={() => s.open({ kind: 'feedback' })}>
