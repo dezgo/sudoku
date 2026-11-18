@@ -89,6 +89,13 @@ const POLICY_HTML = `<!DOCTYPE html>
       time.
     </li>
     <li>
+      <strong>Finished games</strong> — if you're signed in and haven't
+      turned it off in Settings (web app): which puzzles you finish, their
+      level, which hint techniques you used, and — if you choose to answer —
+      whether you enjoyed it and learnt something. Members of your groups
+      see these so they can try the same puzzle. Your time isn't included.
+    </li>
+    <li>
       <strong>Feedback</strong> — if you send feedback (web app): your
       message, which screen you were on, your browser and device type, and
       — so we can reply — your display name and email if you're signed in,
@@ -141,6 +148,8 @@ const POLICY_HTML = `<!DOCTYPE html>
     <li>Running multiplayer games and telling you when it's your turn.</li>
     <li>Generating the daily puzzle and leaderboard you see.</li>
     <li>Reading and replying to feedback you send.</li>
+    <li>Showing your groups which puzzles you've finished and enjoyed, if
+    you've left that on.</li>
     <li>Seeing how the app is used — how many people play, how often, and
     which features they use — so we know what to improve.</li>
   </ul>
@@ -172,8 +181,9 @@ const POLICY_HTML = `<!DOCTYPE html>
 
   <h2>Data retention</h2>
   <ul>
-    <li>Your account, display name, groups, scores, multiplayer history and
-    shared puzzles are kept until you delete your account.</li>
+    <li>Your account, display name, groups, scores, finished games,
+    multiplayer history and shared puzzles are kept until you delete your
+    account.</li>
     <li>Feedback is kept so we can follow it up. Feedback sent while
     signed in is deleted with your account; otherwise email us and we'll
     delete it.</li>

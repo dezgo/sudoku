@@ -396,7 +396,7 @@ export function SettingsSheet() {
                   <button
                     class="icon-btn"
                     aria-label={`Share ${g.group.name} invite`}
-                    onClick={() => void shareText(`Join my Sudoku Crew group with code: ${g.invite_code}`, location.origin + '/play/')}
+                    onClick={() => void shareText(`Join my Sudoku Crew group “${g.group.name}”:`, `${location.origin}/g/${g.invite_code}`)}
                   >
                     <Icon name="share" size={18} />
                   </button>
@@ -445,6 +445,22 @@ export function SettingsSheet() {
               </div>
             </div>
           )}
+        </>
+      )}
+
+      {s.identity && (
+        <>
+          <div class="section-title">Your crew</div>
+          <div class="group">
+            <Toggle
+              label="Show my finished games to my groups"
+              checked={p.shareActivity}
+              onChange={(v) => s.setPref('shareActivity', v)}
+            />
+          </div>
+          <div class="muted small" style={{ margin: '6px 6px 0' }}>
+            Which puzzles you finish and how you rated them, so your group can try them too. Never your time.
+          </div>
         </>
       )}
 

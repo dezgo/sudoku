@@ -117,6 +117,8 @@ export interface Prefs {
   highlightConstraints: boolean;
   sound: boolean;
   colors: Partial<Record<ColorKey, string>>;
+  /** Show my finished games (and how I rated them) to my groups. */
+  shareActivity: boolean;
 }
 
 // Both highlights start off for new players (Oct 2026), so every lifeline
@@ -128,6 +130,7 @@ export const DEFAULT_PREFS: Prefs = {
   highlightConstraints: false,
   sound: true,
   colors: {},
+  shareActivity: true,
 };
 
 export function loadPrefs(): Prefs {

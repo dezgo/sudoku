@@ -7,6 +7,7 @@ import { applyColors } from '../lib/colors';
 import { Home } from '../ui/Home';
 import { Play } from '../ui/Play';
 import { CoachSheet } from '../ui/Coach';
+import { CrewSheet } from '../ui/Crew';
 import { LifelinesSheet } from '../ui/Lifelines';
 import { HistorySheet } from '../ui/History';
 import { MultiplayerSheet } from '../ui/Multiplayer';
@@ -47,6 +48,8 @@ function renderSheet(sheet: Sheet, i: number) {
       return <LifelinesSheet key={i} used={sheet.used} />;
     case 'share':
       return <ShareSheet key={i} puzzle={sheet.puzzle} seconds={sheet.seconds} />;
+    case 'crew':
+      return <CrewSheet key={i} tab={sheet.tab} />;
   }
 }
 
@@ -67,6 +70,19 @@ function handleJoinLink() {
   };
   if (store.token) void join();
   else store.open({ kind: 'signIn', then: () => void join() });
+}
+
+/** `/play/?group=ABC234` — a friend's invite (the Worker redirects /g/<code> here): sign in, then join. */
+function handleGroupLink() {
+  const code = new URLSearchParams(location.search).get('group');
+  if (!code) return;
+  history.replaceState(null, '', location.pathname);
+  const join = () => void store.joinGroupByLink(code);
+  if (store.token) join();
+  else {
+    store.showToast('Sign in to join your friend’s crew.', 4000);
+    store.open({ kind: 'signIn', then: join });
+  }
 }
 
 /** `/play/?p=eagle-maple-lantern` — a shared puzzle (the Worker redirects /p/<name> here). */
@@ -93,6 +109,7 @@ export function App() {
     warmBuffers();
     startUpdateChecks();
     handleJoinLink();
+    handleGroupLink();
     handleShareLink();
   }, []);
 

@@ -19,6 +19,7 @@ import { getAndroidAssetLinks, getAppleAppSiteAssociation } from './well-known';
 import { createSharedPuzzle, getSharedPuzzle, SHARE_NAME_RE } from './shared';
 import { postFeedback } from './feedback';
 import { postUsage, pruneUsage } from './usage';
+import { getCrew, postPlay, ratePlay } from './plays';
 import { getAdminReport, sendWeeklyReport } from './report';
 import { getStatsPage } from './stats-page';
 import { connectCoopGame, createCoopGame, joinCoopGame, listMyCoopGames } from './coop';
@@ -130,6 +131,12 @@ async function route(req: Request, env: Env, ctx: ExecutionContext): Promise<Res
     return Response.redirect(`${url.origin}/play/?p=${shareMatch[1]}`, 302);
   }
 
+  // Group invite link: /g/ABC234 opens the web app and joins that group (after sign-in).
+  const groupLinkMatch = path.match(/^\/g\/([A-Za-z0-9]{4,12})\/?$/);
+  if (groupLinkMatch && method === 'GET') {
+    return Response.redirect(`${url.origin}/play/?group=${groupLinkMatch[1]!.toUpperCase()}`, 302);
+  }
+
   // Co-op invite link: /c/eagle-maple-lantern opens that live game in the web app.
   const coopLinkMatch = path.match(/^\/c\/([a-z-]+)\/?$/);
   if (coopLinkMatch && SHARE_NAME_RE.test(coopLinkMatch[1]!) && method === 'GET') {
@@ -173,6 +180,10 @@ async function route(req: Request, env: Env, ctx: ExecutionContext): Promise<Res
 
   if (path === '/v1/feedback' && method === 'POST') return postFeedback(req, env, ctx);
   if (path === '/v1/usage' && method === 'POST') return postUsage(req, env);
+  if (path === '/v1/plays' && method === 'POST') return postPlay(req, env);
+  const playMatch = path.match(/^\/v1\/plays\/(\d+)$/);
+  if (playMatch && method === 'PUT') return ratePlay(req, env, parseInt(playMatch[1]!, 10));
+  if (path === '/v1/crew' && method === 'GET') return getCrew(req, env);
   if (path === '/v1/admin/report' && method === 'GET') {
     return getAdminReport(req, env, parseInt(url.searchParams.get('days') ?? '7', 10));
   }

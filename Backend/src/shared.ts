@@ -57,6 +57,40 @@ export async function createSharedPuzzle(req: Request, env: Env): Promise<Respon
   return jsonError(500, 'name_collision');
 }
 
+/**
+ * The shared name for a board, so a finished game can be offered to friends.
+ * Reuses any existing name for the same starting board (whoever made it), so
+ * everyone's ratings of one puzzle land on one name. Otherwise makes one under
+ * `userId`, with no time attached.
+ */
+export async function ensureSharedName(
+  env: Env,
+  userId: string,
+  givens: unknown,
+  difficulty: string,
+): Promise<string | null> {
+  if (!DIFFICULTIES.includes(difficulty)) return null;
+  const key = JSON.stringify(givens);
+  const existing = await env.DB.prepare('SELECT name FROM shared_puzzles WHERE givens = ? ORDER BY created_at LIMIT 1')
+    .bind(key)
+    .first<{ name: string }>();
+  if (existing) return existing.name;
+  const solution = solveUnique(givens);
+  if (!solution) return null;
+  for (let attempt = 0; attempt < 5; attempt++) {
+    const name = randomName();
+    const res = await env.DB.prepare(
+      `INSERT OR IGNORE INTO shared_puzzles
+         (name, givens, solution, difficulty, created_by, sharer_seconds, created_at)
+       VALUES (?, ?, ?, ?, ?, NULL, ?)`,
+    )
+      .bind(name, key, JSON.stringify(solution), difficulty, userId, Date.now())
+      .run();
+    if (res.meta.changes === 1) return name;
+  }
+  return null;
+}
+
 export async function getSharedPuzzle(env: Env, name: string): Promise<Response> {
   if (!SHARE_NAME_RE.test(name)) return jsonError(404, 'not_found');
   const row = await env.DB.prepare(

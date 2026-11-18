@@ -64,6 +64,7 @@ export async function deleteMe(req: Request, env: Env): Promise<Response> {
     env.DB.prepare('DELETE FROM feedback WHERE user_id = ?').bind(userId),
     // Usage rows linked to the account go too; the device id isn't kept.
     env.DB.prepare('DELETE FROM usage_events WHERE user_id = ?').bind(userId),
+    env.DB.prepare('DELETE FROM plays WHERE user_id = ?').bind(userId),
     env.DB.prepare('DELETE FROM devices WHERE user_id = ?').bind(userId),
     env.DB.prepare('DELETE FROM users WHERE id = ?').bind(userId),
   ];

@@ -13,6 +13,7 @@ import { Icon } from './icons';
 import { Segmented, Sheet, shareText } from './Sheet';
 import { Lifelines } from './Lifelines';
 import { ApiError, api } from '../lib/api';
+import { RatePlay } from './Crew';
 
 export function NewGameSheet() {
   const s = useStore();
@@ -203,6 +204,7 @@ export function SolvedSheet({ rank, wasRanked }: { rank: number | null; wasRanke
           </span>
         </div>
         <Lifelines used={s.lifelines} small />
+        <RatePlay />
         {rank !== null && <div style={{ fontWeight: 700, margin: '6px 0' }}>Rank #{rank}</div>}
         {s.coop && Object.keys(s.coop.players).length > 1 && (
           <div style={{ fontWeight: 700, margin: '6px 0' }}>

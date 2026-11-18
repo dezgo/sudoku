@@ -15,6 +15,9 @@ import {
   toPuzzle,
   UNAUTHORIZED_EVENT,
   type ApiUser,
+  type CrewFavourite,
+  type CrewPlay,
+  type Enjoyment,
   type GroupListItem,
   type ScoreSubmission,
 } from '../lib/api';
@@ -45,7 +48,7 @@ export type GameMode = 'daily' | 'past_daily' | 'practice' | 'shared' | 'coop';
 
 /** Sheets worth counting in the usage stats (the rest are steps inside these). */
 const TRACKED_SHEETS = new Set<Sheet['kind']>([
-  'newGame', 'games', 'settings', 'leaderboard', 'groupMembers', 'coach', 'history', 'multiplayer', 'feedback', 'share',
+  'newGame', 'games', 'settings', 'leaderboard', 'groupMembers', 'coach', 'history', 'multiplayer', 'feedback', 'share', 'crew',
 ]);
 
 export type Sheet =
@@ -64,7 +67,8 @@ export type Sheet =
   | { kind: 'confirmReset' }
   | { kind: 'feedback' }
   | { kind: 'share'; puzzle: Puzzle; seconds?: number }
-  | { kind: 'lifelines'; used: Lifeline[] };
+  | { kind: 'lifelines'; used: Lifeline[] }
+  | { kind: 'crew'; tab?: 'recent' | 'favourites' };
 
 interface Identity {
   user: ApiUser;
@@ -129,6 +133,12 @@ class Store {
   updateReady = false;
   coop: CoopState | null = null;
   private gameMode: GameMode = 'practice';
+  /** Hint techniques peeked at in the game on screen — "learnt X-Wing" in the crew feed. */
+  private hintTechniques = new Set<string>();
+  /** What the crew has been playing (signed in, in a group). */
+  crew: { feed: CrewPlay[]; favourites: CrewFavourite[] } | null = null;
+  /** The game just solved, for its rating on the Solved sheet. */
+  lastPlay: { id: number | null; enjoyment: Enjoyment | null; learnt: boolean | null; techniques: string[] } | null = null;
   private lastColorsTracked = 0;
 
   private listeners = new Set<Listener>();
@@ -276,7 +286,7 @@ class Store {
     track('open');
     if (this.coop && !this.coopSocket) this.connectCoop();
     void this.refreshDaily();
-    if (this.token) void this.refreshGroups();
+    if (this.token) void this.refreshGroups().then(() => this.refreshCrew());
     if (!this.wasAutoPaused) return;
     this.paused = false;
     this.wasAutoPaused = false;
@@ -328,6 +338,7 @@ class Store {
     this.leaveCoop();
     const save = this.saves[p.id];
     this.gameMode = mode;
+    if (!save || this.game?.puzzle.id !== p.id) this.hintTechniques = new Set();
     track(save ? 'game_resume' : 'game_start', { mode, difficulty: p.difficulty });
     const g = new Game(
       p,
@@ -366,7 +377,7 @@ class Store {
   }
 
   /** Open a puzzle a friend shared (/p/<name>), resuming it if already started here. */
-  async startShared(name: string): Promise<void> {
+  async startShared(name: string, intro?: string): Promise<void> {
     this.loadingPuzzle = true;
     this.emit();
     try {
@@ -380,9 +391,10 @@ class Store {
       }
       const who = r.shared_by ?? 'A friend';
       this.showToast(
-        r.sharer_seconds
+        intro ??
+        (r.sharer_seconds
           ? `${who} did this ${difficultyLabel[r.difficulty]} puzzle in ${formatTime(r.sharer_seconds)}. Your turn!`
-          : `${who} shared this ${difficultyLabel[r.difficulty]} puzzle with you.`,
+          : `${who} shared this ${difficultyLabel[r.difficulty]} puzzle with you.`),
         5000,
       );
     } catch (e) {
@@ -417,6 +429,7 @@ class Store {
       const local = readJSON<CoopLocal>(KEYS.coop, {});
       const id = local[name]?.id ?? nextPuzzleId();
       this.gameMode = 'coop';
+      this.hintTechniques = new Set();
       track(local[name] ? 'game_resume' : 'game_start', { mode: 'coop', difficulty: d.difficulty, players: d.players.length });
       const g = new Game(
         { id, difficulty: d.difficulty, givens: d.givens, solution: d.solution },
@@ -644,6 +657,8 @@ class Store {
   }
 
   goHome(): void {
+    // Back from a finished game: the crew may have played meanwhile.
+    if (this.game?.isSolved) void this.refreshCrew();
     this.saveProgress();
     this.leaveCoop();
     this.cancelAutoPencil();
@@ -708,6 +723,7 @@ class Store {
       mistakes: g.mistakeCount,
       lifelines: result.lifelines,
     });
+    this.recordPlay(g);
     this.history = [result, ...this.history.filter((r) => r.puzzleID !== g.puzzle.id)];
     persistHistory(this.history);
     this.saveProgress(); // solved → removes the save
@@ -723,6 +739,100 @@ class Store {
         highlight_mistakes_was_on: g.highlightMistakesEverOn,
         highlight_rules_was_on: g.highlightConstraintsEverOn,
       });
+    }
+  }
+
+  // --- Crew (finished games, ratings, feed) ---
+
+  /** Tell the crew about a finished game — unless the player turned that off. */
+  private recordPlay(g: Game): void {
+    this.lastPlay = null;
+    if (!this.token || !this.prefs.shareActivity || this.offlineDaily) return;
+    const mode: GameMode = this.coop ? 'coop' : this.gameMode;
+    const daily = isDaily(g.puzzle) && !this.coop;
+    const play = { id: null as number | null, enjoyment: null as Enjoyment | null, learnt: null as boolean | null, techniques: [...this.hintTechniques] };
+    this.lastPlay = play;
+    const token = this.token;
+    api
+      .postPlay(token, {
+        mode: daily ? (g.puzzle.id === this.todayId ? 'daily' : 'past_daily') : mode === 'daily' || mode === 'past_daily' ? 'practice' : mode,
+        difficulty: g.puzzle.difficulty,
+        ...(daily ? { puzzle_id: g.puzzle.id } : { givens: g.puzzle.givens }),
+        techniques: play.techniques,
+        completed_at: Date.now(),
+      })
+      .then((r) => {
+        play.id = r.id;
+        // Rated before the post came back: send the answers now.
+        if (play.enjoyment !== null || play.learnt !== null)
+          void api.ratePlay(token, r.id, { enjoyment: play.enjoyment, learnt: play.learnt }).catch(() => {});
+      })
+      .catch(() => {
+        /* best effort — the feed just won't show this one */
+      });
+  }
+
+  /** Answer "How was it?" / "Learn anything?" on the Solved sheet. Tapping the same answer again clears it. */
+  ratePlay(answer: { enjoyment?: Enjoyment; learnt?: boolean }): void {
+    const play = this.lastPlay;
+    if (!play || !this.token) return;
+    const change: { enjoyment?: Enjoyment | null; learnt?: boolean | null } = {};
+    if (answer.enjoyment !== undefined) change.enjoyment = play.enjoyment = play.enjoyment === answer.enjoyment ? null : answer.enjoyment;
+    if (answer.learnt !== undefined) change.learnt = play.learnt = play.learnt === answer.learnt ? null : answer.learnt;
+    track('feature', { f: 'rated', ...change });
+    if (play.id !== null) void api.ratePlay(this.token, play.id, change).catch(() => {});
+    this.emit();
+  }
+
+  async refreshCrew(): Promise<void> {
+    if (!this.token || !this.groups.length) {
+      if (this.crew) {
+        this.crew = null;
+        this.emit();
+      }
+      return;
+    }
+    try {
+      this.crew = await api.crew(this.token);
+      this.emit();
+    } catch {
+      /* keep what we had */
+    }
+  }
+
+  /** The link a friend taps to join: your group if you have one, else just the app. */
+  inviteLink(): { text: string; url: string } {
+    const code = this.groups.find((g) => g.invite_code)?.invite_code;
+    return code
+      ? {
+          text: 'Come play sudoku with me! A free daily puzzle, and we can see each other’s games:',
+          url: `${location.origin}/g/${code}`,
+        }
+      : { text: 'Come play sudoku with me! A free daily puzzle:', url: `${location.origin}/play/` };
+  }
+
+  /** Arrived from a friend's /g/<code> link. */
+  async joinGroupByLink(code: string): Promise<void> {
+    if (!this.token) return;
+    try {
+      const g = await api.joinGroup(this.token, code.toUpperCase());
+      track('feature', { f: 'joined_by_link' });
+      await this.refreshGroups();
+      await this.refreshCrew();
+      this.showToast(`You’re in ${g.name}! Their games will show up on your home screen.`, 5000);
+    } catch (e) {
+      this.showToast(e instanceof ApiError && e.kind === 'offline' ? "You're offline — try the link again later." : "That invite link didn't work. Ask your friend for a new one.");
+    }
+  }
+
+  /** Play a board from the crew feed or favourites. */
+  tryFromCrew(item: { puzzle_id: number | null; name: string | null; who?: string; enjoyment?: Enjoyment | null }): void {
+    track('feature', { f: 'crew_try' });
+    this.closeAll();
+    if (item.puzzle_id !== null) void this.startPastDaily(item.puzzle_id);
+    else if (item.name) {
+      const feeling = item.enjoyment === 3 ? ' and loved it' : item.enjoyment === 2 ? ' and enjoyed it' : '';
+      void this.startShared(item.name, item.who ? `${item.who} played this one${feeling}. Your turn!` : 'A crew favourite. Enjoy!');
     }
   }
 
@@ -757,6 +867,7 @@ class Store {
     if (!g || this.paused || g.isSolved) return;
     const hint = findHint(g.cells);
     track('feature', { f: 'hint', found: !!hint, technique: hint?.technique ?? null });
+    if (hint) this.hintTechniques.add(hint.technique);
     // Charged on peek, not on apply — the idea is in their head either way.
     if (hint) {
       g.noteHintViewed();
@@ -832,11 +943,14 @@ class Store {
 
   private async afterSignIn(): Promise<void> {
     await Promise.all([this.refreshGroups(), this.flushPending(), this.syncRemoteHistory()]);
+    await this.refreshCrew();
   }
 
   signOut(): void {
     this.identity = null;
     this.groups = [];
+    this.crew = null;
+    this.lastPlay = null;
     writeJSON(KEYS.identity, null);
     writeJSON(KEYS.groups, null);
     this.emit();
@@ -949,6 +1063,7 @@ class Store {
       this.token ? this.flushPending() : null,
       this.token ? this.syncRemoteHistory() : null,
     ]);
+    await this.refreshCrew();
   }
 }
 

@@ -5,6 +5,7 @@ import { dateFromDailyId, displayLabel, formatTime, weekdayDate } from '../lib/f
 import { addDays, FIRST_DAILY_ID, streakStats } from '../lib/streaks';
 import { Icon } from './icons';
 import { InstallHint } from './InstallHint';
+import { CrewCard, inviteFriend } from './Crew';
 
 export function Home() {
   const s = useStore();
@@ -71,6 +72,8 @@ export function Home() {
           </>
         )}
 
+        <CrewCard />
+
         <button class="btn" onClick={() => s.open({ kind: 'history' })}>
           <Icon name="calendar" size={20} /> Daily History
         </button>
@@ -98,7 +101,10 @@ export function Home() {
         </button>
       </div>
 
-      <button class="link quiet-link" onClick={() => s.open({ kind: 'feedback' })}>
+      <button class="link quiet-link" onClick={inviteFriend}>
+        <Icon name="share" size={15} /> Share Sudoku Crew with a friend
+      </button>
+      <button class="link quiet-link" style={{ marginTop: 0 }} onClick={() => s.open({ kind: 'feedback' })}>
         <Icon name="chat" size={15} /> Ideas or problems? Tell us
       </button>
     </div>

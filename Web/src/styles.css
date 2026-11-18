@@ -1392,3 +1392,114 @@ button.row:active {
   font-weight: 500;
   color: var(--text-2);
 }
+
+/* --- Crew feed + rating (ui/Crew.tsx) --- */
+.crew-card {
+  width: 100%;
+  margin: 4px 0 2px;
+}
+.crew-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  margin: 0 4px 6px;
+  font-size: 0.78rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-2);
+  font-weight: 600;
+}
+.crew-head .link {
+  text-transform: none;
+  letter-spacing: 0;
+  font-size: 0.85rem;
+}
+.crew-row {
+  gap: 10px;
+  font-size: 0.92rem;
+  line-height: 1.3;
+}
+.crew-row .sub {
+  margin-top: 2px;
+}
+.crew-avatar {
+  flex: none;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  font-weight: 700;
+  font-size: 0.9rem;
+  background: var(--accent-softer);
+  color: var(--accent);
+}
+.crew-avatar.fav {
+  background: rgba(212, 160, 23, 0.18);
+  color: var(--gold);
+}
+.crew-row .btn.compact {
+  flex: none;
+  width: auto;
+  padding: 6px 14px;
+}
+.crew-done {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 0.82rem;
+  color: var(--success);
+  font-weight: 600;
+}
+.rate {
+  width: 100%;
+  margin: 10px 0 4px;
+}
+.rate-q {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--text-2);
+  margin: 10px 0 6px;
+}
+.rate-opts {
+  display: flex;
+  gap: 8px;
+  justify-content: center;
+}
+.rate-btn {
+  flex: 1;
+  max-width: 120px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: 8px 6px;
+  border-radius: 12px;
+  background: var(--surface);
+  border: 1.5px solid var(--line);
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--text);
+}
+.rate-btn.wide {
+  flex-direction: row;
+  justify-content: center;
+  padding: 10px 6px;
+}
+.rate-btn .face {
+  font-size: 1.6rem;
+  line-height: 1.1;
+}
+.rate-btn.on {
+  border-color: var(--accent);
+  background: var(--accent-softer);
+}
+.rate-note {
+  margin-top: 8px;
+}
+.crew-invite {
+  color: var(--accent);
+  font-weight: 600;
+  font-size: 0.92rem;
+}

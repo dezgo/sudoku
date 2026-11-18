@@ -424,6 +424,10 @@ const FEATURE_LABEL: Record<string, string> = {
   coach_example: 'Coach: Show me an example',
   coach_show_me: 'Coach: Show me',
   coach_done: 'Coach lesson finished',
+  rated: 'Rated a game',
+  crew_try: 'Tried a game from the crew',
+  invite: 'Invited a friend',
+  joined_by_link: 'Joined a group from a link',
   share: 'Shared a puzzle',
   coop_create: 'Started a co-op game',
   undo: 'Undo',
@@ -439,6 +443,7 @@ const SCREEN_LABEL: Record<string, string> = {
   newGame: 'New game',
   share: 'Share',
   groupMembers: 'Group members',
+  crew: 'Crew feed',
 };
 const PLATFORM_LABEL: Record<string, string> = {
   iphone: 'iPhone',

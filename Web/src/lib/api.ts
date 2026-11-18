@@ -149,6 +149,42 @@ export interface MultiplayerGameDetail {
   board: Grid;
 }
 
+/** Crew feed (Backend/src/plays.ts). A board is a daily (puzzle_id) or a shared puzzle (name). */
+export type Enjoyment = 1 | 2 | 3;
+export interface CrewPlay {
+  id: number;
+  who: string;
+  puzzle_id: number | null;
+  name: string | null;
+  mode: string;
+  difficulty: Difficulty;
+  techniques: string[];
+  enjoyment: Enjoyment | null;
+  learnt: boolean | null;
+  completed_at: number;
+  done: boolean;
+}
+export interface CrewFavourite {
+  puzzle_id: number | null;
+  name: string | null;
+  difficulty: Difficulty;
+  ratings: number;
+  loved: number;
+  learnt: number;
+  players: number;
+  names: string[];
+  last_at: number;
+  done: boolean;
+}
+export interface PlaySubmission {
+  mode: string;
+  difficulty: Difficulty;
+  puzzle_id?: number;
+  givens?: Grid;
+  techniques: string[];
+  completed_at: number;
+}
+
 export function toPuzzle(p: PuzzleResponse): Puzzle {
   return { id: p.puzzle_id, difficulty: p.difficulty, givens: p.givens, solution: p.solution };
 }
@@ -226,6 +262,10 @@ export const api = {
   coopMine: (t: string) => send<{ games: CoopGameSummary[] }>('me/coop', 'GET', t).then((r) => r.games),
   feedback: (t: string | null, message: string, email: string | undefined, context: string) =>
     send<{ ok: true }>('feedback', 'POST', t, { message, email, context }),
+  postPlay: (t: string, p: PlaySubmission) => send<{ id: number; ref: string }>('plays', 'POST', t, p),
+  ratePlay: (t: string, id: number, r: { enjoyment?: Enjoyment | null; learnt?: boolean | null }) =>
+    send<void>(`plays/${id}`, 'PUT', t, r),
+  crew: (t: string) => send<{ feed: CrewPlay[]; favourites: CrewFavourite[] }>('crew', 'GET', t),
   postScore: (t: string, s: ScoreSubmission) => send<{ rank: number }>('scores', 'POST', t, s).then((r) => r.rank),
   groupScores: (t: string, groupId: string, puzzleId: number) =>
     send<LeaderboardEntry[]>(`groups/${groupId}/scores/${puzzleId}`, 'GET', t),
