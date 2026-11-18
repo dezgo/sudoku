@@ -7,7 +7,7 @@ import { applyColors } from '../lib/colors';
 import { Home } from '../ui/Home';
 import { Play } from '../ui/Play';
 import { CoachSheet } from '../ui/Coach';
-import { CrewSheet, EveryoneSheet, PersonSheet } from '../ui/Crew';
+import { CrewSheet, EveryoneSheet, PersonSheet, WhatsNewSheet } from '../ui/Crew';
 import { WatchSheet } from '../ui/Watch';
 import { LifelinesSheet } from '../ui/Lifelines';
 import { HistorySheet } from '../ui/History';
@@ -53,6 +53,8 @@ function renderSheet(sheet: Sheet, i: number) {
       return <CrewSheet key={i} tab={sheet.tab} explain={sheet.explain} />;
     case 'everyone':
       return <EveryoneSheet key={i} />;
+    case 'whatsNew':
+      return <WhatsNewSheet key={i} />;
     case 'person':
       return <PersonSheet key={i} id={sheet.id} />;
     case 'watch':

@@ -14,6 +14,7 @@ import { techniqueLabel, type TutorTechnique } from '../engine/tutor';
 import { Segmented, Sheet, shareText } from './Sheet';
 import { track } from '../lib/usage';
 import { Icon } from './icons';
+import { CHANGES } from '../app/changes';
 
 const FACES: { v: Enjoyment; face: string; label: string }[] = [
   { v: 1, face: '😐', label: 'Meh' },
@@ -602,7 +603,7 @@ function Introduce({ id, name }: { id: string; name: string }) {
                   {s.crew?.notes?.[o.id] && <div class="crew-note">{s.crew.notes[o.id]}</div>}
                 </div>
                 {sent.has(o.id) ? (
-                  <span class="crew-done">Sent ✓</span>
+                  <span class="crew-done">Done ✓</span>
                 ) : (
                   <button
                     class="btn compact"
@@ -617,7 +618,7 @@ function Introduce({ id, name }: { id: string; name: string }) {
             ))}
           </div>
           <p class="muted small" style={{ margin: '8px 4px 0' }}>
-            They’ll each be asked, and connect only if both say yes. If they’re already connected, nothing changes.
+            They’ll each be asked, and connect only if both say yes. If they already know each other here, nothing happens — neither of them is asked.
           </p>
         </>
       )}
@@ -889,6 +890,26 @@ export function EveryoneSheet() {
       <p class="muted small" style={{ marginTop: 14 }}>
         Everyone who plays Sudoku Crew, counted without names.
       </p>
+    </Sheet>
+  );
+}
+
+/** What's new: dated, plain-English changes, newest first. */
+export function WhatsNewSheet() {
+  return (
+    <Sheet title="What’s new">
+      {CHANGES.map((c) => (
+        <div key={c.date}>
+          <div class="section-title">{weekdayDate(new Date(`${c.date}T12:00:00`))}</div>
+          <div class="group whats-new">
+            <ul>
+              {c.items.map((t) => (
+                <li key={t}>{t}</li>
+              ))}
+            </ul>
+          </div>
+        </div>
+      ))}
     </Sheet>
   );
 }

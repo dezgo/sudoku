@@ -469,6 +469,12 @@ export function SettingsSheet() {
             Suggest a change or report a problem
           </span>
         </button>
+        <button class="row" onClick={() => s.open({ kind: 'whatsNew' })}>
+          <Icon name="seal" size={18} />
+          <span class="grow" style={{ color: 'var(--accent)' }}>
+            What’s new
+          </span>
+        </button>
       </div>
 
       {s.identity && (

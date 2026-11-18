@@ -71,6 +71,7 @@ export type Sheet =
   | { kind: 'crew'; tab?: 'recent' | 'favourites'; explain?: boolean }
   | { kind: 'everyone' }
   | { kind: 'person'; id: string }
+  | { kind: 'whatsNew' }
   | { kind: 'watch'; id: string; name: string };
 
 

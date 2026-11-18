@@ -107,6 +107,9 @@ export function Home() {
       <button class="link quiet-link" style={{ marginTop: 0 }} onClick={() => s.open({ kind: 'feedback' })}>
         <Icon name="chat" size={15} /> Ideas or problems? Tell us
       </button>
+      <button class="link quiet-link" style={{ marginTop: 0 }} onClick={() => s.open({ kind: 'whatsNew' })}>
+        <Icon name="seal" size={15} /> What’s new
+      </button>
     </div>
   );
 }
