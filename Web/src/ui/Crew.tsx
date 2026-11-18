@@ -953,48 +953,36 @@ export function InviteSheet({ code }: { code: string }) {
   return (
     <Sheet title={`${Who} invited you`}>
       <p class="invite-lead">
-        Connect with <b>{who}</b> on Sudoku Crew. It’s just the two of you — <b>not a group</b>.
+        Play the daily sudoku alongside <b>{who}</b>. You’ll see each other’s games, privately — just the two of you.
       </p>
 
-      <div class="section-title">{Who} will see</div>
+      <div class="section-title">Shared privately with {who}</div>
       <div class="group invite-list">
         <div class="row">
           <span class="invite-mark yes">✓</span>
-          <span class="grow">Puzzles you finish, and how you rated them</span>
+          <span class="grow">The puzzles you finish, and how you rated them</span>
         </div>
         <div class="row">
           <span class="invite-mark yes">✓</span>
-          <span class="grow">Which days you played, and when you’re playing</span>
+          <span class="grow">Which days you play, and when you’re on now</span>
         </div>
         <div class="row">
           <span class="invite-mark yes">✓</span>
-          <span class="grow">Your times on daily puzzles</span>
+          <span class="grow">Your daily puzzle times</span>
         </div>
       </div>
-      <p class="muted small invite-also">And you’ll see the same about {who}.</p>
+      <p class="muted small invite-also">{Who} shares the same with you.</p>
 
-      <div class="section-title">Stays private</div>
-      <div class="group invite-list">
-        <div class="row">
-          <span class="invite-mark no">✕</span>
-          <span class="grow">{Who}’s other friends don’t see you, and you don’t see them</span>
-        </div>
-        <div class="row">
-          <span class="invite-mark no">✕</span>
-          <span class="grow">Your email address</span>
-        </div>
-        <div class="row">
-          <span class="invite-mark no">✕</span>
-          <span class="grow">Watching you play — only if you say yes, each time</span>
-        </div>
-      </div>
-      <p class="muted small invite-also">You can remove {who} any time. They aren’t told.</p>
+      <p class="muted small invite-also">
+        Nobody else {who} knows can see you, your email stays private, and {who} can only watch you play if you
+        say yes. You can disconnect any time.
+      </p>
 
       <button class="btn primary" style={{ marginTop: 16 }} onClick={connect}>
         {s.token ? `Connect with ${who}` : `Sign in to connect with ${who}`}
       </button>
       <button class="link" style={{ display: 'block', margin: '12px auto 0' }} onClick={() => s.close()}>
-        Not now — just play
+        Maybe later — just play
       </button>
     </Sheet>
   );

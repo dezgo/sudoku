@@ -1062,7 +1062,7 @@ class Store {
     const code = this.crew?.invite_code;
     return code
       ? {
-          text: 'Come play sudoku with me! A free daily puzzle, and just the two of us see each other’s games (it’s not a group):',
+          text: 'Come play the daily sudoku with me! It’s free, and we’d see each other’s games, privately — just between us:',
           url: `${location.origin}/g/${code}`,
         }
       : { text: 'Come play sudoku with me! A free daily puzzle:', url: `${location.origin}/play/` };

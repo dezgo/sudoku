@@ -34,7 +34,7 @@ export async function crewInvitePage(env: Env, origin: string, code: string): Pr
   const who = name ? esc(name) : 'A friend';
   const target = `${origin}/play/?group=${encodeURIComponent(c)}`;
   const title = `${who} invited you to Sudoku Crew`;
-  const desc = `A free daily sudoku. Connect with ${name ? who : 'them'} and just the two of you see each other’s finished puzzles — it’s not a group.`;
+  const desc = `Play the free daily sudoku with ${name ? who : 'them'} — you’ll see each other’s games, privately — just the two of you.`;
   const html = `<!DOCTYPE html>
 <html lang="en">
 <head>
