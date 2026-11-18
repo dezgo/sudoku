@@ -60,6 +60,11 @@ export function Home() {
         <div class="caption">
           {dateLabel}
           {done ? ' · already played' : inProgress ? ` · ${formatTime(inProgress.elapsedSeconds)}` : ''}
+          {streak > 0 && ` · ${streak}-day streak`}
+          {' · '}
+          <button class="link inline-caption" onClick={() => s.open({ kind: 'history' })}>
+            {missed > 0 ? `${missed} to catch up` : 'History'} ›
+          </button>
         </div>
 
         {recent && recent.puzzle.id !== todayId && (
@@ -75,19 +80,6 @@ export function Home() {
 
         <CrewCard />
 
-        <button class="btn" onClick={() => s.open({ kind: 'history' })}>
-          <Icon name="calendar" size={20} /> Daily History
-        </button>
-        {streak > 0 && (
-          <div class="caption">
-            {streak}-day streak{missed > 0 ? ` · ${missed} to catch up` : ''}
-          </div>
-        )}
-        {streak === 0 && missed > 0 && <div class="caption">{missed} past dailies to catch up</div>}
-
-        <button class="btn" onClick={() => s.open({ kind: 'leaderboard', puzzleId: todayId })}>
-          <Icon name="podium" size={20} /> Today's Leaderboard
-        </button>
         <button class="btn" onClick={() => s.open({ kind: 'multiplayer' })}>
           <Icon name="users" size={20} /> Multiplayer
         </button>
@@ -96,9 +88,6 @@ export function Home() {
         </button>
         <button class="btn" onClick={() => s.open({ kind: 'coach' })}>
           <Icon name="cap" size={20} /> Coach
-        </button>
-        <button class="btn" onClick={() => s.open({ kind: 'games' })}>
-          <Icon name="list" size={20} /> Games
         </button>
       </div>
 

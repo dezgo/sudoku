@@ -1787,3 +1787,10 @@ button.crew-head {
     animation: none;
   }
 }
+.link.inline-caption {
+  display: inline;
+  padding: 0;
+  font-size: inherit;
+  font-weight: 600;
+  color: var(--accent);
+}

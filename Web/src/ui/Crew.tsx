@@ -320,6 +320,9 @@ export function CrewSheet({ tab: initial }: { tab?: 'recent' | 'favourites' }) {
       )}
 
       <div class="crew-more">
+        <button class="link" onClick={() => s.open({ kind: 'leaderboard', puzzleId: s.todayId })}>
+          Times for today’s daily ›
+        </button>
         {g?.can_rename &&
           (renaming === null ? (
             <button class="link" onClick={() => setRenaming(g.name)}>

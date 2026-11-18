@@ -31,6 +31,11 @@ export function NewGameSheet() {
         >
           Start
         </button>
+        {(s.inProgress.length > 0 || s.history.length > 0) && (
+          <button class="link" style={{ marginTop: 6 }} onClick={() => s.open({ kind: 'games' })}>
+            Your saved & finished games ›
+          </button>
+        )}
       </div>
     </Sheet>
   );
