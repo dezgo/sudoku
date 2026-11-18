@@ -44,28 +44,25 @@ export function Home() {
       <PulseLine />
 
       <div class="home-buttons">
-        {done ? (
-          <button class="btn" onClick={() => s.open({ kind: 'completed', result: done, fanfare: true })}>
-            <Icon name="seal" size={20} /> Daily Done
-          </button>
-        ) : inProgress ? (
-          <button class="btn primary" onClick={() => void s.startDaily()}>
-            <Icon name="play" size={18} filled /> Resume Daily
-          </button>
-        ) : (
-          <button class="btn primary" onClick={() => void s.startDaily()}>
-            <Icon name="calendar" size={20} /> Daily Puzzle
-          </button>
+        {/* Daily not done: it leads. Done: what the crew's playing leads, and the
+            daily shrinks to one line under it. */}
+        {!done && (
+          <>
+            <button class="btn primary" onClick={() => void s.startDaily()}>
+              {inProgress ? <Icon name="play" size={18} filled /> : <Icon name="calendar" size={20} />}
+              {inProgress ? ' Resume Daily' : ' Daily Puzzle'}
+            </button>
+            <div class="caption">
+              {dateLabel}
+              {inProgress ? ` · ${formatTime(inProgress.elapsedSeconds)}` : ''}
+              {streak > 0 && ` · ${streak}-day streak`}
+              {' · '}
+              <button class="link inline-caption" onClick={() => s.open({ kind: 'history' })}>
+                {missed > 0 ? `${missed} to catch up` : 'History'} ›
+              </button>
+            </div>
+          </>
         )}
-        <div class="caption">
-          {dateLabel}
-          {done ? ' · already played' : inProgress ? ` · ${formatTime(inProgress.elapsedSeconds)}` : ''}
-          {streak > 0 && ` · ${streak}-day streak`}
-          {' · '}
-          <button class="link inline-caption" onClick={() => s.open({ kind: 'history' })}>
-            {missed > 0 ? `${missed} to catch up` : 'History'} ›
-          </button>
-        </div>
 
         {recent && recent.puzzle.id !== todayId && (
           <>
@@ -79,6 +76,19 @@ export function Home() {
         )}
 
         <CrewCard />
+
+        {done && (
+          <div class="daily-done-line">
+            <button class="link inline-caption" onClick={() => s.open({ kind: 'completed', result: done, fanfare: true })}>
+              <Icon name="seal" size={16} /> Today’s daily done
+            </button>
+            {streak > 0 && <span> · {streak}-day streak</span>}
+            {' · '}
+            <button class="link inline-caption" onClick={() => s.open({ kind: 'history' })}>
+              {missed > 0 ? `${missed} to catch up` : 'History'} ›
+            </button>
+          </div>
+        )}
 
         <button class="btn" onClick={() => s.open({ kind: 'multiplayer' })}>
           <Icon name="users" size={20} /> Multiplayer

@@ -1794,3 +1794,15 @@ button.crew-head {
   font-weight: 600;
   color: var(--accent);
 }
+.daily-done-line {
+  text-align: center;
+  font-size: 0.85rem;
+  color: var(--text-2);
+  margin: 2px 0 4px;
+}
+.daily-done-line .link.inline-caption {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  vertical-align: middle;
+}
