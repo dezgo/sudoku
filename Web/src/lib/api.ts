@@ -313,6 +313,7 @@ export const api = {
     send<{ status: 'connected' | 'waiting' }>(`crew/requests/${userId}/accept`, 'POST', t),
   crewIntroduce: (t: string, a: string, b: string) => send<void>('crew/introduce', 'POST', t, { a, b }),
   crewIgnore: (t: string, userId: string) => send<void>(`crew/requests/${userId}`, 'DELETE', t),
+  inviteFrom: (code: string) => send<{ name: string | null }>(`invite/${encodeURIComponent(code)}`, 'GET', null),
   crewNote: (t: string, userId: string, note: string) => send<void>(`crew/notes/${userId}`, 'PUT', t, { note }),
   crewRemove: (t: string, userId: string) => send<void>(`crew/${userId}`, 'DELETE', t),
   postScore: (t: string, s: ScoreSubmission) => send<{ rank: number }>('scores', 'POST', t, s).then((r) => r.rank),

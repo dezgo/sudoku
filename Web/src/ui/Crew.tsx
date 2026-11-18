@@ -128,8 +128,8 @@ export function HowCrewWorks({ open: initiallyOpen = false }: { open?: boolean }
             only added if you accept — and then it’s just the two of you who are connected.
           </li>
           <li>
-            <b>You see each other’s finished games</b> and how you rated them, so you can try the same puzzle. Never your
-            times, unless you open “Times for today’s daily”.
+            <b>You see each other’s finished games</b> and how you rated them, so you can try the same puzzle. Times only
+            show for daily puzzles, under “Times for today’s daily”.
           </li>
           <li>
             <b>Their friends don’t see you, and yours don’t see them.</b> If Ash is in your crew and you invite a mate, Ash
@@ -907,6 +907,95 @@ export function WhatsNewSheet() {
           </div>
         </div>
       ))}
+    </Sheet>
+  );
+}
+
+/**
+ * Opened from someone's invite link. Says exactly what connecting shares —
+ * and that it isn't a group — before anything is sent.
+ */
+export function InviteSheet({ code }: { code: string }) {
+  const s = useStore();
+  const [name, setName] = useState<string | null | undefined>(undefined);
+  const [bad, setBad] = useState(false);
+  useEffect(() => {
+    api
+      .inviteFrom(code)
+      .then((r) => setName(r.name))
+      .catch(() => setBad(true));
+  }, [code]);
+  const who = name || 'your friend';
+  const Who = name || 'Your friend';
+  const connect = () => {
+    const go = () => {
+      store.closeAll();
+      void store.joinGroupByLink(code);
+    };
+    if (s.token) go();
+    else s.open({ kind: 'signIn', then: go });
+  };
+  if (bad)
+    return (
+      <Sheet title="Invite">
+        <p>That invite link didn’t work. Ask your friend to send it again.</p>
+        <button class="btn" style={{ marginTop: 12 }} onClick={() => s.close()}>
+          Play anyway
+        </button>
+      </Sheet>
+    );
+  if (name === undefined)
+    return (
+      <Sheet title="Invite">
+        <p class="muted">Loading…</p>
+      </Sheet>
+    );
+  return (
+    <Sheet title={`${Who} invited you`}>
+      <p class="invite-lead">
+        Connect with <b>{who}</b> on Sudoku Crew. It’s just the two of you — <b>not a group</b>.
+      </p>
+
+      <div class="section-title">{Who} will see</div>
+      <div class="group invite-list">
+        <div class="row">
+          <span class="invite-mark yes">✓</span>
+          <span class="grow">Puzzles you finish, and how you rated them</span>
+        </div>
+        <div class="row">
+          <span class="invite-mark yes">✓</span>
+          <span class="grow">Which days you played, and when you’re playing</span>
+        </div>
+        <div class="row">
+          <span class="invite-mark yes">✓</span>
+          <span class="grow">Your times on daily puzzles</span>
+        </div>
+      </div>
+      <p class="muted small invite-also">And you’ll see the same about {who}.</p>
+
+      <div class="section-title">Stays private</div>
+      <div class="group invite-list">
+        <div class="row">
+          <span class="invite-mark no">✕</span>
+          <span class="grow">{Who}’s other friends don’t see you, and you don’t see them</span>
+        </div>
+        <div class="row">
+          <span class="invite-mark no">✕</span>
+          <span class="grow">Your email address</span>
+        </div>
+        <div class="row">
+          <span class="invite-mark no">✕</span>
+          <span class="grow">Watching you play — only if you say yes, each time</span>
+        </div>
+      </div>
+      <p class="muted small invite-also">You can remove {who} any time. They aren’t told.</p>
+
+      <button class="btn primary" style={{ marginTop: 16 }} onClick={connect}>
+        {s.token ? `Connect with ${who}` : `Sign in to connect with ${who}`}
+      </button>
+      <button class="link" style={{ display: 'block', margin: '12px auto 0' }} onClick={() => s.close()}>
+        Not now — just play
+      </button>
     </Sheet>
   );
 }

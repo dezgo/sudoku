@@ -12,6 +12,7 @@ export const CHANGES: Change[] = [
   {
     date: '2026-11-18',
     items: [
+      'Opening a friend’s invite link now shows exactly what you’d share — and that it’s just the two of you, not a group — before anything is sent.',
       'Introductions you’ve made show “Introduced ✓” on both people’s pages.',
       'Introduce two people in your crew. They each get asked, and connect only if both say yes. You never find out whether they already knew each other.',
       'Your whole crew now shows on the home screen as a row of faces. Tap one to see their week, what they’ve played, add a private note or remove them.',

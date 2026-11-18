@@ -72,6 +72,7 @@ export type Sheet =
   | { kind: 'everyone' }
   | { kind: 'person'; id: string }
   | { kind: 'whatsNew' }
+  | { kind: 'invite'; code: string }
   | { kind: 'watch'; id: string; name: string };
 
 
@@ -1061,7 +1062,7 @@ class Store {
     const code = this.crew?.invite_code;
     return code
       ? {
-          text: 'Come play sudoku with me! A free daily puzzle, and we can see each other’s games:',
+          text: 'Come play sudoku with me! A free daily puzzle, and just the two of us see each other’s games (it’s not a group):',
           url: `${location.origin}/g/${code}`,
         }
       : { text: 'Come play sudoku with me! A free daily puzzle:', url: `${location.origin}/play/` };

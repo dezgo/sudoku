@@ -20,6 +20,7 @@ import { getAndroidAssetLinks, getAppleAppSiteAssociation } from './well-known';
 import { createSharedPuzzle, getSharedPuzzle, SHARE_NAME_RE } from './shared';
 import { postFeedback } from './feedback';
 import { postUsage, pruneUsage } from './usage';
+import { crewInvitePage, getInvite } from './crew-invite';
 import { acceptRequest, getMyInvite, ignoreRequest, introduce, joinCrew, putNote, removeFromCrew } from './crew';
 import { getCrew, getEveryone, postPlay, postPulse, prunePresence, ratePlay } from './plays';
 import { getAdminReport, sendWeeklyReport } from './report';
@@ -142,11 +143,12 @@ async function route(req: Request, env: Env, ctx: ExecutionContext): Promise<Res
     return Response.redirect(`${url.origin}/play/?p=${shareMatch[1]}`, 302);
   }
 
-  // Group invite link: /g/ABC234 opens the web app and joins that group (after sign-in).
+  // Crew invite link: /g/ABC234 — a link preview saying who's inviting, then on
+  // to the web app, which explains what connecting shares before asking.
   const groupLinkMatch = path.match(/^\/g\/([A-Za-z0-9]{4,12})\/?$/);
-  if (groupLinkMatch && method === 'GET') {
-    return Response.redirect(`${url.origin}/play/?group=${groupLinkMatch[1]!.toUpperCase()}`, 302);
-  }
+  if (groupLinkMatch && method === 'GET') return crewInvitePage(env, url.origin, groupLinkMatch[1]!);
+  const crewInviteMatch = path.match(/^\/v1\/invite\/([A-Za-z0-9]{4,12})$/);
+  if (crewInviteMatch && method === 'GET') return getInvite(env, crewInviteMatch[1]!);
 
   // Co-op invite link: /c/eagle-maple-lantern opens that live game in the web app.
   const coopLinkMatch = path.match(/^\/c\/([a-z-]+)\/?$/);

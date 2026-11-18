@@ -7,7 +7,7 @@ import { applyColors } from '../lib/colors';
 import { Home } from '../ui/Home';
 import { Play } from '../ui/Play';
 import { CoachSheet } from '../ui/Coach';
-import { CrewSheet, EveryoneSheet, PersonSheet, WhatsNewSheet } from '../ui/Crew';
+import { CrewSheet, EveryoneSheet, InviteSheet, PersonSheet, WhatsNewSheet } from '../ui/Crew';
 import { WatchSheet } from '../ui/Watch';
 import { LifelinesSheet } from '../ui/Lifelines';
 import { HistorySheet } from '../ui/History';
@@ -53,6 +53,8 @@ function renderSheet(sheet: Sheet, i: number) {
       return <CrewSheet key={i} tab={sheet.tab} explain={sheet.explain} />;
     case 'everyone':
       return <EveryoneSheet key={i} />;
+    case 'invite':
+      return <InviteSheet key={i} code={sheet.code} />;
     case 'whatsNew':
       return <WhatsNewSheet key={i} />;
     case 'person':
@@ -86,12 +88,8 @@ function handleGroupLink() {
   const code = new URLSearchParams(location.search).get('group');
   if (!code) return;
   history.replaceState(null, '', location.pathname);
-  const join = () => void store.joinGroupByLink(code);
-  if (store.token) join();
-  else {
-    store.showToast('Sign in to connect with your friend.', 4000);
-    store.open({ kind: 'signIn', then: join });
-  }
+  // Say exactly what connecting shares before anything is sent.
+  store.open({ kind: 'invite', code });
 }
 
 /** `/play/?p=eagle-maple-lantern` — a shared puzzle (the Worker redirects /p/<name> here). */

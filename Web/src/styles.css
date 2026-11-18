@@ -2004,3 +2004,35 @@ div.crew-note,
 .whats-new li + li {
   margin-top: 8px;
 }
+
+/* Invite sheet: what connecting shares. */
+.invite-lead {
+  font-size: 1rem;
+  line-height: 1.45;
+  margin: 0 2px 4px;
+}
+.invite-list .row {
+  font-size: 0.92rem;
+  line-height: 1.35;
+}
+.invite-mark {
+  flex: none;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  font-size: 0.75rem;
+  font-weight: 700;
+}
+.invite-mark.yes {
+  background: rgba(36, 161, 72, 0.15);
+  color: var(--success);
+}
+.invite-mark.no {
+  background: var(--surface-2);
+  color: var(--text-2);
+}
+.invite-also {
+  margin: 8px 4px 0;
+}
