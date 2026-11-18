@@ -3,7 +3,8 @@
 // board. Deliberately not competitive: no times, no ranks. Plus the two-tap
 // "How was it?" on the Solved sheet that feeds it.
 
-import { useEffect, useState } from 'preact/hooks';
+import { useEffect, useRef, useState } from 'preact/hooks';
+import type { ComponentChildren } from 'preact';
 import { store, useStore } from '../app/store';
 import { api, type CrewFavourite, type CrewPlay, type Enjoyment } from '../lib/api';
 import { deviceId } from '../lib/usage';
@@ -159,40 +160,61 @@ function NoteLine({ id, onEdit }: { id: string; onEdit: () => void }) {
   );
 }
 
-/** Inline editor for a private note. Saving an empty note removes it. */
-function NoteEditor({ id, name, onDone }: { id: string; name: string; onDone: () => void }) {
+/**
+ * A private note that saves as you type (and when you leave the box) — no
+ * Save button. Clearing it removes the note.
+ */
+function NoteInput({ id, name, autoFocus = false, onDone }: { id: string; name: string; autoFocus?: boolean; onDone?: () => void }) {
   const s = useStore();
-  const [text, setText] = useState(s.crew?.notes?.[id] ?? '');
-  const [saving, setSaving] = useState(false);
-  const save = async () => {
-    setSaving(true);
-    const ok = await s.saveNote(id, text);
-    setSaving(false);
-    if (ok) onDone();
+  const initial = s.crew?.notes?.[id] ?? '';
+  const [text, setText] = useState(initial);
+  const [status, setStatus] = useState<'' | 'saving' | 'saved'>('');
+  const latest = useRef(initial);
+  const saved = useRef(initial.trim());
+  const timer = useRef<number | null>(null);
+  const flush = async () => {
+    if (timer.current !== null) window.clearTimeout(timer.current);
+    timer.current = null;
+    const v = latest.current.trim();
+    if (v === saved.current) return;
+    saved.current = v;
+    setStatus('saving');
+    const ok = await s.saveNote(id, v);
+    setStatus(ok ? 'saved' : '');
   };
+  const box = useRef<HTMLInputElement>(null);
+  useEffect(() => {
+    if (autoFocus) box.current?.focus();
+    // Leaving the screen mid-typing still saves.
+    return () => void flush();
+  }, []);
   return (
     <div class="crew-note-edit">
       <input
         type="text"
         value={text}
         maxLength={200}
-        placeholder={`Who’s ${name}? e.g. from work`}
+        placeholder={`Private note — who’s ${name}?`}
         aria-label={`Private note on ${name}`}
-        ref={(el) => el?.focus()}
-        onInput={(e) => setText((e.target as HTMLInputElement).value)}
+        ref={box}
+        onInput={(e) => {
+          const v = (e.target as HTMLInputElement).value;
+          setText(v);
+          latest.current = v;
+          setStatus('');
+          if (timer.current !== null) window.clearTimeout(timer.current);
+          timer.current = window.setTimeout(() => void flush(), 700);
+        }}
+        onBlur={() => {
+          void flush();
+          onDone?.();
+        }}
         onKeyDown={(e) => {
-          if (e.key === 'Enter') void save();
-          if (e.key === 'Escape') onDone();
+          if (e.key === 'Enter' || e.key === 'Escape') (e.target as HTMLInputElement).blur();
         }}
       />
       <div class="sub">
-        Only you see this.{' '}
-        <button class="link inline-caption" disabled={saving} onClick={() => void save()}>
-          Save
-        </button>{' '}
-        <button class="link inline-caption" onClick={onDone}>
-          Cancel
-        </button>
+        Only you see this{status === 'saving' ? ' · Saving…' : status === 'saved' ? ' · Saved ✓' : ''}
       </div>
     </div>
   );
@@ -214,7 +236,7 @@ export function CrewRequests() {
               <b>{r.name}</b> wants to connect
             </div>
             {noting === r.id ? (
-              <NoteEditor id={r.id} name={r.name} onDone={() => setNoting(null)} />
+              <NoteInput id={r.id} name={r.name} autoFocus onDone={() => setNoting(null)} />
             ) : (
               <>
                 <NoteLine id={r.id} onEdit={() => setNoting(r.id)} />
@@ -271,9 +293,10 @@ export function CrewCard() {
     <div class="crew-card">
       <button class="crew-head" onClick={() => s.open({ kind: 'crew' })}>
         <span>Your crew</span>
-        <span class="crew-head-more">See everyone ›</span>
+        <span class="crew-head-more">See all ›</span>
       </button>
       <CrewRequests />
+      <CrewStrip />
       <div class="group">
         <PlayingNow />
         {latest.map((p) => (
@@ -322,15 +345,125 @@ export function PlayingNow() {
   );
 }
 
+const touchScreen = typeof matchMedia === 'function' && matchMedia('(pointer: coarse)').matches;
+
+/** Everyone in my crew as a row of faces on Home. Tap one to see them. */
+function CrewStrip() {
+  const s = useStore();
+  const crew = s.crew;
+  if (!crew || !s.crewMates.length) return null;
+  const today = crew.days[crew.days.length - 1];
+  const live = new Set((s.pulse?.crew_playing ?? []).map((p) => p.id));
+  return (
+    <div class="crew-strip">
+      {s.crewMates.map((m) => (
+        <button key={m.id} class="crew-face" onClick={() => s.open({ kind: 'person', id: m.id })} title={crew.notes?.[m.id] ?? m.name}>
+          <span class={`crew-avatar big${live.has(m.id) ? ' live' : ''}`}>
+            {(m.name.trim()[0] ?? '?').toUpperCase()}
+            {today && m.played.includes(today) && <i class="crew-face-tick" aria-label="played today">✓</i>}
+          </span>
+          <span class="crew-face-name">{m.name.split(' ')[0]}</span>
+        </button>
+      ))}
+      <button class="crew-face" onClick={() => inviteFriend()}>
+        <span class="crew-avatar big add">
+          <Icon name="plus" size={18} />
+        </span>
+        <span class="crew-face-name">Invite</span>
+      </button>
+    </div>
+  );
+}
+
+/**
+ * A list row you can swipe left on a phone to reveal its actions. Tapping
+ * (or clicking, on a computer) does `onTap` — which opens the same options.
+ */
+function SwipeRow({ actions, onTap, children }: { actions: { label: string; danger?: boolean; run: () => void }[]; onTap: () => void; children: ComponentChildren }) {
+  const W = actions.length * 76;
+  const [x, setX] = useState(0);
+  const [dragging, setDragging] = useState(false);
+  const g = useRef<{ x0: number; y0: number; base: number; drag: boolean | null } | null>(null);
+  const swallowClick = useRef(false);
+  return (
+    <div class="swipe">
+      <div class="swipe-actions" style={{ width: W }} aria-hidden={x === 0}>
+        {actions.map((a) => (
+          <button key={a.label} class={a.danger ? 'danger' : ''} tabIndex={x === 0 ? -1 : 0} onClick={() => (setX(0), a.run())}>
+            {a.label}
+          </button>
+        ))}
+      </div>
+      <div
+        class="row crew-member swipe-fg"
+        role="button"
+        tabIndex={0}
+        style={{ transform: `translateX(${x}px)`, transition: dragging ? 'none' : undefined }}
+        onPointerDown={(e) => {
+          if (e.pointerType === 'mouse') return;
+          g.current = { x0: e.clientX, y0: e.clientY, base: x, drag: null };
+        }}
+        onPointerMove={(e) => {
+          const st = g.current;
+          if (!st) return;
+          const dx = e.clientX - st.x0;
+          const dy = e.clientY - st.y0;
+          if (st.drag === null) {
+            if (Math.abs(dx) > 8 && Math.abs(dx) > Math.abs(dy)) {
+              st.drag = true;
+              setDragging(true);
+              (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+            } else if (Math.abs(dy) > 8) {
+              g.current = null;
+              return;
+            } else return;
+          }
+          setX(Math.max(-W, Math.min(0, st.base + dx)));
+        }}
+        onPointerUp={() => {
+          const st = g.current;
+          g.current = null;
+          if (!st?.drag) return;
+          swallowClick.current = true;
+          setDragging(false);
+          setX((cur) => (cur < -W / 2 ? -W : 0));
+        }}
+        onPointerCancel={() => {
+          g.current = null;
+          setDragging(false);
+          setX(0);
+        }}
+        onClick={() => {
+          if (swallowClick.current) {
+            swallowClick.current = false;
+            return;
+          }
+          if (x !== 0) setX(0);
+          else onTap();
+        }}
+        onKeyDown={(e) => e.key === 'Enter' && onTap()}
+      >
+        {children}
+      </div>
+    </div>
+  );
+}
+
 /** Me and my crew, with the days each played this week. */
 function People() {
   const s = useStore();
   const crew = s.crew;
-  const [editing, setEditing] = useState(false);
   const [removing, setRemoving] = useState<string | null>(null);
   const [noting, setNoting] = useState<string | null>(null);
   if (!crew) return <p class="muted">Loading…</p>;
   const letter = (d: string) => 'SMTWTFS'[new Date(`${d}T12:00:00Z`).getUTCDay()];
+  const dots = (played: string[]) => (
+    <span class="crew-dots">
+      {crew.days.map((d) => (
+        <b key={d} class={played.includes(d) ? 'on' : ''} title={d} />
+      ))}
+    </span>
+  );
   return (
     <>
       <div class="group">
@@ -342,97 +475,177 @@ function People() {
             ))}
           </span>
         </div>
-        {crew.people.map((m) => (
-          <div class="row crew-member" key={m.id}>
-            <Initial name={m.name} />
-            <div class="grow">
-              <div>
-                {m.name}
-                {m.you && <span class="muted"> (you)</span>}
+        {crew.people.map((m) => {
+          const body = (
+            <>
+              <Initial name={m.name} />
+              <div class="grow">
+                <div>
+                  {m.name}
+                  {m.you && <span class="muted"> (you)</span>}
+                </div>
+                {noting === m.id ? (
+                  <div onClick={(e) => e.stopPropagation()}>
+                    <NoteInput id={m.id} name={m.name} autoFocus onDone={() => setNoting(null)} />
+                  </div>
+                ) : (
+                  !m.you && crew.notes?.[m.id] && <div class="crew-note">{crew.notes[m.id]}</div>
+                )}
+                {removing === m.id ? (
+                  <div class="sub" onClick={(e) => e.stopPropagation()}>
+                    Remove {m.name}? You’ll stop seeing each other.{' '}
+                    <button class="link inline-caption" onClick={() => setRemoving(null)}>
+                      Keep
+                    </button>{' '}
+                    <button
+                      class="link inline-caption danger"
+                      onClick={async () => {
+                        setRemoving(null);
+                        await s.removeFromCrew(m.id);
+                      }}
+                    >
+                      Remove
+                    </button>
+                  </div>
+                ) : (
+                  <div class="sub">{m.last_at ? `last played ${ago(m.last_at)}` : 'not played yet'}</div>
+                )}
               </div>
-              {!m.you && noting !== m.id && <NoteLine id={m.id} onEdit={() => setNoting(m.id)} />}
-              {noting === m.id ? (
-                <NoteEditor id={m.id} name={m.name} onDone={() => setNoting(null)} />
-              ) : removing === m.id ? (
-                <div class="sub">
-                  Remove {m.name}? You’ll stop seeing each other.{' '}
-                  <button class="link inline-caption" onClick={() => setRemoving(null)}>
-                    Keep
-                  </button>{' '}
-                  <button
-                    class="link inline-caption danger"
-                    onClick={async () => {
-                      setRemoving(null);
-                      await s.removeFromCrew(m.id);
-                    }}
-                  >
-                    Remove
-                  </button>
-                </div>
-              ) : (
-                <div class="sub">
-                  {m.last_at ? `last played ${ago(m.last_at)}` : 'not played yet'}
-                  {editing && !m.you && (
-                    <>
-                      {' · '}
-                      <button class="link inline-caption" onClick={() => (setNoting(m.id), setRemoving(null))}>
-                        {crew.notes?.[m.id] ? 'Edit note' : 'Add note'}
-                      </button>
-                      {' · '}
-                      <button class="link inline-caption danger" onClick={() => setRemoving(m.id)}>
-                        Remove
-                      </button>
-                    </>
-                  )}
-                </div>
-              )}
+              {dots(m.played)}
+            </>
+          );
+          return m.you ? (
+            <div class="row crew-member" key={m.id}>
+              {body}
             </div>
-            <span class="crew-dots">
-              {crew.days.map((d) => (
-                <b key={d} class={m.played.includes(d) ? 'on' : ''} title={d} />
-              ))}
-            </span>
-          </div>
-        ))}
+          ) : (
+            <SwipeRow
+              key={m.id}
+              onTap={() => s.open({ kind: 'person', id: m.id })}
+              actions={[
+                { label: 'Note', run: () => (setRemoving(null), setNoting(m.id)) },
+                { label: 'Remove', danger: true, run: () => (setNoting(null), setRemoving(m.id)) },
+              ]}
+            >
+              {body}
+            </SwipeRow>
+          );
+        })}
         {crew.waiting.map((w) => (
-          <div class="row crew-member" key={w.id}>
+          <SwipeRow key={w.id} onTap={() => setNoting(w.id)} actions={[{ label: 'Note', run: () => setNoting(w.id) }]}>
             <Initial name={w.name} />
             <div class="grow">
               <div>{w.name}</div>
               {noting === w.id ? (
-                <NoteEditor id={w.id} name={w.name} onDone={() => setNoting(null)} />
+                <div onClick={(e) => e.stopPropagation()}>
+                  <NoteInput id={w.id} name={w.name} autoFocus onDone={() => setNoting(null)} />
+                </div>
               ) : (
-                <>
-                  <NoteLine id={w.id} onEdit={() => setNoting(w.id)} />
-                  <div class="sub">
-                    Waiting for {w.name} to accept
-                    {editing && (
-                      <>
-                        {' · '}
-                        <button class="link inline-caption" onClick={() => setNoting(w.id)}>
-                          {crew.notes?.[w.id] ? 'Edit note' : 'Add note'}
-                        </button>
-                      </>
-                    )}
-                  </div>
-                </>
+                crew.notes?.[w.id] && <div class="crew-note">{crew.notes[w.id]}</div>
               )}
+              <div class="sub">Waiting for {w.name} to accept</div>
             </div>
-          </div>
+          </SwipeRow>
         ))}
         <button class="row crew-invite" onClick={() => inviteFriend()}>
           <Icon name="plus" size={18} />
           <span class="grow">Invite a friend</span>
         </button>
       </div>
-      {(crew.people.length > 1 || crew.waiting.length > 0) && (
-        <div style={{ textAlign: 'right', marginTop: 6 }}>
-          <button class="link inline-caption muted-link" onClick={() => (setEditing(!editing), setRemoving(null))}>
-            {editing ? 'Finish editing' : 'Edit crew'}
-          </button>
-        </div>
+      {s.crewMates.length > 0 && (
+        <p class="muted small" style={{ margin: '8px 4px 0' }}>
+          {touchScreen ? 'Tap someone to see their games, or swipe left to add a note or remove them.' : 'Click someone to see their games, add a private note or remove them.'}
+        </p>
       )}
     </>
+  );
+}
+
+/** One crew-mate: my private note, their week, what they've played, and Remove. */
+export function PersonSheet({ id }: { id: string }) {
+  const s = useStore();
+  const crew = s.crew;
+  const [confirm, setConfirm] = useState(false);
+  const m = crew?.people.find((p) => p.id === id);
+  if (!crew || !m)
+    return (
+      <Sheet title="Your crew">
+        <p class="muted">{crew ? 'They’re no longer in your crew.' : 'Loading…'}</p>
+      </Sheet>
+    );
+  const games = crew.feed.filter((p) => p.user_id === id);
+  const live = s.pulse?.crew_playing?.find((p) => p.id === id);
+  const n = m.played.length;
+  return (
+    <Sheet title={m.name}>
+      <div class="person-head">
+        <span class={`crew-avatar huge${live ? ' live' : ''}`}>{(m.name.trim()[0] ?? '?').toUpperCase()}</span>
+        <div class="muted small">
+          {live ? 'Playing right now' : m.last_at ? `Last played ${ago(m.last_at)}` : 'Not played yet'}
+        </div>
+      </div>
+      <NoteInput key={id} id={id} name={m.name} />
+
+      <div class="section-title">This week</div>
+      <div class="group">
+        <div class="row">
+          <span class="grow">
+            Played {n} of the last 7 days
+          </span>
+          <span class="crew-dots">
+            {crew.days.map((d) => (
+              <b key={d} class={m.played.includes(d) ? 'on' : ''} title={d} />
+            ))}
+          </span>
+        </div>
+        {live?.watchable && (
+          <div class="row">
+            <span class="grow">They’re happy to be watched</span>
+            <button class="btn compact" onClick={() => s.open({ kind: 'watch', id, name: m.name })}>
+              Watch
+            </button>
+          </div>
+        )}
+      </div>
+
+      <div class="section-title">Recently played</div>
+      {games.length ? (
+        <div class="group">
+          {games.map((p) => (
+            <PlayRow key={p.id} p={p} />
+          ))}
+        </div>
+      ) : (
+        <p class="muted">Nothing in the last two weeks.</p>
+      )}
+
+      <div class="crew-more">
+        {confirm ? (
+          <div class="crew-leave">
+            Remove {m.name}? You’ll stop seeing each other. They aren’t told.
+            <div style={{ marginTop: 8 }}>
+              <button class="link" onClick={() => setConfirm(false)}>
+                Keep
+              </button>
+              {'   '}
+              <button
+                class="link danger"
+                onClick={async () => {
+                  await s.removeFromCrew(id);
+                  s.close();
+                }}
+              >
+                Remove
+              </button>
+            </div>
+          </div>
+        ) : (
+          <button class="link danger" onClick={() => setConfirm(true)}>
+            Remove from my crew
+          </button>
+        )}
+      </div>
+    </Sheet>
   );
 }
 

@@ -1856,6 +1856,7 @@ button.crew-head {
 }
 
 /* Private crew notes ("Sam from work") — only the owner sees them. */
+div.crew-note,
 .crew-note {
   display: block;
   margin-top: 2px;
@@ -1886,4 +1887,110 @@ button.crew-head {
 }
 .crew-note-edit .sub {
   margin-top: 4px;
+}
+
+/* Crew faces on Home — everyone in your crew, tap for their page. */
+.crew-strip {
+  display: flex;
+  gap: 14px;
+  overflow-x: auto;
+  padding: 4px 4px 10px;
+  scrollbar-width: none;
+}
+.crew-strip::-webkit-scrollbar {
+  display: none;
+}
+.crew-face {
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  width: 56px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--text);
+  cursor: pointer;
+}
+.crew-avatar.big {
+  position: relative;
+  width: 46px;
+  height: 46px;
+  font-size: 1.1rem;
+}
+.crew-avatar.huge {
+  width: 64px;
+  height: 64px;
+  font-size: 1.6rem;
+}
+.crew-avatar.add {
+  background: var(--surface);
+  border: 1.5px dashed var(--line);
+  color: var(--accent);
+}
+.crew-face-name {
+  font-size: 0.78rem;
+  max-width: 56px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.crew-face-tick {
+  position: absolute;
+  right: -3px;
+  bottom: -3px;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: var(--success);
+  color: #fff;
+  font-style: normal;
+  font-size: 0.65rem;
+  display: grid;
+  place-items: center;
+  border: 2px solid var(--bg);
+}
+.person-head {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  margin: 4px 0 12px;
+}
+
+/* Swipe-left rows (crew list): actions sit behind the row. */
+.swipe {
+  position: relative;
+  overflow: hidden;
+  border-bottom: 0.5px solid var(--line);
+}
+.swipe .row {
+  border-bottom: 0;
+}
+.swipe-fg {
+  position: relative;
+  background: var(--surface);
+  transition: transform 0.2s ease;
+  touch-action: pan-y;
+  cursor: pointer;
+}
+.swipe-actions {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  display: flex;
+}
+.swipe-actions button {
+  flex: 1;
+  border: 0;
+  background: var(--text-2);
+  color: #fff;
+  font: inherit;
+  font-weight: 600;
+  font-size: 0.85rem;
+}
+.swipe-actions button.danger {
+  background: var(--error);
 }

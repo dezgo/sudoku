@@ -176,6 +176,7 @@ export interface CrewData {
 export interface CrewPlay {
   id: string;
   who: string;
+  user_id: string;
   /** My own game — shown as "You finished…", with nothing to try. */
   you: boolean;
   puzzle_id: number | null;

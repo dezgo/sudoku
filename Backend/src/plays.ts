@@ -201,6 +201,7 @@ export async function getCrew(req: Request, env: Env): Promise<Response> {
     .map((sc) => ({
       id: `s${sc.puzzle_id}-${sc.user_id}`,
       who: sc.display_name ?? 'Someone',
+      user_id: sc.user_id,
       you: sc.user_id === me,
       puzzle_id: sc.puzzle_id,
       name: null,
@@ -221,6 +222,7 @@ export async function getCrew(req: Request, env: Env): Promise<Response> {
     feed: [...feedRes.results.map((p) => ({
       id: String(p.id),
       who: p.display_name ?? 'Someone',
+      user_id: p.user_id,
       you: p.user_id === me,
       ...where(p.puzzle_ref),
       mode: p.mode,

@@ -70,6 +70,7 @@ export type Sheet =
   | { kind: 'lifelines'; used: Lifeline[] }
   | { kind: 'crew'; tab?: 'recent' | 'favourites'; explain?: boolean }
   | { kind: 'everyone' }
+  | { kind: 'person'; id: string }
   | { kind: 'watch'; id: string; name: string };
 
 
