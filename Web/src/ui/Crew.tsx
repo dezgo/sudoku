@@ -137,6 +137,9 @@ export function HowCrewWorks({ open: initiallyOpen = false }: { open?: boolean }
             <b>Watching only happens if you say yes</b>, each time (you can change that in Settings).
           </li>
           <li>
+            <b>Notes are just for you.</b> Add one to remember who someone is (“Sam from work”). They never see it.
+          </li>
+          <li>
             <b>You can remove anyone</b>, any time. They aren’t told; you just stop seeing each other.
           </li>
         </ul>
@@ -145,9 +148,60 @@ export function HowCrewWorks({ open: initiallyOpen = false }: { open?: boolean }
   );
 }
 
-/** "Bec wants to join your crew · Accept · Ignore". */
+/** My private note on someone, shown under their name. Tap it to change it. */
+function NoteLine({ id, onEdit }: { id: string; onEdit: () => void }) {
+  const note = useStore().crew?.notes?.[id];
+  if (!note) return null;
+  return (
+    <button class="crew-note" onClick={onEdit} title="Only you see this note">
+      {note}
+    </button>
+  );
+}
+
+/** Inline editor for a private note. Saving an empty note removes it. */
+function NoteEditor({ id, name, onDone }: { id: string; name: string; onDone: () => void }) {
+  const s = useStore();
+  const [text, setText] = useState(s.crew?.notes?.[id] ?? '');
+  const [saving, setSaving] = useState(false);
+  const save = async () => {
+    setSaving(true);
+    const ok = await s.saveNote(id, text);
+    setSaving(false);
+    if (ok) onDone();
+  };
+  return (
+    <div class="crew-note-edit">
+      <input
+        type="text"
+        value={text}
+        maxLength={200}
+        placeholder={`Who’s ${name}? e.g. from work`}
+        aria-label={`Private note on ${name}`}
+        ref={(el) => el?.focus()}
+        onInput={(e) => setText((e.target as HTMLInputElement).value)}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter') void save();
+          if (e.key === 'Escape') onDone();
+        }}
+      />
+      <div class="sub">
+        Only you see this.{' '}
+        <button class="link inline-caption" disabled={saving} onClick={() => void save()}>
+          Save
+        </button>{' '}
+        <button class="link inline-caption" onClick={onDone}>
+          Cancel
+        </button>
+      </div>
+    </div>
+  );
+}
+
+/** "Bec wants to connect · Accept · Ignore". */
 export function CrewRequests() {
   const s = useStore();
+  const [noting, setNoting] = useState<string | null>(null);
   const reqs = s.crew?.requests ?? [];
   if (!reqs.length) return null;
   return (
@@ -157,9 +211,26 @@ export function CrewRequests() {
           <Initial name={r.name} />
           <div class="grow">
             <div>
-              <b>{r.name}</b> wants to join your crew
+              <b>{r.name}</b> wants to connect
             </div>
-            <div class="sub">You’d see each other’s games · {ago(r.at)}</div>
+            {noting === r.id ? (
+              <NoteEditor id={r.id} name={r.name} onDone={() => setNoting(null)} />
+            ) : (
+              <>
+                <NoteLine id={r.id} onEdit={() => setNoting(r.id)} />
+                <div class="sub">
+                  You’d see each other’s games, not each other’s crews · {ago(r.at)}
+                  {!s.crew?.notes?.[r.id] && (
+                    <>
+                      {' · '}
+                      <button class="link inline-caption" onClick={() => setNoting(r.id)}>
+                        Add note
+                      </button>
+                    </>
+                  )}
+                </div>
+              </>
+            )}
           </div>
           <button class="btn compact primary" onClick={() => void s.answerRequest(r.id, true)}>
             Accept
@@ -257,6 +328,7 @@ function People() {
   const crew = s.crew;
   const [editing, setEditing] = useState(false);
   const [removing, setRemoving] = useState<string | null>(null);
+  const [noting, setNoting] = useState<string | null>(null);
   if (!crew) return <p class="muted">Loading…</p>;
   const letter = (d: string) => 'SMTWTFS'[new Date(`${d}T12:00:00Z`).getUTCDay()];
   return (
@@ -278,7 +350,10 @@ function People() {
                 {m.name}
                 {m.you && <span class="muted"> (you)</span>}
               </div>
-              {removing === m.id ? (
+              {!m.you && noting !== m.id && <NoteLine id={m.id} onEdit={() => setNoting(m.id)} />}
+              {noting === m.id ? (
+                <NoteEditor id={m.id} name={m.name} onDone={() => setNoting(null)} />
+              ) : removing === m.id ? (
                 <div class="sub">
                   Remove {m.name}? You’ll stop seeing each other.{' '}
                   <button class="link inline-caption" onClick={() => setRemoving(null)}>
@@ -300,6 +375,10 @@ function People() {
                   {editing && !m.you && (
                     <>
                       {' · '}
+                      <button class="link inline-caption" onClick={() => (setNoting(m.id), setRemoving(null))}>
+                        {crew.notes?.[m.id] ? 'Edit note' : 'Add note'}
+                      </button>
+                      {' · '}
                       <button class="link inline-caption danger" onClick={() => setRemoving(m.id)}>
                         Remove
                       </button>
@@ -320,7 +399,24 @@ function People() {
             <Initial name={w.name} />
             <div class="grow">
               <div>{w.name}</div>
-              <div class="sub">Waiting for {w.name} to accept</div>
+              {noting === w.id ? (
+                <NoteEditor id={w.id} name={w.name} onDone={() => setNoting(null)} />
+              ) : (
+                <>
+                  <NoteLine id={w.id} onEdit={() => setNoting(w.id)} />
+                  <div class="sub">
+                    Waiting for {w.name} to accept
+                    {editing && (
+                      <>
+                        {' · '}
+                        <button class="link inline-caption" onClick={() => setNoting(w.id)}>
+                          {crew.notes?.[w.id] ? 'Edit note' : 'Add note'}
+                        </button>
+                      </>
+                    )}
+                  </div>
+                </>
+              )}
             </div>
           </div>
         ))}
@@ -329,7 +425,7 @@ function People() {
           <span class="grow">Invite a friend</span>
         </button>
       </div>
-      {crew.people.length > 1 && (
+      {(crew.people.length > 1 || crew.waiting.length > 0) && (
         <div style={{ textAlign: 'right', marginTop: 6 }}>
           <button class="link inline-caption muted-link" onClick={() => (setEditing(!editing), setRemoving(null))}>
             {editing ? 'Finish editing' : 'Edit crew'}

@@ -8,6 +8,7 @@
 //   POST   /v1/crew/requests/:userId/accept    accept someone's request
 //   DELETE /v1/crew/requests/:userId           ignore it (never announced: they still see "waiting")
 //   DELETE /v1/crew/:userId                    remove someone from your crew (both ways)
+//   PUT    /v1/crew/notes/:userId {note}       my private note on someone ("" clears it)
 
 import type { Env } from './types';
 import { jsonError, jsonOk, readJson } from './http';
@@ -145,5 +146,37 @@ export async function removeFromCrew(req: Request, env: Env, other: string): Pro
   if (auth instanceof Response) return auth;
   const [a, b] = auth.user_id < other ? [auth.user_id, other] : [other, auth.user_id];
   await env.DB.prepare('DELETE FROM connections WHERE a = ? AND b = ?').bind(a, b).run();
+  return new Response(null, { status: 204 });
+}
+
+/** My private notes on people, keyed by their id. Nobody else ever sees these. */
+export async function notesFor(env: Env, me: string): Promise<Record<string, string>> {
+  const r = await env.DB.prepare('SELECT about, note FROM crew_notes WHERE owner = ?').bind(me).all<{ about: string; note: string }>();
+  return Object.fromEntries(r.results.map((n) => [n.about, n.note]));
+}
+
+export async function putNote(req: Request, env: Env, about: string): Promise<Response> {
+  const auth = await requireAuth(req, env);
+  if (auth instanceof Response) return auth;
+  const me = auth.user_id;
+  const body = await readJson<{ note?: unknown }>(req);
+  if (typeof body?.note !== 'string') return jsonError(400, 'missing_note');
+  const note = body.note.trim().slice(0, 200);
+  if (!note) {
+    await env.DB.prepare('DELETE FROM crew_notes WHERE owner = ? AND about = ?').bind(me, about).run();
+    return new Response(null, { status: 204 });
+  }
+  // Only people you're connected to, or who you've asked / who asked you.
+  const known =
+    (await areConnected(env, me, about)) ||
+    !!(await env.DB.prepare('SELECT 1 FROM crew_requests WHERE (from_user = ?1 AND to_user = ?2) OR (from_user = ?2 AND to_user = ?1)')
+      .bind(me, about)
+      .first());
+  if (!known) return jsonError(404, 'not_in_crew');
+  await env.DB.prepare(
+    'INSERT INTO crew_notes (owner, about, note, updated_at) VALUES (?, ?, ?, ?) ON CONFLICT (owner, about) DO UPDATE SET note = excluded.note, updated_at = excluded.updated_at',
+  )
+    .bind(me, about, note, Date.now())
+    .run();
   return new Response(null, { status: 204 });
 }

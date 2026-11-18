@@ -986,7 +986,25 @@ class Store {
     }
   }
 
-  /** Answer "Bec wants to join your crew". Ignoring is silent — they just keep waiting. */
+  /** Save my private note on someone ("" clears it). */
+  async saveNote(userId: string, note: string): Promise<boolean> {
+    if (!this.token || !this.crew) return false;
+    try {
+      await api.crewNote(this.token, userId, note);
+      const notes = { ...this.crew.notes };
+      if (note.trim()) notes[userId] = note.trim().slice(0, 200);
+      else delete notes[userId];
+      this.crew = { ...this.crew, notes };
+      track('feature', { f: 'crew_note' });
+      this.emit();
+      return true;
+    } catch (e) {
+      this.showToast(e instanceof ApiError && e.kind === 'offline' ? "You're offline." : "Couldn't save the note. Try again.");
+      return false;
+    }
+  }
+
+  /** Answer "Bec wants to connect". Ignoring is silent — they just keep waiting. */
   async answerRequest(userId: string, accept: boolean): Promise<void> {
     if (!this.token) return;
     try {
@@ -1030,10 +1048,10 @@ class Store {
       await this.refreshCrew();
       this.showToast(
         r.status === 'requested'
-          ? `Asked ${r.name} to add you. You’ll see each other’s games once they accept.`
+          ? `Asked ${r.name} to connect. You’ll see each other’s games once they accept.`
           : r.status === 'already'
             ? `You and ${r.name} are already in each other’s crew.`
-            : `You and ${r.name} are now in each other’s crew.`,
+            : `You and ${r.name} are now connected.`,
         6000,
       );
       this.open({ kind: 'crew', explain: true });

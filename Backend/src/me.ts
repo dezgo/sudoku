@@ -67,6 +67,7 @@ export async function deleteMe(req: Request, env: Env): Promise<Response> {
     env.DB.prepare('DELETE FROM plays WHERE user_id = ?').bind(userId),
     env.DB.prepare('DELETE FROM connections WHERE a = ?1 OR b = ?1').bind(userId),
     env.DB.prepare('DELETE FROM crew_requests WHERE from_user = ?1 OR to_user = ?1').bind(userId),
+    env.DB.prepare('DELETE FROM crew_notes WHERE owner = ?1 OR about = ?1').bind(userId),
     env.DB.prepare('DELETE FROM devices WHERE user_id = ?').bind(userId),
     env.DB.prepare('DELETE FROM users WHERE id = ?').bind(userId),
   ];

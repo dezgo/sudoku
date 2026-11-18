@@ -85,7 +85,7 @@ function handleGroupLink() {
   const join = () => void store.joinGroupByLink(code);
   if (store.token) join();
   else {
-    store.showToast('Sign in to join your friend’s crew.', 4000);
+    store.showToast('Sign in to connect with your friend.', 4000);
     store.open({ kind: 'signIn', then: join });
   }
 }

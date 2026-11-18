@@ -161,7 +161,9 @@ export interface CrewPerson {
 }
 export interface CrewData {
   invite_code: string;
-  /** People asking to join my crew. */
+  /** My private notes on people, by user id. Only I ever see these. */
+  notes: Record<string, string>;
+  /** People asking to connect with me. */
   requests: { id: string; name: string; at: number }[];
   /** People I've asked, who haven't answered yet. */
   waiting: { id: string; name: string }[];
@@ -305,6 +307,7 @@ export const api = {
     send<{ name: string; status: 'requested' | 'connected' | 'already' }>('crew/join', 'POST', t, { code }),
   crewAccept: (t: string, userId: string) => send<void>(`crew/requests/${userId}/accept`, 'POST', t),
   crewIgnore: (t: string, userId: string) => send<void>(`crew/requests/${userId}`, 'DELETE', t),
+  crewNote: (t: string, userId: string, note: string) => send<void>(`crew/notes/${userId}`, 'PUT', t, { note }),
   crewRemove: (t: string, userId: string) => send<void>(`crew/${userId}`, 'DELETE', t),
   postScore: (t: string, s: ScoreSubmission) => send<{ rank: number }>('scores', 'POST', t, s).then((r) => r.rank),
   groupScores: (t: string, groupId: string, puzzleId: number) =>

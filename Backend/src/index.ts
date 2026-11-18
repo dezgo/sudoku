@@ -20,7 +20,7 @@ import { getAndroidAssetLinks, getAppleAppSiteAssociation } from './well-known';
 import { createSharedPuzzle, getSharedPuzzle, SHARE_NAME_RE } from './shared';
 import { postFeedback } from './feedback';
 import { postUsage, pruneUsage } from './usage';
-import { acceptRequest, getMyInvite, ignoreRequest, joinCrew, removeFromCrew } from './crew';
+import { acceptRequest, getMyInvite, ignoreRequest, joinCrew, putNote, removeFromCrew } from './crew';
 import { getCrew, getEveryone, postPlay, postPulse, prunePresence, ratePlay } from './plays';
 import { getAdminReport, sendWeeklyReport } from './report';
 import { getStatsPage } from './stats-page';
@@ -204,6 +204,8 @@ async function route(req: Request, env: Env, ctx: ExecutionContext): Promise<Res
   if (acceptMatch && method === 'POST') return acceptRequest(req, env, acceptMatch[1]!);
   const ignoreMatch = path.match(/^\/v1\/crew\/requests\/([A-Za-z0-9_-]+)$/);
   if (ignoreMatch && method === 'DELETE') return ignoreRequest(req, env, ignoreMatch[1]!);
+  const noteMatch = path.match(/^\/v1\/crew\/notes\/([A-Za-z0-9_-]+)$/);
+  if (noteMatch && method === 'PUT') return putNote(req, env, noteMatch[1]!);
   const crewRemoveMatch = path.match(/^\/v1\/crew\/([A-Za-z0-9_-]+)$/);
   if (crewRemoveMatch && method === 'DELETE') return removeFromCrew(req, env, crewRemoveMatch[1]!);
   if (path === '/v1/pulse' && method === 'POST') return postPulse(req, env);
