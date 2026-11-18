@@ -122,8 +122,8 @@ export function HowCrewWorks({ open: initiallyOpen = false }: { open?: boolean }
       {open && (
         <ul>
           <li>
-            <b>Your crew is your own list of friends.</b> When someone opens your invite link, the two of you are connected —
-            just you two.
+            <b>Your crew is your own list of friends.</b> When someone opens your invite link, you get a request. They’re
+            only added if you accept — and then it’s just the two of you who are connected.
           </li>
           <li>
             <b>You see each other’s finished games</b> and how you rated them, so you can try the same puzzle. Never your
@@ -145,6 +145,34 @@ export function HowCrewWorks({ open: initiallyOpen = false }: { open?: boolean }
   );
 }
 
+/** "Bec wants to join your crew · Accept · Ignore". */
+export function CrewRequests() {
+  const s = useStore();
+  const reqs = s.crew?.requests ?? [];
+  if (!reqs.length) return null;
+  return (
+    <div class="group crew-requests">
+      {reqs.map((r) => (
+        <div class="row crew-row" key={r.id}>
+          <Initial name={r.name} />
+          <div class="grow">
+            <div>
+              <b>{r.name}</b> wants to join your crew
+            </div>
+            <div class="sub">You’d see each other’s games · {ago(r.at)}</div>
+          </div>
+          <button class="btn compact primary" onClick={() => void s.answerRequest(r.id, true)}>
+            Accept
+          </button>
+          <button class="link" onClick={() => void s.answerRequest(r.id, false)}>
+            Ignore
+          </button>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 /** Home screen: the latest few, and the way into "Your crew". */
 export function CrewCard() {
   const s = useStore();
@@ -153,6 +181,7 @@ export function CrewCard() {
   if (!s.crewMates.length && !feed.some((p) => !p.you))
     return (
       <div class="crew-card">
+        <CrewRequests />
         <div class="group crew-start">
           <div class="crew-start-text">
             Play alongside friends: see what they finish and try the same puzzles. Only the people you invite see your games.
@@ -173,6 +202,7 @@ export function CrewCard() {
         <span>Your crew</span>
         <span class="crew-head-more">See everyone ›</span>
       </button>
+      <CrewRequests />
       <div class="group">
         <PlayingNow />
         {latest.map((p) => (
@@ -285,6 +315,15 @@ function People() {
             </span>
           </div>
         ))}
+        {crew.waiting.map((w) => (
+          <div class="row crew-member" key={w.id}>
+            <Initial name={w.name} />
+            <div class="grow">
+              <div>{w.name}</div>
+              <div class="sub">Waiting for {w.name} to accept</div>
+            </div>
+          </div>
+        ))}
         <button class="row crew-invite" onClick={() => inviteFriend()}>
           <Icon name="plus" size={18} />
           <span class="grow">Invite a friend</span>
@@ -320,6 +359,7 @@ export function CrewSheet({ tab: initial, explain = false }: { tab?: 'recent' | 
     <Sheet title="Your crew">
       <HowCrewWorks open={explain || !s.crewMates.length} />
       <div style={{ height: 12 }} />
+      <CrewRequests />
       <People />
 
       <div class="section-title">What they’ve been playing</div>

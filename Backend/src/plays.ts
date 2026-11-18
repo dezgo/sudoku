@@ -12,7 +12,7 @@ import { jsonError, jsonOk, readJson } from './http';
 import { requireAuth } from './auth';
 import { ensureSharedName } from './shared';
 import { addDays, dateInTimezone } from './daily';
-import { crewOf, inviteCodeFor } from './crew';
+import { crewOf, inviteCodeFor, requestsFor } from './crew';
 
 const MODES = ['daily', 'past_daily', 'practice', 'shared', 'coop'];
 const DAY = 24 * 60 * 60 * 1000;
@@ -215,6 +215,7 @@ export async function getCrew(req: Request, env: Env): Promise<Response> {
 
   return jsonOk({
     invite_code: await inviteCodeFor(env, me),
+    ...(await requestsFor(env, me)),
     ...(await crewPeople(env, me, crew)),
     feed: [...feedRes.results.map((p) => ({
       id: String(p.id),

@@ -90,9 +90,11 @@ const POLICY_HTML = `<!DOCTYPE html>
     </li>
     <li>
       <strong>Your crew</strong> — the people you've connected with, one
-      at a time, by sharing or opening an invite link (people who were in a
-      group with you are connected too). Connections go both ways and you can
-      remove anyone. Your crew sees your name; their own friends don't.
+      at a time. Opening someone's invite link sends them a request with your
+      display name; you're only connected once they accept (people who were
+      in a group with you are connected too). Connections go both ways and
+      you can remove anyone. Your crew sees your name; their own friends
+      don't.
     </li>
     <li>
       <strong>Finished games</strong> — if you're signed in and haven't

@@ -3,7 +3,10 @@
 // can see you're playing and ask to watch; nobody else's friends are shared.
 //
 //   GET    /v1/me/invite         → { code }   your invite code (made on first use)
-//   POST   /v1/crew/join {code}  → { name }   connect with whoever's code it is
+//   POST   /v1/crew/join {code}  → { name, status }  ask to join whoever's code it is
+//                                     status: 'requested' | 'connected' (they'd asked you too) | 'already'
+//   POST   /v1/crew/requests/:userId/accept    accept someone's request
+//   DELETE /v1/crew/requests/:userId           ignore it (never announced: they still see "waiting")
 //   DELETE /v1/crew/:userId                    remove someone from your crew (both ways)
 
 import type { Env } from './types';
@@ -71,8 +74,70 @@ export async function joinCrew(req: Request, env: Env): Promise<Response> {
       .first<{ id: string; display_name: string | null }>());
   if (!who) return jsonError(404, 'unknown_code');
   if (who.id === auth.user_id) return jsonError(400, 'thats_you');
-  await connect(env, auth.user_id, who.id);
-  return jsonOk({ name: who.display_name ?? 'your friend' });
+  const name = who.display_name ?? 'your friend';
+  if (await areConnected(env, auth.user_id, who.id)) return jsonOk({ name, status: 'already' });
+  // They'd already asked to join my crew: that's both of us saying yes.
+  const theyAsked = await env.DB.prepare('SELECT 1 FROM crew_requests WHERE from_user = ? AND to_user = ?')
+    .bind(who.id, auth.user_id)
+    .first();
+  if (theyAsked) {
+    await connect(env, auth.user_id, who.id);
+    await clearRequests(env, auth.user_id, who.id);
+    return jsonOk({ name, status: 'connected' });
+  }
+  // Ask them. A stuck loop or a link passed round widely can't pile up requests.
+  const pending = await env.DB.prepare('SELECT COUNT(*) AS n FROM crew_requests WHERE to_user = ? AND ignored = 0')
+    .bind(who.id)
+    .first<{ n: number }>();
+  if ((pending?.n ?? 0) >= 50) return jsonError(429, 'too_many_requests');
+  await env.DB.prepare('INSERT OR IGNORE INTO crew_requests (from_user, to_user, created_at) VALUES (?, ?, ?)')
+    .bind(auth.user_id, who.id, Date.now())
+    .run();
+  return jsonOk({ name, status: 'requested' });
+}
+
+async function clearRequests(env: Env, x: string, y: string): Promise<void> {
+  await env.DB.prepare('DELETE FROM crew_requests WHERE (from_user = ?1 AND to_user = ?2) OR (from_user = ?2 AND to_user = ?1)')
+    .bind(x, y)
+    .run();
+}
+
+export async function acceptRequest(req: Request, env: Env, from: string): Promise<Response> {
+  const auth = await requireAuth(req, env);
+  if (auth instanceof Response) return auth;
+  const asked = await env.DB.prepare('SELECT 1 FROM crew_requests WHERE from_user = ? AND to_user = ?').bind(from, auth.user_id).first();
+  if (!asked) return jsonError(404, 'no_request');
+  await connect(env, auth.user_id, from);
+  await clearRequests(env, auth.user_id, from);
+  return new Response(null, { status: 204 });
+}
+
+export async function ignoreRequest(req: Request, env: Env, from: string): Promise<Response> {
+  const auth = await requireAuth(req, env);
+  if (auth instanceof Response) return auth;
+  // Kept, not deleted: the asker keeps seeing "waiting", so they're never told.
+  await env.DB.prepare('UPDATE crew_requests SET ignored = 1 WHERE from_user = ? AND to_user = ?').bind(from, auth.user_id).run();
+  return new Response(null, { status: 204 });
+}
+
+/** Requests waiting on me, and the ones I've sent that are still waiting. */
+export async function requestsFor(env: Env, me: string) {
+  const [incoming, outgoing] = await Promise.all([
+    env.DB.prepare(
+      'SELECT r.from_user AS id, u.display_name, r.created_at FROM crew_requests r JOIN users u ON u.id = r.from_user WHERE r.to_user = ? AND r.ignored = 0 ORDER BY r.created_at',
+    )
+      .bind(me)
+      .all<{ id: string; display_name: string | null; created_at: number }>(),
+    env.DB.prepare(
+      'SELECT r.to_user AS id, u.display_name FROM crew_requests r JOIN users u ON u.id = r.to_user WHERE r.from_user = ? ORDER BY r.created_at',
+    )
+      .bind(me)
+      .all<{ id: string; display_name: string | null }>(),
+  ]);
+  return {
+    requests: incoming.results.map((r) => ({ id: r.id, name: r.display_name ?? 'Someone', at: r.created_at })),
+    waiting: outgoing.results.map((r) => ({ id: r.id, name: r.display_name ?? 'Someone' })),
+  };
 }
 
 export async function removeFromCrew(req: Request, env: Env, other: string): Promise<Response> {

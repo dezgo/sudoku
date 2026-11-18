@@ -161,6 +161,10 @@ export interface CrewPerson {
 }
 export interface CrewData {
   invite_code: string;
+  /** People asking to join my crew. */
+  requests: { id: string; name: string; at: number }[];
+  /** People I've asked, who haven't answered yet. */
+  waiting: { id: string; name: string }[];
   /** The last 7 days, oldest first. */
   days: string[];
   people: CrewPerson[];
@@ -297,7 +301,10 @@ export const api = {
   everyone: (t: string | null, device_id: string) =>
     send<Pulse & { favourites: CrewFavourite[] }>(`everyone?device_id=${encodeURIComponent(device_id)}`, 'GET', t),
   crew: (t: string) => send<CrewData>('crew', 'GET', t),
-  crewJoin: (t: string, code: string) => send<{ name: string }>('crew/join', 'POST', t, { code }),
+  crewJoin: (t: string, code: string) =>
+    send<{ name: string; status: 'requested' | 'connected' | 'already' }>('crew/join', 'POST', t, { code }),
+  crewAccept: (t: string, userId: string) => send<void>(`crew/requests/${userId}/accept`, 'POST', t),
+  crewIgnore: (t: string, userId: string) => send<void>(`crew/requests/${userId}`, 'DELETE', t),
   crewRemove: (t: string, userId: string) => send<void>(`crew/${userId}`, 'DELETE', t),
   postScore: (t: string, s: ScoreSubmission) => send<{ rank: number }>('scores', 'POST', t, s).then((r) => r.rank),
   groupScores: (t: string, groupId: string, puzzleId: number) =>

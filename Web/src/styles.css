@@ -1840,3 +1840,17 @@ button.crew-head {
 .link.inline-caption.danger {
   color: var(--error);
 }
+.crew-requests {
+  margin-bottom: 10px;
+  border: 1.5px solid var(--accent);
+}
+.crew-requests .btn.compact {
+  flex: none;
+  width: auto;
+  padding: 6px 12px;
+}
+.crew-requests .link {
+  flex: none;
+  font-size: 0.85rem;
+  color: var(--text-2);
+}

@@ -986,6 +986,19 @@ class Store {
     }
   }
 
+  /** Answer "Bec wants to join your crew". Ignoring is silent — they just keep waiting. */
+  async answerRequest(userId: string, accept: boolean): Promise<void> {
+    if (!this.token) return;
+    try {
+      if (accept) await api.crewAccept(this.token, userId);
+      else await api.crewIgnore(this.token, userId);
+      track('feature', { f: accept ? 'crew_accept' : 'crew_ignore' });
+      await this.refreshCrew();
+    } catch (e) {
+      this.showToast(e instanceof ApiError && e.kind === 'offline' ? "You're offline." : "That didn't work. Try again.");
+    }
+  }
+
   /** Remove someone from my crew — both ways, quietly. */
   async removeFromCrew(userId: string): Promise<void> {
     if (!this.token) return;
@@ -1013,9 +1026,16 @@ class Store {
     if (!this.token) return;
     try {
       const r = await api.crewJoin(this.token, code.toUpperCase());
-      track('feature', { f: 'joined_by_link' });
+      track('feature', { f: r.status === 'requested' ? 'crew_request' : 'joined_by_link' });
       await this.refreshCrew();
-      this.showToast(`You and ${r.name} are now in each other’s crew.`, 5000);
+      this.showToast(
+        r.status === 'requested'
+          ? `Asked ${r.name} to add you. You’ll see each other’s games once they accept.`
+          : r.status === 'already'
+            ? `You and ${r.name} are already in each other’s crew.`
+            : `You and ${r.name} are now in each other’s crew.`,
+        6000,
+      );
       this.open({ kind: 'crew', explain: true });
     } catch (e) {
       this.showToast(
