@@ -26,6 +26,8 @@ import { getStatsPage } from './stats-page';
 import { connectCoopGame, createCoopGame, joinCoopGame, listMyCoopGames } from './coop';
 
 export { CoopRoom } from './coop-room';
+export { WatchRoom } from './watch-room';
+import { connectWatch } from './watch';
 import {
   createMultiplayerGame,
   declineMultiplayerGame,
@@ -196,6 +198,9 @@ async function route(req: Request, env: Env, ctx: ExecutionContext): Promise<Res
   if (playMatch && method === 'PUT') return ratePlay(req, env, parseInt(playMatch[1]!, 10));
   if (path === '/v1/crew' && method === 'GET') return getCrew(req, env);
   if (path === '/v1/pulse' && method === 'POST') return postPulse(req, env);
+  const watchMatch = path.match(/^\/v1\/watch\/([A-Za-z0-9]+)\/ws$/);
+  if (watchMatch && method === 'GET')
+    return connectWatch(req, env, watchMatch[1]!, url.searchParams.get('token'), url.searchParams.get('role'));
   if (path === '/v1/everyone' && method === 'GET') return getEveryone(req, env, url.searchParams.get('device_id'));
   if (path === '/v1/admin/report' && method === 'GET') {
     return getAdminReport(req, env, parseInt(url.searchParams.get('days') ?? '7', 10));

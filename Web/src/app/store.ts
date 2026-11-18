@@ -71,7 +71,8 @@ export type Sheet =
   | { kind: 'share'; puzzle: Puzzle; seconds?: number }
   | { kind: 'lifelines'; used: Lifeline[] }
   | { kind: 'crew'; tab?: 'recent' | 'favourites' }
-  | { kind: 'everyone' };
+  | { kind: 'everyone' }
+  | { kind: 'watch'; id: string; name: string };
 
 
 interface Identity {
@@ -144,6 +145,14 @@ class Store {
   /** Anonymous live counts: playing right now, solved today's daily. */
   pulse: Pulse | null = null;
   private pulseTimer: number | null = null;
+  /** Being watched (this phone is the host): asks waiting for an answer, who's watching, the last reaction. */
+  watch: { asks: { id: string; name: string }[]; watchers: { id: string; name: string }[]; reaction: { e: string; name: string; key: number } | null } = {
+    asks: [],
+    watchers: [],
+    reaction: null,
+  };
+  private watchSocket: WebSocket | null = null;
+  private lastBoardSent = '';
   /** The game just solved, for its rating on the Solved sheet. */
   lastPlay: { id: number | null; enjoyment: Enjoyment | null; learnt: boolean | null; techniques: string[] } | null = null;
   private lastColorsTracked = 0;
@@ -247,6 +256,10 @@ class Store {
       this.game.setHighlightMistakes(value as boolean);
     if (this.game && key === 'highlightConstraints') this.game.setHighlightConstraints(value as boolean);
     this.saveProgress();
+    if (key === 'crewCanWatch' || key === 'shareActivity') {
+      this.syncWatchHost();
+      void this.sendPulse();
+    }
     this.emit();
   }
 
@@ -257,6 +270,7 @@ class Store {
     this.timer = window.setInterval(() => {
       const g = this.game;
       if (!g || this.paused || this.phase !== 'playing' || g.isSolved) return;
+      if (this.watch.asks.length) return; // "Ash would like to watch" is on screen: nobody loses time deciding
       if (this.coop && !this.coop.started) return; // co-op clock waits for a partner or a first move
       g.elapsedSeconds++;
       // Persist every 5s so a killed tab loses little time.
@@ -280,6 +294,7 @@ class Store {
 
   private enterBackground(): void {
     this.saveProgress();
+    this.syncWatchHost(); // a hidden phone can't be watched; ends it for watchers
     if (this.phase !== 'playing' || this.paused) return;
     // Cancel the interval outright rather than relying on the paused flag —
     // browsers batch throttled timers and can fire a burst on return.
@@ -292,6 +307,7 @@ class Store {
   private enterForeground(): void {
     track('open');
     void this.sendPulse();
+    this.syncWatchHost();
     if (this.coop && !this.coopSocket) this.connectCoop();
     void this.refreshDaily();
     if (this.token) void this.refreshGroups();
@@ -363,6 +379,7 @@ class Store {
     this.startTimer();
     this.emit();
     void this.sendPulse(); // count this player as "playing now" straight away
+    this.syncWatchHost();
   }
 
   resume(save: GameSave, mode?: GameMode): void {
@@ -675,12 +692,14 @@ class Store {
     this.tutor = null;
     this.phase = 'home';
     this.stopTimer();
+    this.syncWatchHost();
     this.emit();
     void this.sendPulse();
   }
 
   confirmReset(): void {
     this.game?.reset();
+    this.pushWatchBoard();
     this.paused = false;
     this.saveProgress();
     this.startTimer();
@@ -712,13 +731,18 @@ class Store {
       this.saveCoopNotes();
     }
     if (g.isSolved) this.onSolved(g);
-    else this.saveProgress();
+    else {
+      this.saveProgress();
+      this.pushWatchBoard();
+    }
     this.emit();
   }
 
   private onSolved(g: Game): void {
     this.stopTimer();
     void this.sendPulse();
+    this.pushWatchBoard();
+    this.syncWatchHost(); // tells watchers "done" and closes
     this.tutor = null;
     const result: PuzzleResult = {
       puzzleID: g.puzzle.id,
@@ -802,11 +826,136 @@ class Store {
     this.emit();
   }
 
+  // --- Being watched (watch-room.ts) ---
+
+  /** Host a watch room while a solo game is on screen and the player allows crew asks. */
+  private syncWatchHost(): void {
+    const g = this.game;
+    const should =
+      !!this.token &&
+      this.groups.length > 0 &&
+      this.prefs.shareActivity &&
+      this.prefs.crewCanWatch &&
+      this.phase === 'playing' &&
+      !!g &&
+      !g.isSolved &&
+      !this.coop &&
+      !document.hidden;
+    if (should && !this.watchSocket) this.openWatchHost();
+    else if (!should && this.watchSocket) this.closeWatchHost(g?.isSolved ? 'done' : 'stop');
+  }
+
+  private openWatchHost(): void {
+    const me = this.identity!.user.id;
+    const proto = location.protocol === 'https:' ? 'wss' : 'ws';
+    const ws = new WebSocket(`${proto}://${location.host}/v1/watch/${me}/ws?role=host&token=${encodeURIComponent(this.token!)}`);
+    this.watchSocket = ws;
+    this.lastBoardSent = '';
+    ws.onmessage = (e) => {
+      let m: { t: string; id?: string; name?: string; e?: string };
+      try {
+        m = JSON.parse(e.data as string);
+      } catch {
+        return;
+      }
+      if (m.t === 'ask' && m.id) {
+        if (this.prefs.alwaysAllowWatch) this.allowWatcher(m.id, m.name ?? 'Someone');
+        else if (!this.watch.asks.some((a) => a.id === m.id)) {
+          this.watch.asks = [...this.watch.asks, { id: m.id, name: m.name || 'Someone' }];
+          const id = m.id;
+          // Unanswered for 15 seconds counts as "not now".
+          setTimeout(() => {
+            if (this.watch.asks.some((a) => a.id === id)) this.denyWatcher(id);
+          }, 15_000);
+        }
+      } else if (m.t === 'gone' && m.id) {
+        this.watch.asks = this.watch.asks.filter((a) => a.id !== m.id);
+        this.watch.watchers = this.watch.watchers.filter((a) => a.id !== m.id);
+      } else if (m.t === 'react' && m.e) {
+        const key = Date.now();
+        this.watch.reaction = { e: m.e, name: m.name || 'Someone', key };
+        setTimeout(() => {
+          if (this.watch.reaction?.key === key) {
+            this.watch.reaction = null;
+            this.emit();
+          }
+        }, 2600);
+      }
+      this.emit();
+    };
+    ws.onclose = () => {
+      if (this.watchSocket !== ws) return;
+      this.watchSocket = null;
+      this.watch = { asks: [], watchers: [], reaction: null };
+      this.emit();
+    };
+  }
+
+  private closeWatchHost(why: 'stop' | 'done'): void {
+    const ws = this.watchSocket;
+    this.watchSocket = null;
+    if (ws?.readyState === WebSocket.OPEN) ws.send(JSON.stringify({ t: why }));
+    ws?.close();
+    this.watch = { asks: [], watchers: [], reaction: null };
+  }
+
+  private watchSend(msg: unknown): void {
+    if (this.watchSocket?.readyState === WebSocket.OPEN) this.watchSocket.send(JSON.stringify(msg));
+  }
+
+  allowWatcher(id: string, name?: string): void {
+    const ask = this.watch.asks.find((a) => a.id === id);
+    this.watch.asks = this.watch.asks.filter((a) => a.id !== id);
+    if (!this.watch.watchers.some((w) => w.id === id)) this.watch.watchers = [...this.watch.watchers, { id, name: ask?.name ?? name ?? 'Someone' }];
+    this.watchSend({ t: 'allow', id });
+    track('feature', { f: 'watch_allowed' });
+    this.lastBoardSent = '';
+    this.pushWatchBoard();
+    this.emit();
+  }
+
+  denyWatcher(id: string): void {
+    this.watch.asks = this.watch.asks.filter((a) => a.id !== id);
+    this.watchSend({ t: 'deny', id });
+    this.emit();
+  }
+
+  stopWatchers(): void {
+    this.watchSend({ t: 'stop' });
+    this.watch.watchers = [];
+    this.emit();
+  }
+
+  /** Send the board to anyone watching — numbers, pencil marks and where the player is looking. */
+  private pushWatchBoard(): void {
+    const g = this.game;
+    if (!g || !this.watch.watchers.length || g === this.coopGame) return;
+    const cells = g.cells.flat();
+    const msg = JSON.stringify({
+      t: 'board',
+      difficulty: g.puzzle.difficulty,
+      daily: isDaily(g.puzzle),
+      fixed: cells.map((c) => (c.isFixed ? 1 : 0)),
+      values: cells.map((c) => c.value ?? 0),
+      notes: cells.map((c) => [...c.notes].sort()),
+      sel: this.selIndex(),
+      solved: g.isSolved,
+    });
+    if (msg === this.lastBoardSent) return;
+    this.lastBoardSent = msg;
+    if (this.watchSocket?.readyState === WebSocket.OPEN) this.watchSocket.send(msg);
+  }
+
   /** Heartbeat for "playing right now": on launch, on return, and every minute while the app is on screen. */
   private async sendPulse(): Promise<void> {
     if (document.hidden) return;
     try {
-      this.pulse = await api.pulse(deviceId(), this.phase === 'playing' && !this.paused && !!this.game && !this.game.isSolved);
+      this.pulse = await api.pulse(this.token, {
+        device_id: deviceId(),
+        playing: this.phase === 'playing' && !this.paused && !!this.game && !this.game.isSolved,
+        visible: this.prefs.shareActivity,
+        watchable: this.prefs.shareActivity && this.prefs.crewCanWatch,
+      });
       this.emit();
     } catch {
       /* offline: keep the last numbers */
@@ -915,7 +1064,10 @@ class Store {
     this.autoPencilTimer = window.setTimeout(() => {
       this.autoPencilTimer = null;
       this.autoPencilPending = false;
-      if (this.game?.autoPencil()) this.saveProgress();
+      if (this.game?.autoPencil()) {
+        this.saveProgress();
+        this.pushWatchBoard();
+      }
       this.emit();
     }, 3000);
     this.emit();
@@ -1014,6 +1166,7 @@ class Store {
   }
 
   signOut(): void {
+    if (this.watchSocket) this.closeWatchHost('stop');
     this.identity = null;
     this.groups = [];
     this.crew = null;

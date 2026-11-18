@@ -399,9 +399,15 @@ export function SettingsSheet() {
               checked={p.shareActivity}
               onChange={(v) => s.setPref('shareActivity', v)}
             />
+            {p.shareActivity && (
+              <Toggle label="Let my crew ask to watch me play" checked={p.crewCanWatch} onChange={(v) => s.setPref('crewCanWatch', v)} />
+            )}
+            {p.shareActivity && p.crewCanWatch && (
+              <Toggle label="Always allow — don't ask each time" checked={p.alwaysAllowWatch} onChange={(v) => s.setPref('alwaysAllowWatch', v)} />
+            )}
           </div>
           <div class="muted small" style={{ margin: '6px 6px 0' }}>
-            Which puzzles you finish and how you rated them, so your crew can try them too. Never your time.
+            Which puzzles you finish and how you rated them, so your crew can try them too. Never your time. Watchers see your board live, only while you allow it.
           </div>
         </>
       )}

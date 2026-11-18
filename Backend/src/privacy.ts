@@ -96,6 +96,13 @@ const POLICY_HTML = `<!DOCTYPE html>
       see these so they can try the same puzzle. Your time isn't included.
     </li>
     <li>
+      <strong>Watching</strong> — someone in your crew can ask to watch
+      your game live, and only sees it if you allow it each time (or you
+      turn on "always allow" in Settings). They see your board, including
+      pencil marks, and can send emoji reactions. Nothing from a watched
+      game is stored. You can stop it any time, or turn asking off.
+    </li>
+    <li>
       <strong>Without an account</strong> (web app): if you finish a daily
       or a shared puzzle and rate it, we keep the puzzle, its level and your
       answers against the app's random device ID — no name or email. And

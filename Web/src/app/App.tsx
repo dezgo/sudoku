@@ -8,6 +8,7 @@ import { Home } from '../ui/Home';
 import { Play } from '../ui/Play';
 import { CoachSheet } from '../ui/Coach';
 import { CrewSheet, EveryoneSheet } from '../ui/Crew';
+import { WatchSheet } from '../ui/Watch';
 import { LifelinesSheet } from '../ui/Lifelines';
 import { HistorySheet } from '../ui/History';
 import { MultiplayerSheet } from '../ui/Multiplayer';
@@ -52,6 +53,8 @@ function renderSheet(sheet: Sheet, i: number) {
       return <CrewSheet key={i} tab={sheet.tab} />;
     case 'everyone':
       return <EveryoneSheet key={i} />;
+    case 'watch':
+      return <WatchSheet key={i} id={sheet.id} name={sheet.name} />;
   }
 }
 

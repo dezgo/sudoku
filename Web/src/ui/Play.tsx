@@ -11,6 +11,7 @@ import { CoopStrip, inviteToCoop } from './Coop';
 import { Lifelines } from './Lifelines';
 import { Icon } from './icons';
 import { track } from '../lib/usage';
+import { WatchBar } from './Watch';
 
 export function Play() {
   const s = useStore();
@@ -90,6 +91,7 @@ export function Play() {
 
       {coop && <CoopStrip />}
       <Lifelines used={s.lifelines} />
+      <WatchBar />
 
       <Board
         cells={g.cells}

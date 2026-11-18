@@ -119,6 +119,10 @@ export interface Prefs {
   colors: Partial<Record<ColorKey, string>>;
   /** Show my finished games (and how I rated them) to my groups. */
   shareActivity: boolean;
+  /** Crew-mates can ask to watch my games live. */
+  crewCanWatch: boolean;
+  /** …and don't ask each time. */
+  alwaysAllowWatch: boolean;
 }
 
 // Both highlights start off for new players (Oct 2026), so every lifeline
@@ -131,6 +135,8 @@ export const DEFAULT_PREFS: Prefs = {
   sound: true,
   colors: {},
   shareActivity: true,
+  crewCanWatch: true,
+  alwaysAllowWatch: false,
 };
 
 export function loadPrefs(): Prefs {

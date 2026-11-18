@@ -191,6 +191,8 @@ export interface CrewFavourite {
 export interface Pulse {
   playing_now: number;
   solved_today: number;
+  /** Crew-mates with a game running right now (signed in only). */
+  crew_playing?: { id: string; name: string; watchable: boolean }[];
 }
 export interface PlaySubmission {
   device_id?: string;
@@ -284,7 +286,8 @@ export const api = {
   postPlay: (t: string | null, p: PlaySubmission) => send<{ id: number | null; ref: string | null }>('plays', 'POST', t, p),
   ratePlay: (t: string | null, id: number, r: { enjoyment?: Enjoyment | null; learnt?: boolean | null; device_id?: string }) =>
     send<void>(`plays/${id}`, 'PUT', t, r),
-  pulse: (device_id: string, playing: boolean) => send<Pulse>('pulse', 'POST', null, { device_id, playing }),
+  pulse: (t: string | null, body: { device_id: string; playing: boolean; visible: boolean; watchable: boolean }) =>
+    send<Pulse>('pulse', 'POST', t, body),
   everyone: (t: string | null, device_id: string) =>
     send<Pulse & { favourites: CrewFavourite[] }>(`everyone?device_id=${encodeURIComponent(device_id)}`, 'GET', t),
   crew: (t: string) => send<{ groups: CrewGroup[]; feed: CrewPlay[]; favourites: CrewFavourite[] }>('crew', 'GET', t),

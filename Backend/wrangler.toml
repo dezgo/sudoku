@@ -89,9 +89,18 @@ migrations_dir = "migrations"
 name = "COOP"
 class_name = "CoopRoom"
 
+# Watching a crew-mate's game live: one Durable Object per player (src/watch-room.ts).
+[[durable_objects.bindings]]
+name = "WATCH"
+class_name = "WatchRoom"
+
 [[migrations]]
 tag = "v1-coop"
 new_sqlite_classes = ["CoopRoom"]
+
+[[migrations]]
+tag = "v2-watch"
+new_sqlite_classes = ["WatchRoom"]
 
 # Crons:
 #   "0 * * * *"  — hourly: ensure today's + tomorrow's daily puzzles exist

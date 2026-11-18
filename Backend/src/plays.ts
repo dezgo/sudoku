@@ -312,18 +312,38 @@ async function crewGroups(env: Env, me: string) {
  * No names, ever.
  */
 export async function postPulse(req: Request, env: Env): Promise<Response> {
-  const body = await readJson<{ device_id?: unknown; playing?: unknown }>(req);
+  const body = await readJson<{ device_id?: unknown; playing?: unknown; visible?: unknown; watchable?: unknown }>(req);
   const device = typeof body?.device_id === 'string' && DEVICE_RE.test(body.device_id) ? body.device_id : null;
   const now = Date.now();
+  // Signed in: link the heartbeat to the account, so the crew can see "Ash is playing now".
+  let me: string | null = null;
+  if (req.headers.get('authorization')) {
+    const auth = await requireAuth(req, env);
+    if (!(auth instanceof Response)) me = auth.user_id;
+  }
   if (device)
     await env.DB.prepare(
-      'INSERT INTO presence (device_id, playing, at) VALUES (?1, ?2, ?3) ON CONFLICT(device_id) DO UPDATE SET playing = ?2, at = ?3',
+      `INSERT INTO presence (device_id, playing, at, user_id, visible, watchable) VALUES (?1, ?2, ?3, ?4, ?5, ?6)
+       ON CONFLICT(device_id) DO UPDATE SET playing = ?2, at = ?3, user_id = ?4, visible = ?5, watchable = ?6`,
     )
-      .bind(device, body?.playing === true ? 1 : 0, now)
+      .bind(device, body?.playing === true ? 1 : 0, now, me, body?.visible === true ? 1 : 0, body?.watchable === true ? 1 : 0)
       .run();
   const counts = await liveCounts(env);
   const mine = device && body?.playing === true ? 1 : 0;
-  return jsonOk({ playing_now: Math.max(0, counts.playing - mine), solved_today: counts.solvedToday });
+  // Crew-mates with a game running right now — only those who show their games to their crew.
+  const crew = me
+    ? (
+        await env.DB.prepare(
+          `SELECT p.user_id, MAX(p.watchable) AS watchable, u.display_name FROM presence p JOIN users u ON u.id = p.user_id
+           WHERE p.playing = 1 AND p.visible = 1 AND p.at > ?1 AND p.user_id != ?2 AND p.user_id IN
+             (SELECT gm2.user_id FROM group_members gm1 JOIN group_members gm2 ON gm2.group_id = gm1.group_id WHERE gm1.user_id = ?2)
+           GROUP BY p.user_id`,
+        )
+          .bind(now - 150_000, me)
+          .all<{ user_id: string; watchable: number; display_name: string | null }>()
+      ).results.map((r) => ({ id: r.user_id, name: r.display_name ?? 'Someone', watchable: r.watchable === 1 }))
+    : [];
+  return jsonOk({ playing_now: Math.max(0, counts.playing - mine), solved_today: counts.solvedToday, crew_playing: crew });
 }
 
 // A minute-ish of staleness is fine and keeps a busy day cheap: each copy of

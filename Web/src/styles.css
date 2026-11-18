@@ -1668,3 +1668,122 @@ button.crew-head {
   display: inline-flex;
   align-items: center;
 }
+
+/* --- Watching (ui/Watch.tsx) --- */
+.watch-bar {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 2px 0 8px;
+  position: relative;
+}
+.watch-ask,
+.watch-on {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px;
+  border-radius: 12px;
+  font-size: 0.9rem;
+}
+.watch-ask {
+  background: var(--accent-softer);
+  border: 1.5px solid var(--accent);
+}
+.watch-on {
+  background: var(--surface);
+  color: var(--text-2);
+}
+.watch-ask .grow,
+.watch-on .grow {
+  flex: 1;
+  min-width: 0;
+}
+.watch-ask .btn.compact {
+  width: auto;
+  padding: 6px 14px;
+}
+.watch-react {
+  align-self: center;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 12px;
+  border-radius: 999px;
+  background: var(--surface);
+  font-size: 0.85rem;
+  color: var(--text-2);
+  animation: watch-pop 2.6s ease forwards;
+}
+.watch-react .e {
+  font-size: 1.4rem;
+}
+@keyframes watch-pop {
+  0% { transform: scale(0.6); opacity: 0; }
+  12% { transform: scale(1.1); opacity: 1; }
+  20% { transform: scale(1); }
+  80% { opacity: 1; }
+  100% { opacity: 0; transform: translateY(-8px); }
+}
+.watch-wait {
+  text-align: center;
+  padding: 24px 8px;
+}
+.watch-wait .big {
+  font-size: 3rem;
+}
+.watch-board {
+  position: relative;
+}
+.watch-float {
+  position: absolute;
+  left: 50%;
+  top: 40%;
+  transform: translate(-50%, -50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  pointer-events: none;
+  animation: watch-pop 2.6s ease forwards;
+}
+.watch-float span {
+  font-size: 4rem;
+  filter: drop-shadow(0 4px 10px rgba(0, 0, 0, 0.25));
+}
+.watch-float small {
+  background: var(--surface);
+  padding: 2px 10px;
+  border-radius: 999px;
+  font-weight: 600;
+}
+.watch-reacts {
+  display: flex;
+  justify-content: center;
+  gap: 8px;
+  margin: 12px 0 6px;
+}
+.react-btn {
+  font-size: 1.6rem;
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  background: var(--surface);
+  border: 1.5px solid var(--line);
+}
+.react-btn:active {
+  transform: scale(0.9);
+}
+.crew-avatar.live {
+  background: rgba(36, 161, 72, 0.16);
+  color: var(--success);
+}
+.t-center {
+  text-align: center;
+}
+@media (prefers-reduced-motion: reduce) {
+  .watch-react,
+  .watch-float {
+    animation: none;
+  }
+}

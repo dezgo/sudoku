@@ -1,6 +1,7 @@
 export interface Env {
   DB: D1Database;
   COOP: DurableObjectNamespace;
+  WATCH: DurableObjectNamespace;
   RESEND_API_KEY: string;
   EMAIL_FROM: string;
   // Where player feedback is emailed (wrangler.toml [vars]).

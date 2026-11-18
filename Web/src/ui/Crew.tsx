@@ -133,10 +133,11 @@ export function CrewCard() {
         <span class="crew-head-more">See everyone ›</span>
       </button>
       <div class="group">
+        <PlayingNow />
         {latest.map((p) => (
           <PlayRow key={p.id} p={p} />
         ))}
-        {!latest.length && (
+        {!latest.length && !s.pulse?.crew_playing?.length && (
           <div class="row">
             <span class="grow muted small">Nothing in the last two weeks. When someone in your crew finishes a game, it shows up here.</span>
           </div>
@@ -147,6 +148,35 @@ export function CrewCard() {
         </button>
       </div>
     </div>
+  );
+}
+
+/** "Ash is playing now · Watch" rows — crew-mates with a game running. */
+export function PlayingNow() {
+  const s = useStore();
+  const now = s.pulse?.crew_playing ?? [];
+  return (
+    <>
+      {now.map((p) => (
+        <div class="row crew-row" key={p.id}>
+          <span class="crew-avatar live">{(p.name.trim()[0] ?? '?').toUpperCase()}</span>
+          <div class="grow">
+            <div>
+              <b>{p.name}</b> is playing now
+            </div>
+            <div class="sub">
+              <span class="pulse-dot" aria-hidden="true" />
+              {p.watchable ? 'Ask to watch — they can say no' : 'Playing on their own'}
+            </div>
+          </div>
+          {p.watchable && (
+            <button class="btn compact" onClick={() => s.open({ kind: 'watch', id: p.id, name: p.name })}>
+              Watch
+            </button>
+          )}
+        </div>
+      ))}
+    </>
   );
 }
 
