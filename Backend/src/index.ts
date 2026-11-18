@@ -20,7 +20,7 @@ import { getAndroidAssetLinks, getAppleAppSiteAssociation } from './well-known';
 import { createSharedPuzzle, getSharedPuzzle, SHARE_NAME_RE } from './shared';
 import { postFeedback } from './feedback';
 import { postUsage, pruneUsage } from './usage';
-import { acceptRequest, getMyInvite, ignoreRequest, joinCrew, putNote, removeFromCrew } from './crew';
+import { acceptRequest, getMyInvite, ignoreRequest, introduce, joinCrew, putNote, removeFromCrew } from './crew';
 import { getCrew, getEveryone, postPlay, postPulse, prunePresence, ratePlay } from './plays';
 import { getAdminReport, sendWeeklyReport } from './report';
 import { getStatsPage } from './stats-page';
@@ -200,6 +200,7 @@ async function route(req: Request, env: Env, ctx: ExecutionContext): Promise<Res
   if (path === '/v1/crew' && method === 'GET') return getCrew(req, env);
   if (path === '/v1/me/invite' && method === 'GET') return getMyInvite(req, env);
   if (path === '/v1/crew/join' && method === 'POST') return joinCrew(req, env);
+  if (path === '/v1/crew/introduce' && method === 'POST') return introduce(req, env);
   const acceptMatch = path.match(/^\/v1\/crew\/requests\/([A-Za-z0-9_-]+)\/accept$/);
   if (acceptMatch && method === 'POST') return acceptRequest(req, env, acceptMatch[1]!);
   const ignoreMatch = path.match(/^\/v1\/crew\/requests\/([A-Za-z0-9_-]+)$/);

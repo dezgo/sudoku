@@ -1009,12 +1009,33 @@ class Store {
   async answerRequest(userId: string, accept: boolean): Promise<void> {
     if (!this.token) return;
     try {
-      if (accept) await api.crewAccept(this.token, userId);
-      else await api.crewIgnore(this.token, userId);
+      if (accept) {
+        const r = await api.crewAccept(this.token, userId);
+        if (r?.status === 'waiting') {
+          const name = this.crew?.requests.find((q) => q.id === userId)?.name ?? 'they';
+          this.showToast(`Done. You’ll be connected once ${name} says yes too.`, 5000);
+        }
+      } else await api.crewIgnore(this.token, userId);
       track('feature', { f: accept ? 'crew_accept' : 'crew_ignore' });
       await this.refreshCrew();
     } catch (e) {
       this.showToast(e instanceof ApiError && e.kind === 'offline' ? "You're offline." : "That didn't work. Try again.");
+    }
+  }
+
+  /**
+   * Introduce two people in my crew. They each get asked; nothing tells me
+   * whether they were already connected.
+   */
+  async introduce(a: string, b: string): Promise<boolean> {
+    if (!this.token) return false;
+    try {
+      await api.crewIntroduce(this.token, a, b);
+      track('feature', { f: 'crew_introduce' });
+      return true;
+    } catch (e) {
+      this.showToast(e instanceof ApiError && e.kind === 'offline' ? "You're offline." : "That didn't work. Try again.");
+      return false;
     }
   }
 

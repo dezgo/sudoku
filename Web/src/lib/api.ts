@@ -164,7 +164,8 @@ export interface CrewData {
   /** My private notes on people, by user id. Only I ever see these. */
   notes: Record<string, string>;
   /** People asking to connect with me. */
-  requests: { id: string; name: string; at: number }[];
+  /** `via` = who introduced us, for an introduction (both must accept). */
+  requests: { id: string; name: string; at: number; via: string | null }[];
   /** People I've asked, who haven't answered yet. */
   waiting: { id: string; name: string }[];
   /** The last 7 days, oldest first. */
@@ -306,7 +307,9 @@ export const api = {
   crew: (t: string) => send<CrewData>('crew', 'GET', t),
   crewJoin: (t: string, code: string) =>
     send<{ name: string; status: 'requested' | 'connected' | 'already' }>('crew/join', 'POST', t, { code }),
-  crewAccept: (t: string, userId: string) => send<void>(`crew/requests/${userId}/accept`, 'POST', t),
+  crewAccept: (t: string, userId: string) =>
+    send<{ status: 'connected' | 'waiting' }>(`crew/requests/${userId}/accept`, 'POST', t),
+  crewIntroduce: (t: string, a: string, b: string) => send<void>('crew/introduce', 'POST', t, { a, b }),
   crewIgnore: (t: string, userId: string) => send<void>(`crew/requests/${userId}`, 'DELETE', t),
   crewNote: (t: string, userId: string, note: string) => send<void>(`crew/notes/${userId}`, 'PUT', t, { note }),
   crewRemove: (t: string, userId: string) => send<void>(`crew/${userId}`, 'DELETE', t),

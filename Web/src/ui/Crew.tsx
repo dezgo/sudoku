@@ -138,6 +138,10 @@ export function HowCrewWorks({ open: initiallyOpen = false }: { open?: boolean }
             <b>Watching only happens if you say yes</b>, each time (you can change that in Settings).
           </li>
           <li>
+            <b>You can introduce two people in your crew.</b> They’re each asked, and only connect if both say yes. You
+            don’t find out whether they already knew each other.
+          </li>
+          <li>
             <b>Notes are just for you.</b> Add one to remember who someone is (“Sam from work”). They never see it.
           </li>
           <li>
@@ -233,7 +237,15 @@ export function CrewRequests() {
           <Initial name={r.name} />
           <div class="grow">
             <div>
-              <b>{r.name}</b> wants to connect
+              {r.via ? (
+                <>
+                  {r.via} introduced you to <b>{r.name}</b>
+                </>
+              ) : (
+                <>
+                  <b>{r.name}</b> wants to connect
+                </>
+              )}
             </div>
             {noting === r.id ? (
               <NoteInput id={r.id} name={r.name} autoFocus onDone={() => setNoting(null)} />
@@ -241,7 +253,7 @@ export function CrewRequests() {
               <>
                 <NoteLine id={r.id} onEdit={() => setNoting(r.id)} />
                 <div class="sub">
-                  You’d see each other’s games, not each other’s crews · {ago(r.at)}
+                  {r.via ? 'You’ll connect if you both say yes' : 'You’d see each other’s games, not each other’s crews'} · {ago(r.at)}
                   {!s.crew?.notes?.[r.id] && (
                     <>
                       {' · '}
@@ -561,6 +573,58 @@ function People() {
   );
 }
 
+/** "Introduce Dad to… Tim [Introduce]" — the other people in my crew. */
+function Introduce({ id, name }: { id: string; name: string }) {
+  const s = useStore();
+  const [open, setOpen] = useState(false);
+  const [sent, setSent] = useState<Set<string>>(new Set());
+  const others = s.crewMates.filter((m) => m.id !== id);
+  if (!others.length) return null;
+  const first = name.split(' ')[0];
+  return (
+    <>
+      <div class="section-title">Introduce</div>
+      {!open ? (
+        <div class="group">
+          <button class="row crew-invite" onClick={() => setOpen(true)}>
+            <Icon name="plus" size={18} />
+            <span class="grow">Introduce {first} to someone in your crew</span>
+          </button>
+        </div>
+      ) : (
+        <>
+          <div class="group">
+            {others.map((o) => (
+              <div class="row crew-row" key={o.id}>
+                <Initial name={o.name} />
+                <div class="grow">
+                  <div>{o.name}</div>
+                  {s.crew?.notes?.[o.id] && <div class="crew-note">{s.crew.notes[o.id]}</div>}
+                </div>
+                {sent.has(o.id) ? (
+                  <span class="crew-done">Sent ✓</span>
+                ) : (
+                  <button
+                    class="btn compact"
+                    onClick={async () => {
+                      if (await s.introduce(id, o.id)) setSent(new Set([...sent, o.id]));
+                    }}
+                  >
+                    Introduce
+                  </button>
+                )}
+              </div>
+            ))}
+          </div>
+          <p class="muted small" style={{ margin: '8px 4px 0' }}>
+            They’ll each be asked, and connect only if both say yes. If they’re already connected, nothing changes.
+          </p>
+        </>
+      )}
+    </>
+  );
+}
+
 /** One crew-mate: my private note, their week, what they've played, and Remove. */
 export function PersonSheet({ id }: { id: string }) {
   const s = useStore();
@@ -607,6 +671,8 @@ export function PersonSheet({ id }: { id: string }) {
           </div>
         )}
       </div>
+
+      <Introduce id={id} name={m.name} />
 
       <div class="section-title">Recently played</div>
       {games.length ? (

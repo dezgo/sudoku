@@ -8,6 +8,8 @@
 //   POST   /v1/crew/requests/:userId/accept    accept someone's request
 //   DELETE /v1/crew/requests/:userId           ignore it (never announced: they still see "waiting")
 //   DELETE /v1/crew/:userId                    remove someone from your crew (both ways)
+//   POST   /v1/crew/introduce {a, b}          introduce two people in my crew (both must accept;
+//                                     silently does nothing if they're already connected)
 //   PUT    /v1/crew/notes/:userId {note}       my private note on someone ("" clears it)
 
 import type { Env } from './types';
@@ -78,9 +80,17 @@ export async function joinCrew(req: Request, env: Env): Promise<Response> {
   const name = who.display_name ?? 'your friend';
   if (await areConnected(env, auth.user_id, who.id)) return jsonOk({ name, status: 'already' });
   // They'd already asked to join my crew: that's both of us saying yes.
-  const theyAsked = await env.DB.prepare('SELECT 1 FROM crew_requests WHERE from_user = ? AND to_user = ?')
+  const theyAsked = await env.DB.prepare('SELECT via FROM crew_requests WHERE from_user = ? AND to_user = ?')
     .bind(who.id, auth.user_id)
-    .first();
+    .first<{ via: string | null }>();
+  if (theyAsked?.via) {
+    // We'd been introduced: opening their link is my yes to it. Connect only if they've said yes too.
+    await env.DB.prepare('UPDATE crew_requests SET accepted = 1, ignored = 0 WHERE from_user = ? AND to_user = ?').bind(who.id, auth.user_id).run();
+    const theirs = await env.DB.prepare('SELECT accepted FROM crew_requests WHERE from_user = ? AND to_user = ?')
+      .bind(auth.user_id, who.id)
+      .first<{ accepted: number }>();
+    if (theirs?.accepted !== 1) return jsonOk({ name, status: 'requested' });
+  }
   if (theyAsked) {
     await connect(env, auth.user_id, who.id);
     await clearRequests(env, auth.user_id, who.id);
@@ -106,11 +116,23 @@ async function clearRequests(env: Env, x: string, y: string): Promise<void> {
 export async function acceptRequest(req: Request, env: Env, from: string): Promise<Response> {
   const auth = await requireAuth(req, env);
   if (auth instanceof Response) return auth;
-  const asked = await env.DB.prepare('SELECT 1 FROM crew_requests WHERE from_user = ? AND to_user = ?').bind(from, auth.user_id).first();
+  const me = auth.user_id;
+  const asked = await env.DB.prepare('SELECT via FROM crew_requests WHERE from_user = ? AND to_user = ?')
+    .bind(from, me)
+    .first<{ via: string | null }>();
   if (!asked) return jsonError(404, 'no_request');
-  await connect(env, auth.user_id, from);
-  await clearRequests(env, auth.user_id, from);
-  return new Response(null, { status: 204 });
+  if (asked.via) {
+    // An introduction: my yes is recorded; we connect once they've said yes too.
+    await env.DB.prepare('UPDATE crew_requests SET accepted = 1, ignored = 0 WHERE from_user = ? AND to_user = ?').bind(from, me).run();
+    const theirs = await env.DB.prepare('SELECT accepted, via FROM crew_requests WHERE from_user = ? AND to_user = ?')
+      .bind(me, from)
+      .first<{ accepted: number; via: string | null }>();
+    // The other row is theirs to answer: only their accepting it is a yes.
+    if (!theirs || theirs.accepted !== 1) return jsonOk({ status: 'waiting' });
+  }
+  await connect(env, me, from);
+  await clearRequests(env, me, from);
+  return jsonOk({ status: 'connected' });
 }
 
 export async function ignoreRequest(req: Request, env: Env, from: string): Promise<Response> {
@@ -125,18 +147,29 @@ export async function ignoreRequest(req: Request, env: Env, from: string): Promi
 export async function requestsFor(env: Env, me: string) {
   const [incoming, outgoing] = await Promise.all([
     env.DB.prepare(
-      'SELECT r.from_user AS id, u.display_name, r.created_at FROM crew_requests r JOIN users u ON u.id = r.from_user WHERE r.to_user = ? AND r.ignored = 0 ORDER BY r.created_at',
+      `SELECT r.from_user AS id, u.display_name, r.created_at, r.via, v.display_name AS via_name
+       FROM crew_requests r JOIN users u ON u.id = r.from_user LEFT JOIN users v ON v.id = r.via
+       WHERE r.to_user = ? AND r.ignored = 0 AND r.accepted = 0 ORDER BY r.created_at`,
     )
       .bind(me)
-      .all<{ id: string; display_name: string | null; created_at: number }>(),
+      .all<{ id: string; display_name: string | null; created_at: number; via: string | null; via_name: string | null }>(),
     env.DB.prepare(
-      'SELECT r.to_user AS id, u.display_name FROM crew_requests r JOIN users u ON u.id = r.to_user WHERE r.from_user = ? ORDER BY r.created_at',
+      // An introduction only counts as "waiting on them" once I've said yes to it.
+      `SELECT r.to_user AS id, u.display_name FROM crew_requests r JOIN users u ON u.id = r.to_user
+       WHERE r.from_user = ?1 AND (r.via IS NULL OR EXISTS (
+         SELECT 1 FROM crew_requests x WHERE x.from_user = r.to_user AND x.to_user = ?1 AND x.accepted = 1))
+       ORDER BY r.created_at`,
     )
       .bind(me)
       .all<{ id: string; display_name: string | null }>(),
   ]);
   return {
-    requests: incoming.results.map((r) => ({ id: r.id, name: r.display_name ?? 'Someone', at: r.created_at })),
+    requests: incoming.results.map((r) => ({
+      id: r.id,
+      name: r.display_name ?? 'Someone',
+      at: r.created_at,
+      via: r.via ? (r.via_name ?? 'A friend') : null,
+    })),
     waiting: outgoing.results.map((r) => ({ id: r.id, name: r.display_name ?? 'Someone' })),
   };
 }
@@ -178,5 +211,31 @@ export async function putNote(req: Request, env: Env, about: string): Promise<Re
   )
     .bind(me, about, note, Date.now())
     .run();
+  return new Response(null, { status: 204 });
+}
+
+/**
+ * Introduce two people in my crew to each other. Each gets "Derek introduced
+ * you to Tim" and they connect only if both accept. If they're already
+ * connected nothing happens — and the reply is the same either way, so the
+ * introducer never learns who's connected to whom.
+ */
+export async function introduce(req: Request, env: Env): Promise<Response> {
+  const auth = await requireAuth(req, env);
+  if (auth instanceof Response) return auth;
+  const me = auth.user_id;
+  const body = await readJson<{ a?: unknown; b?: unknown }>(req);
+  const a = typeof body?.a === 'string' ? body.a : '';
+  const b = typeof body?.b === 'string' ? body.b : '';
+  if (!a || !b || a === b || a === me || b === me) return jsonError(400, 'bad_pair');
+  if (!(await areConnected(env, me, a)) || !(await areConnected(env, me, b))) return jsonError(404, 'not_in_crew');
+  if (!(await areConnected(env, a, b))) {
+    const now = Date.now();
+    // OR IGNORE: an existing request between them (or one they ignored) stays as it is.
+    await env.DB.batch([
+      env.DB.prepare('INSERT OR IGNORE INTO crew_requests (from_user, to_user, created_at, via) VALUES (?, ?, ?, ?)').bind(a, b, now, me),
+      env.DB.prepare('INSERT OR IGNORE INTO crew_requests (from_user, to_user, created_at, via) VALUES (?, ?, ?, ?)').bind(b, a, now, me),
+    ]);
+  }
   return new Response(null, { status: 204 });
 }
