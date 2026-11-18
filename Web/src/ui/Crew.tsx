@@ -577,9 +577,11 @@ function People() {
 /** "Introduce Dad to… Tim [Introduce]" — the other people in my crew. */
 function Introduce({ id, name }: { id: string; name: string }) {
   const s = useStore();
-  const [open, setOpen] = useState(false);
-  const [sent, setSent] = useState<Set<string>>(new Set());
+  const intros = new Set(s.crew?.introduced ?? []);
+  const done = (o: string) => intros.has(id < o ? `${id}|${o}` : `${o}|${id}`);
   const others = s.crewMates.filter((m) => m.id !== id);
+  // Already introduced them to someone? Show the list straight away.
+  const [open, setOpen] = useState(others.some((o) => done(o.id)));
   if (!others.length) return null;
   const first = name.split(' ')[0];
   return (
@@ -602,15 +604,10 @@ function Introduce({ id, name }: { id: string; name: string }) {
                   <div>{o.name}</div>
                   {s.crew?.notes?.[o.id] && <div class="crew-note">{s.crew.notes[o.id]}</div>}
                 </div>
-                {sent.has(o.id) ? (
-                  <span class="crew-done">Done ✓</span>
+                {done(o.id) ? (
+                  <span class="crew-done">Introduced ✓</span>
                 ) : (
-                  <button
-                    class="btn compact"
-                    onClick={async () => {
-                      if (await s.introduce(id, o.id)) setSent(new Set([...sent, o.id]));
-                    }}
-                  >
+                  <button class="btn compact" onClick={() => void s.introduce(id, o.id)}>
                     Introduce
                   </button>
                 )}

@@ -163,6 +163,8 @@ export interface CrewData {
   invite_code: string;
   /** My private notes on people, by user id. Only I ever see these. */
   notes: Record<string, string>;
+  /** Pairs I've introduced, as "a|b" with a < b. */
+  introduced: string[];
   /** People asking to connect with me. */
   /** `via` = who introduced us, for an introduction (both must accept). */
   requests: { id: string; name: string; at: number; via: string | null }[];

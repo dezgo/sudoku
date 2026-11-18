@@ -1033,6 +1033,11 @@ class Store {
     try {
       await api.crewIntroduce(this.token, a, b);
       track('feature', { f: 'crew_introduce' });
+      if (this.crew) {
+        const pair = a < b ? `${a}|${b}` : `${b}|${a}`;
+        this.crew = { ...this.crew, introduced: [...(this.crew.introduced ?? []), pair] };
+        this.emit();
+      }
       return true;
     } catch (e) {
       this.showToast(e instanceof ApiError && e.kind === 'offline' ? "You're offline." : "That didn't work. Try again.");

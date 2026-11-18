@@ -229,8 +229,10 @@ export async function introduce(req: Request, env: Env): Promise<Response> {
   const b = typeof body?.b === 'string' ? body.b : '';
   if (!a || !b || a === b || a === me || b === me) return jsonError(400, 'bad_pair');
   if (!(await areConnected(env, me, a)) || !(await areConnected(env, me, b))) return jsonError(404, 'not_in_crew');
+  const now = Date.now();
+  const [x, y] = a < b ? [a, b] : [b, a];
+  await env.DB.prepare('INSERT OR IGNORE INTO crew_intros (by_user, a, b, created_at) VALUES (?, ?, ?, ?)').bind(me, x, y, now).run();
   if (!(await areConnected(env, a, b))) {
-    const now = Date.now();
     // OR IGNORE: an existing request between them (or one they ignored) stays as it is.
     await env.DB.batch([
       env.DB.prepare('INSERT OR IGNORE INTO crew_requests (from_user, to_user, created_at, via) VALUES (?, ?, ?, ?)').bind(a, b, now, me),
@@ -238,4 +240,10 @@ export async function introduce(req: Request, env: Env): Promise<Response> {
     ]);
   }
   return new Response(null, { status: 204 });
+}
+
+/** Pairs I've introduced, as "a|b" (a < b). */
+export async function introsBy(env: Env, me: string): Promise<string[]> {
+  const r = await env.DB.prepare('SELECT a, b FROM crew_intros WHERE by_user = ?').bind(me).all<{ a: string; b: string }>();
+  return r.results.map((p) => `${p.a}|${p.b}`);
 }
