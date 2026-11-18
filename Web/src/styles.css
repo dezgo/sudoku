@@ -1594,3 +1594,19 @@ button.crew-head {
   text-align: center;
   color: var(--text-2);
 }
+.crew-rename {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+}
+.crew-rename .field {
+  flex: 1;
+  min-width: 0;
+}
+.crew-rename .btn.compact {
+  width: auto;
+  padding: 8px 16px;
+}

@@ -191,6 +191,7 @@ export function CrewSheet({ tab: initial }: { tab?: 'recent' | 'favourites' }) {
   const [tab, setTab] = useState<'recent' | 'favourites'>(initial ?? 'recent');
   const [which, setWhich] = useState(0);
   const [leaving, setLeaving] = useState(false);
+  const [renaming, setRenaming] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const crew = s.crew;
 
@@ -237,7 +238,7 @@ export function CrewSheet({ tab: initial }: { tab?: 'recent' | 'favourites' }) {
       {groups.length > 1 && (
         <div class="crew-picker">
           {groups.map((x, i) => (
-            <button key={x.id} class={`chip${i === which ? ' on' : ''}`} onClick={() => (setWhich(i), setLeaving(false))}>
+            <button key={x.id} class={`chip${i === which ? ' on' : ''}`} onClick={() => (setWhich(i), setLeaving(false), setRenaming(null))}>
               {x.name}
             </button>
           ))}
@@ -284,6 +285,38 @@ export function CrewSheet({ tab: initial }: { tab?: 'recent' | 'favourites' }) {
       )}
 
       <div class="crew-more">
+        {g?.can_rename &&
+          (renaming === null ? (
+            <button class="link" onClick={() => setRenaming(g.name)}>
+              Rename {g.name}
+            </button>
+          ) : (
+            <form
+              class="crew-rename"
+              onSubmit={async (e) => {
+                e.preventDefault();
+                if (await s.renameCrew(g.id, renaming)) setRenaming(null);
+              }}
+            >
+              <input
+                class="field"
+                value={renaming}
+                maxLength={64}
+                aria-label="Crew name"
+                autoFocus
+                onInput={(e) => setRenaming(e.currentTarget.value)}
+              />
+              <button class="btn compact primary" type="submit" disabled={!renaming.trim()}>
+                Save
+              </button>
+              <button class="link" type="button" onClick={() => setRenaming(null)}>
+                Cancel
+              </button>
+              <div class="muted small" style={{ width: '100%', textAlign: 'center' }}>
+                Everyone in the crew sees this name.
+              </div>
+            </form>
+          ))}
         <button class="link" onClick={() => s.open({ kind: 'groupOnboarding', mode: 'join' })}>
           Join another crew with a code
         </button>

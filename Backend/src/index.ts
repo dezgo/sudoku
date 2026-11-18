@@ -7,6 +7,7 @@ import {
   getGroupMembers,
   joinGroup,
   leaveGroup,
+  renameGroup,
 } from './groups';
 import { ensureUpcomingDailies, getDailyByPuzzleId, getDailyToday } from './daily';
 import { getGroupScores, getGroupStandings, postScore } from './scores';
@@ -157,6 +158,9 @@ async function route(req: Request, env: Env, ctx: ExecutionContext): Promise<Res
 
   const membersMatch = path.match(/^\/v1\/groups\/([^/]+)\/members$/);
   if (membersMatch && method === 'GET') return getGroupMembers(req, env, membersMatch[1]!);
+
+  const renameMatch = path.match(/^\/v1\/groups\/([^/]+)$/);
+  if (renameMatch && method === 'PUT') return renameGroup(req, env, renameMatch[1]!);
 
   const leaveMatch = path.match(/^\/v1\/groups\/([^/]+)\/members\/me$/);
   if (leaveMatch && method === 'DELETE') return leaveGroup(req, env, leaveMatch[1]!);

@@ -215,11 +215,11 @@ async function crewGroups(env: Env, me: string) {
   const since = Date.now() - 8 * DAY;
   const [groups, members, sc, pl] = await Promise.all([
     env.DB.prepare(
-      `SELECT g.id, g.name, g.invite_code FROM groups g JOIN group_members m ON m.group_id = g.id
+      `SELECT g.id, g.name, g.invite_code, g.created_by FROM groups g JOIN group_members m ON m.group_id = g.id
        WHERE m.user_id = ? ORDER BY m.joined_at`,
     )
       .bind(me)
-      .all<{ id: string; name: string; invite_code: string }>(),
+      .all<{ id: string; name: string; invite_code: string; created_by: string }>(),
     env.DB.prepare(
       `SELECT m.group_id, m.user_id, u.display_name,
               MAX(COALESCE((SELECT MAX(completed_at) FROM scores s WHERE s.user_id = m.user_id), 0),
@@ -251,6 +251,7 @@ async function crewGroups(env: Env, me: string) {
     id: g.id,
     name: g.name,
     invite_code: g.invite_code,
+    can_rename: g.created_by === me,
     days,
     members: members.results
       .filter((m) => m.group_id === g.id)

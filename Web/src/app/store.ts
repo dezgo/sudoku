@@ -815,6 +815,18 @@ class Store {
     }
   }
 
+  async renameCrew(groupId: string, name: string): Promise<boolean> {
+    if (!this.token || !name.trim()) return false;
+    try {
+      await api.renameGroup(this.token, groupId, name.trim());
+      await this.refreshGroups();
+      return true;
+    } catch (e) {
+      this.showToast(e instanceof ApiError && e.kind === 'offline' ? "You're offline." : "Couldn't rename it. Try again.");
+      return false;
+    }
+  }
+
   async leaveCrew(groupId: string): Promise<void> {
     if (!this.token) return;
     try {

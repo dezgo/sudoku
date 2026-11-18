@@ -128,3 +128,23 @@ export async function leaveGroup(
 
   return new Response(null, { status: 204 });
 }
+
+/**
+ * PUT /v1/groups/:id { name } — rename a crew. Only whoever started it can,
+ * so a member can't change the name everyone else sees out from under them.
+ */
+export async function renameGroup(req: Request, env: Env, groupId: string): Promise<Response> {
+  const auth = await requireAuth(req, env);
+  if (auth instanceof Response) return auth;
+  const body = await readJson<{ name?: unknown }>(req);
+  const name = typeof body?.name === 'string' ? body.name.trim() : '';
+  if (!name) return jsonError(400, 'missing_name');
+  if (name.length > MAX_GROUP_NAME) return jsonError(400, 'name_too_long');
+  const g = await env.DB.prepare('SELECT created_by FROM groups WHERE id = ?')
+    .bind(groupId)
+    .first<{ created_by: string }>();
+  if (!g) return jsonError(404, 'not_found');
+  if (g.created_by !== auth.user_id) return jsonError(403, 'not_the_creator');
+  await env.DB.prepare('UPDATE groups SET name = ? WHERE id = ?').bind(name, groupId).run();
+  return jsonOk({ group: { id: groupId, name } });
+}

@@ -155,6 +155,8 @@ export interface CrewGroup {
   id: string;
   name: string;
   invite_code: string;
+  /** True for whoever started this crew. */
+  can_rename: boolean;
   /** The last 7 days, oldest first ('YYYY-MM-DD'). */
   days: string[];
   members: { name: string; you: boolean; played: string[]; last_at: number | null }[];
@@ -257,6 +259,8 @@ export const api = {
     send<{ group: ApiGroup; invite_code: string }>('groups', 'POST', t, { name }),
   joinGroup: (t: string, invite_code: string) =>
     send<{ group: ApiGroup }>('groups/join', 'POST', t, { invite_code }).then((r) => r.group),
+  renameGroup: (t: string, id: string, name: string) =>
+    send<{ group: ApiGroup }>(`groups/${id}`, 'PUT', t, { name }).then((r) => r.group),
   leaveGroup: (t: string, id: string) => send<void>(`groups/${id}/members/me`, 'DELETE', t),
   groupMembers: (t: string, id: string) => send<GroupMember[]>(`groups/${id}/members`, 'GET', t),
   dailyToday: () => send<{ today: PuzzleResponse; tomorrow: PuzzleResponse }>('daily/today', 'GET'),
