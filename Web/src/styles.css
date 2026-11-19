@@ -2047,3 +2047,19 @@ div.crew-note,
 .invite-also {
   margin: 8px 4px 0;
 }
+
+/* Invite a friend: QR code to scan in person */
+.invite-qr {
+  text-align: center;
+  margin: 4px 0 16px;
+}
+.invite-qr .qr {
+  display: block;
+  width: min(72vw, 280px);
+  height: auto;
+  margin: 0 auto 12px;
+  border-radius: 12px;
+}
+.invite-qr p {
+  margin: 0 8px;
+}

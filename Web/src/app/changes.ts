@@ -10,6 +10,10 @@ export interface Change {
 
 export const CHANGES: Change[] = [
   {
+    date: '2026-11-19',
+    items: ['“Invite a friend” now shows a QR code. A friend points their phone camera at it to open Sudoku Crew and connect with you. You can still send a link instead.'],
+  },
+  {
     date: '2026-11-18',
     items: [
       'Opening a friend’s invite link shows what you’d both see before anything is sent. “How your crew works” now lists exactly what you share, and what you never share.',

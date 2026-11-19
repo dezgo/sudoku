@@ -11,7 +11,7 @@ import { deviceId } from '../lib/usage';
 import { dateFromDailyId, weekdayDate } from '../lib/format';
 import { difficultyLabel } from '../engine/types';
 import { techniqueLabel, type TutorTechnique } from '../engine/tutor';
-import { Segmented, Sheet, shareText } from './Sheet';
+import { Segmented, Sheet } from './Sheet';
 import { track } from '../lib/usage';
 import { Icon } from './icons';
 import { CHANGES } from '../app/changes';
@@ -105,8 +105,7 @@ function FavouriteRow({ f }: { f: CrewFavourite }) {
 
 export function inviteFriend(): void {
   track('feature', { f: 'invite' });
-  const { text, url } = store.inviteLink();
-  void shareText(text, url);
+  store.open({ kind: 'inviteQr' });
 }
 
 /**

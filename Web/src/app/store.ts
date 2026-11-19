@@ -73,6 +73,7 @@ export type Sheet =
   | { kind: 'person'; id: string }
   | { kind: 'whatsNew' }
   | { kind: 'invite'; code: string }
+  | { kind: 'inviteQr' }
   | { kind: 'watch'; id: string; name: string };
 
 

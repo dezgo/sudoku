@@ -7,6 +7,7 @@ import { applyColors } from '../lib/colors';
 import { Home } from '../ui/Home';
 import { Play } from '../ui/Play';
 import { CoachSheet } from '../ui/Coach';
+import { InviteQrSheet } from '../ui/InviteQr';
 import { CrewSheet, EveryoneSheet, InviteSheet, PersonSheet, WhatsNewSheet } from '../ui/Crew';
 import { WatchSheet } from '../ui/Watch';
 import { LifelinesSheet } from '../ui/Lifelines';
@@ -55,6 +56,8 @@ function renderSheet(sheet: Sheet, i: number) {
       return <EveryoneSheet key={i} />;
     case 'invite':
       return <InviteSheet key={i} code={sheet.code} />;
+    case 'inviteQr':
+      return <InviteQrSheet key={i} />;
     case 'whatsNew':
       return <WhatsNewSheet key={i} />;
     case 'person':
