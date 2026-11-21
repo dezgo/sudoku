@@ -1207,6 +1207,24 @@ class Store {
     return r.needs_display_name || !r.user.display_name;
   }
 
+  /**
+   * Sign in with a token handed over by the store app's shell (the old native
+   * app kept the player's sign-in; the wrapper passes it once so they don't
+   * have to sign in again). Ignored if already signed in or the token is stale.
+   */
+  async adoptToken(token: string): Promise<void> {
+    if (this.token) return;
+    try {
+      const user = await api.me(token);
+      this.identity = { user, token };
+      writeJSON(KEYS.identity, this.identity);
+      this.emit();
+      void this.afterSignIn();
+    } catch {
+      // Expired or revoked — they'll just sign in as normal.
+    }
+  }
+
   async setDisplayName(name: string): Promise<void> {
     if (!this.token) return;
     const user = await api.putMe(this.token, name.trim());

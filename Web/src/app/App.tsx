@@ -86,6 +86,18 @@ function handleJoinLink() {
   else store.open({ kind: 'signIn', then: () => void join() });
 }
 
+/**
+ * `/play/#signin=<token>` — the store app's shell hands over the sign-in the
+ * old native app had, once, so updating the app doesn't sign anyone out. In
+ * the fragment so it never reaches a server log; removed from the address at once.
+ */
+function handleAppHandoff() {
+  const m = /(?:^#|&)signin=([^&]+)/.exec(location.hash);
+  if (!m) return;
+  history.replaceState(null, '', location.pathname + location.search);
+  void store.adoptToken(decodeURIComponent(m[1]));
+}
+
 /** `/play/?group=ABC234` — a friend's invite (the Worker redirects /g/<code> here): sign in, then join. */
 function handleGroupLink() {
   const code = new URLSearchParams(location.search).get('group');
@@ -118,6 +130,7 @@ export function App() {
     void s.launch();
     warmBuffers();
     startUpdateChecks();
+    handleAppHandoff();
     handleJoinLink();
     handleGroupLink();
     handleShareLink();

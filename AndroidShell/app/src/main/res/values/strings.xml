@@ -1,0 +1,5 @@
+<resources>
+    <string name="app_name">Sudoku Crew</string>
+    <string name="launch_url">https://sudokucrew.com/play/</string>
+    <string name="asset_statements">[{ \"relation\": [\"delegate_permission/common.handle_all_urls\"], \"target\": { \"namespace\": \"web\", \"site\": \"https://sudokucrew.com\" } }]</string>
+</resources>

@@ -79,6 +79,7 @@ Created by the 2026-08-12 outage — none of these caused it, but each one made 
 Replaces the old "retire the store apps" plan: Derek wants to stay in the stores for reach. Each store app becomes a thin shell that loads sudokucrew.com/play, shipped as an **update to the existing listing** (`com.derekgillett.sudoku` / `com.derekgillett.Sudoku`, both at 1.1.3) so listings and installs carry over. Web deploys then reach store players with no resubmission; only shell changes (name, icon, new permissions, yearly SDK bumps) need a store release.
 
 - **Android first: Trusted Web Activity.** Needs the Digital Asset Links entry in `Backend/src/well-known.ts` (and the Play app-signing cert SHA256, still missing — see STATUS.md).
+- **✅ Built 2026-11-21: Android shell** in `AndroidShell/` (TWA, versionCode 12 / 2.0.0, targetSdk 36) — keeps players signed in across the update (tested on an emulator). Waiting only on the upload key to sign and upload. See `AndroidShell/README.md`.
 - **⚠️ Android upload key is lost.** Not found on either PC (Windows or Ubuntu), the personal Drive or in Vaultwarden. Derek is checking the MacBook Air. Otherwise: Play Console → "Request upload key reset" (Play App Signing is on, ~2 days, players notice nothing).
 - **iOS second: Capacitor-style shell** built on Derek's MacBook (the Air). Add a native extra (e.g. push notifications) so Apple doesn't reject it as "just a website" (rule 4.2).
 - **Don't** send the old "we've moved" banner. **Never** raise `*_MIN_REQUIRED_VERSION` — that locks people out.
