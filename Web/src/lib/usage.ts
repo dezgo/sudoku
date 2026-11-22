@@ -8,6 +8,7 @@
 // to anyone unless they sign in on this device.
 
 import { readJSON, writeJSON } from './storage';
+import { inStoreApp } from './shell';
 
 export type UsageKind = 'open' | 'game_start' | 'game_resume' | 'game_finish' | 'feature' | 'setting' | 'screen';
 type UsageEvent = { k: UsageKind; at: number; d?: Record<string, unknown> };
@@ -42,6 +43,7 @@ function platform(): string {
 
 function standalone(): boolean {
   return (
+    inStoreApp() ||
     matchMedia('(display-mode: standalone)').matches ||
     (navigator as Navigator & { standalone?: boolean }).standalone === true
   );

@@ -6,6 +6,7 @@
 import { useEffect, useState } from 'preact/hooks';
 import { readJSON, writeJSON } from '../lib/storage';
 import { Icon } from './icons';
+import { inStoreApp } from '../lib/shell';
 
 const DISMISS_KEY = 'sudoku.install_hint_dismissed.v1';
 // Set the first time the app runs installed (or the browser reports an
@@ -28,6 +29,7 @@ window.addEventListener('beforeinstallprompt', (e) => {
 
 function isStandalone(): boolean {
   return (
+    inStoreApp() ||
     window.matchMedia('(display-mode: standalone)').matches ||
     (navigator as Navigator & { standalone?: boolean }).standalone === true
   );
