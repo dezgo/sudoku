@@ -162,13 +162,13 @@ const LANDING_HTML = `<!DOCTYPE html>
 
     <h2>What's in it</h2>
     <ul>
-      <li><strong>Daily puzzle</strong> — same puzzle for everyone, refreshed once a day.</li>
-      <li><strong>Private friend groups</strong> — share an invite code, that's it.</li>
-      <li><strong>Catch up on missed days</strong> — a calendar of every daily, with streaks to keep and monthly trophies to earn.</li>
-      <li><strong>A tutor that teaches</strong> — stuck on a hard one? The lightbulb walks you through singles, pairs, triples, pointing pairs, X-Wings, XY-Wings, swordfish and more — step by step, on your actual board.</li>
-      <li><strong>Coach mode</strong> — practise one technique at a time.</li>
-      <li><strong>Turn-based multiplayer</strong> — take turns on one board with friends.</li>
-      <li><strong>Plenty of fresh puzzles</strong> across Easy, Medium, and Hard, plus speed entry and auto-pencil.</li>
+      <li><strong>A daily puzzle</strong> — the same board for everyone, every day.</li>
+      <li><strong>Your crew</strong> — your own list of friends. Send an invite link or let them scan a QR code; nobody's added unless you both say yes.</li>
+      <li><strong>See what your crew is playing</strong> — the puzzles they finished and loved, with <em>Try it</em> to play the same board. Never their times.</li>
+      <li><strong>Play together</strong> — solve one board with friends live in co-op, take turns in multiplayer, or (if they say yes) watch someone play and cheer them on.</li>
+      <li><strong>A tutor that teaches</strong> — stuck? Get a hint that explains the next step on your actual board, from simple singles up to X-Wings and swordfish. Coach mode lets you practise one technique at a time.</li>
+      <li><strong>Catch up on missed days</strong> — every past daily, with streaks to keep.</li>
+      <li><strong>Plenty of fresh puzzles</strong> from Easy to Expert, with pencil marks, auto-pencil and a quick-entry mode.</li>
     </ul>
 
     <h2>What's not</h2>
