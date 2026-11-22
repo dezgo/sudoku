@@ -110,13 +110,13 @@ const LANDING_HTML = `<!DOCTYPE html>
 <body>
   <div class="wrap">
     <h1>Sudoku Crew</h1>
-    <p class="tagline">A daily Sudoku puzzle and private leaderboard for your friend group.</p>
+    <p class="tagline">A daily Sudoku to share with your friends.</p>
 
     <p>
-      Everyone in your group plays the same puzzle each day. Solve fast,
-      solve clean — your time and mistake count appear on a leaderboard
-      only your group can see. No public rankings, no strangers, no
-      follower counts. Just your people.
+      Everyone plays the same puzzle each day. See what your friends
+      finished and loved, try the same boards, learn a new trick when
+      you're stuck, or solve one together. Go at your own pace — it's not
+      a race, and there are no public rankings. Just your people.
     </p>
 
     <h2>Get Sudoku Crew</h2>
