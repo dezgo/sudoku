@@ -178,7 +178,8 @@ const LANDING_HTML = `<!DOCTYPE html>
       </li>
     </ol>
 
-    <h3>Or put it on your home screen</h3>
+    <h3>Or skip the download and play in your browser</h3>
+    <p>To keep it handy, add a shortcut to your home screen:</p>
     <ul>
       <li><strong>iPhone / iPad:</strong> open it in Safari, tap <em>Share</em>, then <em>Add to Home Screen</em>.</li>
       <li><strong>Android:</strong> open it in Chrome and tap <em>Install</em> (or the ⋮ menu, then <em>Add to Home screen</em>).</li>
