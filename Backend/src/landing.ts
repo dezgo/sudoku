@@ -113,19 +113,52 @@ const LANDING_HTML = `<!DOCTYPE html>
     <p class="tagline">A daily Sudoku puzzle and private leaderboard for your friend group.</p>
 
     <p>
-      <a class="play-btn" href="/play/">
-        <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M7 4.5v15l12-7.5z"/></svg>
-        Play now
-      </a>
-    </p>
-    <p class="sub">Free, right in your browser — no download, works on any phone, tablet or computer.</p>
-
-    <p>
       Everyone in your group plays the same puzzle each day. Solve fast,
       solve clean — your time and mistake count appear on a leaderboard
       only your group can see. No public rankings, no strangers, no
       follower counts. Just your people.
     </p>
+
+    <h2>Get Sudoku Crew</h2>
+    <p>Free. Pick whichever suits you — it's the same game, and your account works on all of them.</p>
+
+    <h3>iPhone</h3>
+    <div class="stores">
+      <a class="store-btn" href="https://apps.apple.com/au/app/sudoku-crew/id6764829511">
+        <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+          <path d="M17.05 20.28c-.98.95-2.05.8-3.08.35-1.09-.46-2.09-.48-3.24 0-1.44.62-2.2.44-3.06-.35C2.79 15.25 3.51 7.59 9.05 7.31c1.35.07 2.29.74 3.08.8 1.18-.24 2.31-.93 3.57-.84 1.51.12 2.65.72 3.4 1.8-3.12 1.87-2.38 5.98.48 7.13-.57 1.5-1.31 2.99-2.54 4.09zM12 7.25c-.15-2.23 1.66-4.07 3.74-4.25.29 2.58-2.34 4.5-3.74 4.25z"/>
+        </svg>
+        <span>
+          <span class="small">DOWNLOAD ON THE</span><br>
+          <span class="big">App Store</span>
+        </span>
+      </a>
+    </div>
+
+    <h3>Android</h3>
+    <p>The Android app is in early access on Google Play. Two steps and you're in:</p>
+    <ol style="padding-left: 1.25rem; margin: 0 0 1.25rem;">
+      <li style="margin-bottom: 0.75rem;">
+        <a href="https://groups.google.com/g/apptesters26"><strong>Join the testers group</strong></a>
+        — sign in with your Google account and hit Join.
+      </li>
+      <li style="margin-bottom: 0.75rem;">
+        <a href="https://play.google.com/apps/testing/com.derekgillett.sudoku"><strong>Open the test on Google Play</strong></a>
+        — tap Become a tester, then install.
+      </li>
+    </ol>
+
+    <h3>Any phone, tablet or computer — in your browser</h3>
+    <p>
+      <a class="play-btn" href="/play/">
+        <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M7 4.5v15l12-7.5z"/></svg>
+        Play now
+      </a>
+    </p>
+    <p class="sub">No download. On a phone, add a shortcut to your home screen to keep it handy:
+      in Safari tap <em>Share</em> → <em>Add to Home Screen</em>; in Chrome tap <em>Install</em> (or ⋮ → <em>Add to Home screen</em>).</p>
+
+    <p>Friend groups are by invite — ask whoever pointed you here for a link.</p>
 
     <h2>What's in it</h2>
     <ul>
@@ -149,48 +182,6 @@ const LANDING_HTML = `<!DOCTYPE html>
       display name and games — plus simple counts of which features get
       used, so we know what to improve. See the
       <a href="/privacy">privacy policy</a> for the full breakdown.
-    </p>
-
-    <h2>Get the app</h2>
-    <p>Same game as in the browser, as an app on your phone:</p>
-    <div class="stores">
-      <a class="store-btn" href="https://apps.apple.com/au/app/sudoku-crew/id6764829511">
-        <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-          <path d="M17.05 20.28c-.98.95-2.05.8-3.08.35-1.09-.46-2.09-.48-3.24 0-1.44.62-2.2.44-3.06-.35C2.79 15.25 3.51 7.59 9.05 7.31c1.35.07 2.29.74 3.08.8 1.18-.24 2.31-.93 3.57-.84 1.51.12 2.65.72 3.4 1.8-3.12 1.87-2.38 5.98.48 7.13-.57 1.5-1.31 2.99-2.54 4.09zM12 7.25c-.15-2.23 1.66-4.07 3.74-4.25.29 2.58-2.34 4.5-3.74 4.25z"/>
-        </svg>
-        <span>
-          <span class="small">DOWNLOAD ON THE</span><br>
-          <span class="big">App Store</span>
-        </span>
-      </a>
-    </div>
-
-    <h3>On Android? Join the early access</h3>
-    <p>The Android app is in testing on Google Play. Two steps and you're in:</p>
-    <ol style="padding-left: 1.25rem; margin: 0 0 1.25rem;">
-      <li style="margin-bottom: 0.75rem;">
-        <a href="https://groups.google.com/g/apptesters26"><strong>Join the testers group</strong></a>
-        — sign in with your Google account and hit Join.
-      </li>
-      <li style="margin-bottom: 0.75rem;">
-        <a href="https://play.google.com/apps/testing/com.derekgillett.sudoku"><strong>Open the test on Google Play</strong></a>
-        — tap Become a tester, then install.
-      </li>
-    </ol>
-
-    <h3>Or skip the download and play in your browser</h3>
-    <p>To keep it handy, add a shortcut to your home screen:</p>
-    <ul>
-      <li><strong>iPhone / iPad:</strong> open it in Safari, tap <em>Share</em>, then <em>Add to Home Screen</em>.</li>
-      <li><strong>Android:</strong> open it in Chrome and tap <em>Install</em> (or the ⋮ menu, then <em>Add to Home screen</em>).</li>
-    </ul>
-    <p>Friend groups are by invite — ask whoever pointed you here for a link.</p>
-
-    <p style="margin-top: 2rem;">
-      <a class="play-btn" href="/play/">
-        <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M7 4.5v15l12-7.5z"/></svg>
-        Play now
-      </a>
     </p>
 
     <div class="footer">
