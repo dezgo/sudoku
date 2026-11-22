@@ -98,6 +98,14 @@ function handleAppHandoff() {
   void store.adoptToken(decodeURIComponent(m[1]));
 }
 
+/** `/play/?game=<id>` — the iPhone app opening a multiplayer game from a notification. */
+function handleGameLink() {
+  const id = new URLSearchParams(location.search).get('game');
+  if (!id) return;
+  history.replaceState(null, '', location.pathname);
+  if (store.token) store.open({ kind: 'multiplayer', gameId: id });
+}
+
 /** `/play/?group=ABC234` — a friend's invite (the Worker redirects /g/<code> here): sign in, then join. */
 function handleGroupLink() {
   const code = new URLSearchParams(location.search).get('group');
@@ -132,9 +140,19 @@ export function App() {
     startUpdateChecks();
     handleAppHandoff();
     handleJoinLink();
+    handleGameLink();
     handleGroupLink();
     handleShareLink();
   }, []);
+
+  // Inside the iPhone app: tell the shell who's signed in, so it can register
+  // for game notifications under that account (see iOS/Sudoku/ShellApp.swift).
+  useEffect(() => {
+    const shell = (window as unknown as { webkit?: { messageHandlers?: { sudokuShell?: { postMessage(m: unknown): void } } } })
+      .webkit?.messageHandlers?.sudokuShell;
+    if (!shell) return;
+    shell.postMessage(s.token ? { type: 'signedIn', token: s.token } : { type: 'signedOut' });
+  }, [s.token]);
 
   // Chosen colours go on <html> inline, so they win in light and dark alike.
   useEffect(() => applyColors(s.prefs.colors), [s.prefs.colors]);

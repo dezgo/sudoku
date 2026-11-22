@@ -39,7 +39,8 @@ export function getAppleAppSiteAssociation(): Response {
       details: [
         {
           appID: `${TEAM_ID}.${IOS_BUNDLE_ID}`,
-          paths: ['/m/*'],
+          // /m/ = old multiplayer invites; the rest are the web app and its share links.
+          paths: ['/m/*', '/play', '/play/*', '/g/*', '/p/*', '/c/*'],
         },
       ],
     },
