@@ -12,6 +12,7 @@ export const KEYS = {
   prefs: 'sudoku.prefs.v1',
   identity: 'sudoku.identity.v1',
   groups: 'sudoku.groups.v1',
+  crew: 'sudoku.crew.v1',
   dailyCache: 'sudoku.daily_cache.v1',
   pendingScores: 'sudoku.pending_scores.v1',
   coach: 'sudoku.coach.completed.v1',

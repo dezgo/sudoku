@@ -143,7 +143,7 @@ class Store {
   /** Hint techniques peeked at in the game on screen — "learnt X-Wing" in the crew feed. */
   private hintTechniques = new Set<string>();
   /** What the crew has been playing (signed in, in a group). */
-  crew: CrewData | null = null;
+  crew: CrewData | null = readJSON<CrewData | null>(KEYS.crew, null);
   /** Anonymous live counts: playing right now, solved today's daily. */
   pulse: Pulse | null = null;
   private pulseTimer: number | null = null;
@@ -978,12 +978,14 @@ class Store {
     if (!this.token) {
       if (this.crew) {
         this.crew = null;
+        writeJSON(KEYS.crew, this.crew);
         this.emit();
       }
       return;
     }
     try {
       this.crew = await api.crew(this.token);
+      writeJSON(KEYS.crew, this.crew);
       this.emit();
     } catch {
       /* keep what we had */
@@ -999,6 +1001,7 @@ class Store {
       if (note.trim()) notes[userId] = note.trim().slice(0, 200);
       else delete notes[userId];
       this.crew = { ...this.crew, notes };
+      writeJSON(KEYS.crew, this.crew);
       track('feature', { f: 'crew_note' });
       this.emit();
       return true;
@@ -1038,6 +1041,7 @@ class Store {
       if (this.crew) {
         const pair = a < b ? `${a}|${b}` : `${b}|${a}`;
         this.crew = { ...this.crew, introduced: [...(this.crew.introduced ?? []), pair] };
+        writeJSON(KEYS.crew, this.crew);
         this.emit();
       }
       return true;
@@ -1242,6 +1246,7 @@ class Store {
     this.identity = null;
     this.groups = [];
     this.crew = null;
+    writeJSON(KEYS.crew, this.crew);
     this.lastPlay = null;
     writeJSON(KEYS.identity, null);
     writeJSON(KEYS.groups, null);

@@ -92,6 +92,7 @@ Storage format is JSON-encoded; the iOS reference uses `UserDefaults` keyed as:
 | `sudoku.appearance`          | Appearance enum raw value (system/light/dark).                    |
 | `sudoku.identity.v1`         | `{ user_id, display_name, token }` for the signed-in user. Token stored in Keychain (iOS) / EncryptedSharedPreferences (Android), not in plain UserDefaults / DataStore. Absent when signed out. |
 | `sudoku.groups.v1`           | Cached list of `{ id, name, member_count }` for the user's groups, refreshed from `/v1/me/groups`. |
+| `sudoku.crew.v1`             | Cached `/v1/crew` response (people, feed, notes), so the home crew card shows straight away on open; refreshed from the server, cleared on sign-out. |
 | `sudoku.daily_cache.v1`      | `{ today: Puzzle, tomorrow: Puzzle, fetched_at }` from `/v1/daily/today`. Used so the daily works offline once fetched. |
 | `sudoku.pending_scores.v1`   | Queue of `{ puzzle_id, elapsed_seconds, mistakes, completed_at }` awaiting upload — solves completed while offline or signed-out. |
 
