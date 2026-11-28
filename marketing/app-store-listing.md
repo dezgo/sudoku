@@ -1,6 +1,72 @@
 # App Store listing copy
 
-App Store Connect → Sudoku Crew → App Store → Version → "Description" field. Limit: **4000 characters** (matches Play). Promotional text (separate field, 170 chars, can be edited without a new submission) is at the bottom.
+App Store Connect → Sudoku Crew → App Store → Version → "Description" field. Limit: **4000 characters**. Promotional text (170 chars) can be edited without a new submission.
+
+## 2.0.0 (current — the app is now the web app in a shell; no leaderboard/speed copy)
+
+### Subtitle (max 30)
+
+Daily sudoku with your friends
+
+### Promotional text (max 170)
+
+One daily Sudoku, shared with your friends. Play together, see what they loved, learn as you go. No ads, no public rankings.
+
+### Description
+
+Sudoku Crew is a daily Sudoku to share with your friends. It's not a race — it's something to do together.
+
+ONE PUZZLE A DAY, THE SAME FOR EVERYONE
+Everyone gets the same board each day. Keep a streak, catch up on ones you missed, and see who in your crew has played today.
+
+YOUR CREW
+Your own list of friends. Send an invite link or let them scan a QR code — nobody's added unless you both say yes. See the puzzles your crew finished and loved, and tap Try it to play the same board. Never their times.
+
+PLAY TOGETHER
+Solve one board with friends live in co-op, take turns in multiplayer, or — if they say yes — watch someone play and cheer them on. Notifications tell you when it's your turn.
+
+HINTS THAT TEACH
+Stuck? Get a hint that explains the next step on your actual board, from simple singles up to X-Wings and Swordfish. Coach mode lets you practise one technique at a time on real puzzles.
+
+YOUR OWN PACE
+Fresh puzzles from Easy to Expert, with pencil marks, auto-pencil and a quick-entry mode. Light and dark themes.
+
+ONE ACCOUNT EVERYWHERE
+The same game on iPhone, Android and any browser at sudokucrew.com — your account, crew and history follow you.
+
+PRIVATE BY DESIGN
+No ads. No public rankings. No advertising trackers. Delete your account from inside the app at any time. Details: https://sudokucrew.com/privacy
+
+### Keywords (max 100)
+
+sudoku,daily,friends,puzzle,coop,multiplayer,brain,logic,hints,coach,number,crew
+
+### What's New in This Version
+
+```
+A big update: Sudoku Crew is rebuilt from the ground up.
+• Your crew — add friends with a link or QR code and see the puzzles they loved
+• Co-op: solve one board together, live
+• Watch a friend play and cheer them on
+• Hints that explain the next step on your own board, plus Coach mode
+• Puzzles from Easy to Expert, with quick entry
+• No public leaderboards — it's not a race
+Your account and history carry over.
+```
+
+### App Review notes (Sign-in required → Yes)
+
+Username: the `REVIEWER_EMAIL` Worker secret; Password: the `REVIEWER_OTP_CODE` secret (same pair as Play — see play-store-app-access.md).
+
+```
+Sign-in is by emailed code (no passwords). Enter the demo email above, then the code shown as the password when asked for the code — no email is sent for this account.
+
+Beyond the web content, the app uses native push notifications (UNUserNotificationCenter / APNs) to tell players when it's their turn in multiplayer or when a crew member asks to watch, and supports universal links so invite links open in the app. Notification permission is requested after sign-in.
+```
+
+---
+
+## 1.x (old native app — kept for history)
 
 ## Name (max 30 chars)
 

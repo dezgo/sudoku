@@ -10,6 +10,10 @@ export interface Change {
 
 export const CHANGES: Change[] = [
   {
+    date: '2026-11-28',
+    items: ['On Android, Home now shows how to get the Sudoku Crew app from Google Play (it’s in early access). Your account comes with you.'],
+  },
+  {
     date: '2026-11-25',
     items: ['Your crew shows straight away when you open the app, instead of a brief “Invite a friend” flash while it loads.'],
   },

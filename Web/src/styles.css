@@ -275,6 +275,17 @@ select:focus-visible {
   margin: -6px 0 2px;
 }
 
+.install-steps {
+  margin: 6px 0 0;
+  padding-left: 1.2rem;
+}
+.install-steps li {
+  margin: 4px 0;
+}
+.install-steps a {
+  color: var(--accent, #2563eb);
+  font-weight: 600;
+}
 .install-hint {
   margin-top: 8px;
   width: 100%;

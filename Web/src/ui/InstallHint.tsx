@@ -6,7 +6,8 @@
 import { useEffect, useState } from 'preact/hooks';
 import { readJSON, writeJSON } from '../lib/storage';
 import { Icon } from './icons';
-import { inStoreApp } from '../lib/shell';
+import { hasStoreApp, inStoreApp, isAndroid } from '../lib/shell';
+import { track } from '../lib/usage';
 
 const DISMISS_KEY = 'sudoku.install_hint_dismissed.v1';
 // Set the first time the app runs installed (or the browser reports an
@@ -15,6 +16,12 @@ const DISMISS_KEY = 'sudoku.install_hint_dismissed.v1';
 // the app. (iPhone keeps home-screen apps' storage separate from Safari, so
 // there a Safari tab can still show the tip — it's genuinely not the app.)
 const INSTALLED_KEY = 'sudoku.installed.v1';
+// Android players in the browser (or a home-screen web app) get offered the
+// Google Play app instead. It's in early access (closed test), so joining
+// takes two steps: the testers group, then the Play testing page.
+const ANDROID_APP_DISMISS_KEY = 'sudoku.android_app_hint_dismissed.v1';
+const TESTERS_GROUP_URL = 'https://groups.google.com/g/apptesters26';
+const PLAY_TEST_URL = 'https://play.google.com/apps/testing/com.derekgillett.sudoku';
 
 interface BeforeInstallPromptEvent extends Event {
   prompt: () => Promise<void>;
@@ -40,6 +47,50 @@ function isIOS(): boolean {
 }
 
 export function InstallHint() {
+  const [androidDismissed, setAndroidDismissed] = useState(() => readJSON<boolean>(ANDROID_APP_DISMISS_KEY, false));
+  if (isAndroid() && !inStoreApp() && !hasStoreApp() && !androidDismissed) {
+    return (
+      <AndroidAppHint
+        onDismiss={() => {
+          writeJSON(ANDROID_APP_DISMISS_KEY, true);
+          setAndroidDismissed(true);
+        }}
+      />
+    );
+  }
+  return <WebInstallHint />;
+}
+
+function AndroidAppHint({ onDismiss }: { onDismiss: () => void }) {
+  const open = (step: string) => () => track('feature', { f: 'android_app_' + step });
+  return (
+    <div class="install-hint">
+      <Icon name="download" size={20} />
+      <div style={{ flex: 1 }}>
+        <b>Sudoku Crew is on Google Play</b> — in early access. Two quick steps, and your account comes with you:
+        <ol class="install-steps">
+          <li>
+            <a href={TESTERS_GROUP_URL} target="_blank" rel="noopener" onClick={open('group')}>
+              Join the testers group
+            </a>{' '}
+            (tap Join)
+          </li>
+          <li>
+            <a href={PLAY_TEST_URL} target="_blank" rel="noopener" onClick={open('play')}>
+              Get it on Google Play
+            </a>{' '}
+            (tap Become a tester, then install)
+          </li>
+        </ol>
+      </div>
+      <button class="icon-btn" aria-label="Dismiss" onClick={onDismiss}>
+        <Icon name="x" size={16} />
+      </button>
+    </div>
+  );
+}
+
+function WebInstallHint() {
   const [dismissed, setDismissed] = useState(() => readJSON<boolean>(DISMISS_KEY, false));
   const [, setTick] = useState(0);
   useEffect(() => {
