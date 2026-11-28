@@ -41,11 +41,12 @@ function ago(ms: number): string {
   return days === 1 ? 'yesterday' : `${days} days ago`;
 }
 
-/** "today's daily", "the daily for Wed 12 Nov", "a Hard puzzle", "a co-op Hard puzzle". */
+/** "today's daily", "the daily for Wed 12 Nov", "a Hard puzzle", "an Expert puzzle", "a co-op Easy puzzle". */
 function what(item: { puzzle_id: number | null; difficulty: CrewPlay['difficulty']; mode?: string }): string {
   if (item.puzzle_id !== null)
     return item.puzzle_id === store.todayId ? "today's daily" : `the daily for ${weekdayDate(dateFromDailyId(item.puzzle_id))}`;
-  return `a ${item.mode === 'coop' ? 'co-op ' : ''}${difficultyLabel[item.difficulty]} puzzle`;
+  const words = `${item.mode === 'coop' ? 'co-op ' : ''}${difficultyLabel[item.difficulty]} puzzle`;
+  return `${/^[aeiou]/i.test(words) ? 'an' : 'a'} ${words}`;
 }
 
 function Initial({ name }: { name: string }) {
